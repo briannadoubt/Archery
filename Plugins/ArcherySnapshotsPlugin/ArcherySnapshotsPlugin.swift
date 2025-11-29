@@ -4,20 +4,16 @@ import Foundation
 @main
 struct ArcherySnapshotsPlugin: CommandPlugin {
     func performCommand(context: PluginContext, arguments: [String]) throws {
-        let workdir = context.package.directory.string
-        try run(toolPath: "/usr/bin/swift", arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"], workingDirectory: workdir)
-        try run(toolPath: "/usr/bin/swift", arguments: ["test"], workingDirectory: workdir)
+        let workdir = context.package.directoryURL
+        try run(toolPath: URL(fileURLWithPath: "/usr/bin/swift"), arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"], workingDirectory: workdir)
+        try run(toolPath: URL(fileURLWithPath: "/usr/bin/swift"), arguments: ["test"], workingDirectory: workdir)
     }
 
-    private func run(toolPath: String, arguments: [String], workingDirectory: String? = nil) throws {
+    private func run(toolPath: URL, arguments: [String], workingDirectory: URL? = nil) throws {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: toolPath)
+        process.executableURL = toolPath
         process.arguments = arguments
-        if let workingDirectory {
-            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
-        } else {
-            process.currentDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        }
+        process.currentDirectoryURL = workingDirectory ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 
         let stdout = Pipe()
         let stderr = Pipe()
@@ -45,9 +41,9 @@ struct CommandError: Error, CustomStringConvertible {
 import XcodeProjectPlugin
 extension ArcherySnapshotsPlugin: XcodeCommandPlugin {
     func performCommand(context: XcodePluginContext, arguments: [String]) throws {
-        let workdir = context.xcodeProject.directory.string
-        try run(toolPath: "/usr/bin/swift", arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"], workingDirectory: workdir)
-        try run(toolPath: "/usr/bin/swift", arguments: ["test"], workingDirectory: workdir)
+        let workdir = context.xcodeProject.directoryURL
+        try run(toolPath: URL(fileURLWithPath: "/usr/bin/swift"), arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"], workingDirectory: workdir)
+        try run(toolPath: URL(fileURLWithPath: "/usr/bin/swift"), arguments: ["test"], workingDirectory: workdir)
     }
 }
 #endif
