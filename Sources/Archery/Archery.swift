@@ -147,6 +147,21 @@ public enum LoadState<Value> {
     case failure(Error)
 }
 
+extension LoadState: Equatable where Value: Equatable {
+    public static func == (lhs: LoadState<Value>, rhs: LoadState<Value>) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.loading, .loading):
+            return true
+        case let (.success(a), .success(b)):
+            return a == b
+        case (.failure, .failure):
+            return true // errors considered equivalent for UI change tracking
+        default:
+            return false
+        }
+    }
+}
+
 public struct AlertState: Equatable {
     public let title: String
     public let message: String?
@@ -183,6 +198,15 @@ public macro ViewModelBound<V>() = #externalMacro(module: "ArcheryMacros", type:
 @attached(member, names: arbitrary)
 public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShellMacro")
 
+@attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
+public macro APIClient() = #externalMacro(module: "ArcheryMacros", type: "APIClientMacro")
+
+@attached(peer)
+public macro Cache(
+    enabled: Bool = true,
+    ttl: Duration? = nil
+) = #externalMacro(module: "ArcheryMacros", type: "CacheMacro")
+
 // Minimal handle for tests
 public struct Archery { public init() {} }
 
@@ -194,5 +218,15 @@ public extension EnvironmentValues {
         get { self[ArcheryContainerKey.self] }
         set { self[ArcheryContainerKey.self] = newValue }
     }
+
+    /// Toggle haptics used by sample/previews (e.g., retry button feedback).
+    var archeryHapticsEnabled: Bool {
+        get { self[ArcheryHapticsEnabledKey.self] }
+        set { self[ArcheryHapticsEnabledKey.self] = newValue }
+    }
+}
+
+private struct ArcheryHapticsEnabledKey: EnvironmentKey {
+    static let defaultValue: Bool = true
 }
 #endif

@@ -81,7 +81,7 @@
 - Minimal logging interface consumed by generated tracing hooks.
 - Done when: EnvContainer used by generated code; shared types adopted; logging hook exercised in tests.
 
-## 8. Networking & Errors
+## 8. Networking & Errors - DONE
 - APIClient macro: async/await, retry/backoff, caching, configurable decoding strategies.
 - Shared AppError type with user-facing messaging + logging/analytics hooks (redaction mandatory).
 - Request/response fixtures + snapshot tests; toggleable network stubs for previews.

@@ -17,7 +17,8 @@ private let archeryMacros: [String: Macro.Type] = [
     "ViewModelBound": ViewModelBoundMacro.self,
     "KeyValueStore": KeyValueStoreMacro.self,
     "Repository": RepositoryMacro.self,
-    "AppShell": AppShellMacro.self
+    "AppShell": AppShellMacro.self,
+    "APIClient": APIClientMacro.self
 ]
 
 @MainActor
@@ -122,6 +123,37 @@ private let cases: [SnapshotCase] = [
         @Repository
         class SyncRepository {
             func profile(id: Int) -> String { "ok" }
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/APIClient/apiclient_basic",
+        source: """
+        @APIClient
+        class WeatherAPI {
+            func forecast(city: String) async throws -> Data { Data() }
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/APIClient/apiclient_sync_warning",
+        source: """
+        @APIClient
+        class SyncAPI {
+            func ping() -> Bool { true }
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/APIClient/apiclient_cache_override",
+        source: """
+        @APIClient
+        class CacheyAPI {
+            @Cache(ttl: .seconds(5))
+            func foo(id: Int) async throws -> String { "ok" }
         }
         """,
         macros: archeryMacros

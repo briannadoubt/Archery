@@ -1,0 +1,178 @@
+class CacheyAPI {
+    @Cache(ttl: .seconds(5))
+    func foo(id: Int) async throws -> String { "ok" }
+}
+
+protocol CacheyAPIProtocol {
+    func foo(id: Int) async throws -> String
+}
+
+final class CacheyAPILive: CacheyAPIProtocol, @unchecked Sendable {
+    private let base: BaseBox
+    private let cachePolicy: APICachePolicy
+    private let retryPolicy: APIRetryPolicy
+    private let decoding: APIDecodingConfiguration
+    private let decoder: JSONDecoder
+    private let clock = ContinuousClock()
+    struct BaseBox: @unchecked Sendable {
+        let value: CacheyAPI
+    }
+    struct Box: @unchecked Sendable {
+        let value: Any
+    }
+    private let state = State()
+
+    actor State {
+        struct CacheEntry {
+            let value: Box
+            let expiry: ContinuousClock.Instant?
+        }
+
+        private var cache: [String: CacheEntry] = [:]
+
+        func cachedValue(for key: String, now: ContinuousClock.Instant) -> Box? {
+            guard let entry = cache[key] else {
+                return nil
+            }
+            if let expiry = entry.expiry, expiry < now {
+                cache[key] = nil
+                return nil
+            }
+            return entry.value
+        }
+        func setCached(_ value: Box, for key: String, expiry: ContinuousClock.Instant?) {
+            cache[key] = CacheEntry(value: value, expiry: expiry)
+        }
+    }
+
+    init(
+        baseFactory: @escaping () -> CacheyAPI = {
+            CacheyAPI()
+        },
+        retryPolicy: APIRetryPolicy = .default,
+        decoding: APIDecodingConfiguration = .default,
+        cachePolicy: APICachePolicy = .disabled
+    ) {
+        self.base = BaseBox(value: baseFactory())
+        self.retryPolicy = retryPolicy
+        self.decoding = decoding
+        self.decoder = decoding.makeDecoder()
+        self.cachePolicy = cachePolicy
+    }
+
+    private func withRetry<T>(
+        function: String,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        var attempt = 0
+        var lastError: Error?
+
+        while attempt <= retryPolicy.maxRetries {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+            do {
+                return try await operation()
+            } catch {
+                if !retryPolicy.shouldRetry(error) {
+                    throw error
+                }
+                lastError = error
+                if attempt == retryPolicy.maxRetries {
+                    break
+                }
+                let delay = retryPolicy.delay(for: attempt)
+                try? await Task.sleep(for: delay)
+            }
+            attempt += 1
+        }
+
+        throw lastError ?? URLError(.unknown)
+    }
+
+    func decode<T: Decodable>(_ data: Data, as type: T.Type = T.self) throws -> T {
+        try decoder.decode(T.self, from: data)
+    }
+
+    func foo(id: Int) async throws -> String {
+        let policy = APICachePolicy(enabled: true, ttl: .seconds(5))
+        let key = "foo|" + [String(describing: id)].joined(separator: "|")
+        if policy.enabled, let cached = await state.cachedValue(for: key, now: clock.now)?.value as? String {
+            return cached
+        }
+        let result = try await withRetry(function: "foo(id: Int)") {
+            try await self.base.value.foo(id: id)
+        }
+        if policy.enabled {
+            let expiry = policy.ttl.map {
+                clock.now.advanced(by: $0)
+            }
+            await state.setCached(Box(value: result), for: key, expiry: expiry)
+        }
+        return result
+    }
+
+    static func live(
+        cachePolicy: APICachePolicy = .disabled,
+        retryPolicy: APIRetryPolicy = .default,
+        decoding: APIDecodingConfiguration = .default
+    ) -> CacheyAPIProtocol {
+        CacheyAPILive(
+            baseFactory: {
+                CacheyAPI()
+            },
+            retryPolicy: retryPolicy,
+            decoding: decoding,
+            cachePolicy: cachePolicy
+        )
+    }
+
+    static func make(
+        in container: EnvContainer,
+        cachePolicy: APICachePolicy = .disabled,
+        retryPolicy: APIRetryPolicy = .default,
+        decoding: APIDecodingConfiguration = .default
+    ) -> CacheyAPIProtocol {
+        if let cached: CacheyAPIProtocol = container.resolve() {
+            return cached
+        }
+        let client = live(
+            cachePolicy: cachePolicy,
+            retryPolicy: retryPolicy,
+            decoding: decoding
+        )
+        container.register(client as CacheyAPIProtocol)
+        return client
+    }
+
+    static func makeChild(
+        from container: EnvContainer,
+        cachePolicy: APICachePolicy = .disabled,
+        retryPolicy: APIRetryPolicy = .default,
+        decoding: APIDecodingConfiguration = .default
+    ) -> CacheyAPIProtocol {
+        let child = EnvContainer()
+        container.merge(into: child)
+        let client = live(
+            cachePolicy: cachePolicy,
+            retryPolicy: retryPolicy,
+            decoding: decoding
+        )
+        child.register(client as CacheyAPIProtocol)
+        return client
+    }
+}
+
+final class MockCacheyAPI: CacheyAPIProtocol {
+    var fooHandler: ((Int) async throws -> String)?
+
+    init() {
+    }
+
+    func foo(id: Int) async throws -> String {
+        if let handler = fooHandler {
+            return try await handler(id)
+        }
+        fatalError("Not implemented in mock")
+    }
+}
