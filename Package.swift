@@ -24,7 +24,7 @@ let package = Package(
             name: "Archery",
             targets: ["Archery"]
         ),
-        .executable(
+        .library(
             name: "ArcheryClient",
             targets: ["ArcheryClient"]
         ),
@@ -49,7 +49,11 @@ let package = Package(
         .target(name: "Archery", dependencies: ["ArcheryMacros"], swiftSettings: warningFlags),
 
         // A client of the library, which is able to use the macro in its own code.
-        .executableTarget(name: "ArcheryClient", dependencies: ["Archery"], swiftSettings: warningFlags),
+        .target(
+            name: "ArcheryClient",
+            dependencies: ["Archery"],
+            swiftSettings: warningFlags
+        ),
 
         // A test target used to develop the macro implementation.
         .testTarget(
@@ -58,8 +62,26 @@ let package = Package(
                 "Archery",
                 "ArcheryMacros",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax")
+            ],
+            resources: [
+                .process("__Snapshots__")
             ],
             swiftSettings: warningFlags
+        ),
+
+        .plugin(
+            name: "ArcherySnapshotsPlugin",
+            capability: .command(
+                intent: .custom(verb: "archery-snapshots", description: "Regenerate Archery macro snapshots and run tests"),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Update snapshot fixtures")
+                ]
+            ),
+            dependencies: []
         ),
     ]
 )

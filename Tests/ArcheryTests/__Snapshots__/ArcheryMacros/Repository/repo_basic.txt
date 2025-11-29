@@ -1,0 +1,253 @@
+class UserRepository {
+    func profile(id: Int) async throws -> String { "ok" }
+}
+
+protocol UserRepositoryProtocol {
+    func profile(id: Int) async throws -> String
+}
+
+final class UserRepositoryLive: UserRepositoryProtocol, @unchecked Sendable {
+    private let base: BaseBox
+    private let enableCaching: Bool
+    private let enableCoalescing: Bool
+    private let enableTracing: Bool
+    private let traceHandler: RepositoryTraceHandler?
+    struct BaseBox: @unchecked Sendable {
+        let value: UserRepository
+    }
+    struct Box: @unchecked Sendable {
+        let value: Any
+    }
+    private let state = State()
+    private let clock = ContinuousClock()
+
+    actor State {
+        private var cache: [String: Box] = [:]
+        private var inflight: [String: Task<Box, Error>] = [:]
+
+        func cachedValue(for key: String) -> Box? {
+            cache[key]
+        }
+        func setCached(_ value: Box, for key: String) {
+            cache[key] = value
+        }
+        func inflightTask(for key: String) -> Task<Box, Error>? {
+            inflight[key]
+        }
+        func inflightOrCreate(for key: String, make: () -> Task<Box, Error>) -> Task<Box, Error> {
+            if let existing = inflight[key] {
+                return existing
+            }
+            let task = make()
+            inflight[key] = task
+            return task
+        }
+        func clearInflight(for key: String) {
+            inflight[key] = nil
+        }
+    }
+
+    init(
+        baseFactory: @escaping () -> UserRepository = {
+            UserRepository()
+        },
+        enableCaching: Bool = false,
+        enableCoalescing: Bool = false,
+        enableTracing: Bool = false,
+        traceHandler: RepositoryTraceHandler? = nil
+    ) {
+        self.base = BaseBox(value: baseFactory())
+        self.enableCaching = enableCaching
+        self.enableCoalescing = enableCoalescing
+        self.enableTracing = enableTracing
+        self.traceHandler = traceHandler
+    }
+
+    func profile(id: Int) async throws -> String {
+        let key = "profile|" + [String(describing: id)].joined(separator: "|")
+        if enableCaching, let cached = await state.cachedValue(for: key)?.value as? String {
+            if enableTracing {
+                let now = clock.now
+                traceHandler?(RepositoryTraceEvent(
+                    function: "profile(id: Int)",
+                    key: key,
+                    start: now,
+                    end: now,
+                    duration: .zero,
+                    cacheHit: true,
+                    coalesced: false,
+                    error: nil,
+                    metadata: nil
+                ))
+            }
+            return cached
+        }
+        let start = enableTracing ? clock.now : nil
+        let task: Task<Box, Error>
+
+        if enableCoalescing {
+            task = await state.inflightOrCreate(for: key) {
+                Task<Box, Error> {
+                    do {
+                        let result = try await base.value.profile(id: id)
+                        if enableCaching {
+                            await state.setCached(Box(value: result), for: key)
+                        }
+                        if let start = start, enableTracing {
+                            let end = clock.now
+                            traceHandler?(RepositoryTraceEvent(
+                                function: "profile(id: Int)",
+                                key: key,
+                                start: start,
+                                end: end,
+                                duration: start.duration(to: end),
+                                cacheHit: false,
+                                coalesced: false,
+                                error: nil,
+                                metadata: nil
+                            ))
+                        }
+                        return Box(value: result)
+                    } catch {
+                        if let start = start, enableTracing {
+                            let end = clock.now
+                            traceHandler?(RepositoryTraceEvent(
+                                function: "profile(id: Int)",
+                                key: key,
+                                start: start,
+                                end: end,
+                                duration: start.duration(to: end),
+                                cacheHit: false,
+                                coalesced: false,
+                                error: error,
+                                metadata: nil
+                            ))
+                        }
+                        throw normalizeRepositoryError(error, function: "profile(id: Int)", file: #fileID, line: #line)
+                    }
+                }
+            }
+        } else {
+            task = Task<Box, Error> {
+                do {
+                    let result = try await base.value.profile(id: id)
+                    if enableCaching {
+                        await state.setCached(Box(value: result), for: key)
+                    }
+                    if let start = start, enableTracing {
+                        let end = clock.now
+                        traceHandler?(RepositoryTraceEvent(
+                            function: "profile(id: Int)",
+                            key: key,
+                            start: start,
+                            end: end,
+                            duration: start.duration(to: end),
+                            cacheHit: false,
+                            coalesced: false,
+                            error: nil,
+                            metadata: nil
+                        ))
+                    }
+                    return Box(value: result)
+                } catch {
+                    if let start = start, enableTracing {
+                        let end = clock.now
+                        traceHandler?(RepositoryTraceEvent(
+                            function: "profile(id: Int)",
+                            key: key,
+                            start: start,
+                            end: end,
+                            duration: start.duration(to: end),
+                            cacheHit: false,
+                            coalesced: false,
+                            error: error,
+                            metadata: nil
+                        ))
+                    }
+                    throw normalizeRepositoryError(error, function: "profile(id: Int)", file: #fileID, line: #line)
+                }
+            }
+        }
+
+        let value = try await task.result.get()
+
+        if enableCoalescing {
+            await state.clearInflight(for: key)
+        }
+
+        guard let typed = value.value as? String else {
+            throw RepositoryError.decodingFailed
+        }
+        return typed
+    }
+
+    static func live(
+        enableCaching: Bool = false,
+        enableCoalescing: Bool = false,
+        enableTracing: Bool = false,
+        traceHandler: RepositoryTraceHandler? = nil
+    ) -> UserRepositoryProtocol {
+        UserRepositoryLive(
+            baseFactory: {
+                UserRepository()
+            },
+            enableCaching: enableCaching,
+            enableCoalescing: enableCoalescing,
+            enableTracing: enableTracing,
+            traceHandler: traceHandler
+        )
+    }
+
+    static func make(
+        in container: EnvContainer,
+        enableCaching: Bool = false,
+        enableCoalescing: Bool = false,
+        enableTracing: Bool = false,
+        traceHandler: RepositoryTraceHandler? = nil
+    ) -> UserRepositoryProtocol {
+        if let cached: UserRepositoryProtocol = container.resolve() {
+            return cached
+        }
+        let repo = live(
+            enableCaching: enableCaching,
+            enableCoalescing: enableCoalescing,
+            enableTracing: enableTracing,
+            traceHandler: traceHandler
+        )
+        container.register(repo as UserRepositoryProtocol)
+        return repo
+    }
+
+    static func makeChild(
+        from container: EnvContainer,
+        enableCaching: Bool = false,
+        enableCoalescing: Bool = false,
+        enableTracing: Bool = false,
+        traceHandler: RepositoryTraceHandler? = nil
+    ) -> UserRepositoryProtocol {
+        let child = EnvContainer()
+        container.merge(into: child)
+        let repo = live(
+            enableCaching: enableCaching,
+            enableCoalescing: enableCoalescing,
+            enableTracing: enableTracing,
+            traceHandler: traceHandler
+        )
+        child.register(repo as UserRepositoryProtocol)
+        return repo
+    }
+}
+
+final class MockUserRepository: UserRepositoryProtocol {
+    var profileHandler: ((Int) async throws -> String)?
+
+    init() {
+    }
+
+    func profile(id: Int) async throws -> String {
+        if let handler = profileHandler {
+            return try await handler(id)
+        }
+        fatalError("Not implemented in mock")
+    }
+}

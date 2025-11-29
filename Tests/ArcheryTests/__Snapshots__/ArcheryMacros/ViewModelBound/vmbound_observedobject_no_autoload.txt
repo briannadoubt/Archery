@@ -1,0 +1,71 @@
+struct SampleView {
+
+    @SwiftUI.Environment(\.archeryContainer) private var __archeryEnv
+    @SwiftUI.ObservedObject private var vmHolder = __ArcheryVMHolder(factory: { SampleVM() })
+
+    var vm: SampleVM {
+        vmHolder.value(container: __archeryEnv)
+    }
+
+    static func previewContainer(seed: ((inout EnvContainer) -> Void)? = nil) -> EnvContainer {
+        var c = EnvContainer()
+        c.registerFactory {
+            SampleVM()
+        }
+        seed?(&c)
+        return c
+    }
+
+    #if DEBUG
+    @available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *)
+    struct SampleViewPreviewModifier: SwiftUI.PreviewModifier {
+        /// Use with `#Preview(traits: .modifier(SampleViewPreviewModifier())) { SampleView() }`
+        /// Optionally pass a seeding closure to register mocks: `.modifier(SampleViewPreviewModifier { c in /* c.register(mock) */ })`
+        typealias Body = SwiftUI.AnyView
+        typealias Context = Void
+        let seed: ((inout EnvContainer) -> Void)?
+        init(seed: ((inout EnvContainer) -> Void)? = nil) {
+            self.seed = seed
+        }
+        func body(content: Content, context: Context) -> Body {
+            let container = SampleView.previewContainer(seed: seed)
+            return SwiftUI.AnyView(content.environment(\.archeryContainer, container))
+        }
+    }
+    #endif
+
+    @MainActor private final class __ArcheryVMHolder: ObservableObject {
+        private var cached: SampleVM?
+        private let factory: @MainActor () -> SampleVM
+        init(factory: @escaping @MainActor () -> SampleVM = {
+                SampleVM()
+            }) {
+            self.factory = factory
+        }
+        func value(container: EnvContainer?) -> SampleVM {
+            if let cached {
+                return cached
+            }
+            if let container {
+                if let resolved: SampleVM = container.resolve() {
+                    self.cached = resolved
+                    return resolved
+                }
+                fatalError("Archery: EnvContainer missing registration for SampleVM. Register it in EnvContainer or supply a factory.")
+            }
+            let created = factory()
+            self.cached = created
+            return created
+        }
+    }
+
+    #if DEBUG
+    struct SampleView_Previews: SwiftUI.PreviewProvider {
+        static var previews: some SwiftUI.View {
+            let container = SampleView.previewContainer()
+            return SampleView()
+                .environment(\.archeryContainer, container)
+        }
+    }
+    #endif
+}

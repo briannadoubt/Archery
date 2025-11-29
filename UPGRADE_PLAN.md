@@ -69,7 +69,7 @@
 - Previews for each tab with mock data.
 - Done when: sample app boots with generated shell; routes type-safe; per-tab previews render.
 
-## 6. Tooling & DX
+## 6. Tooling & DX - DONE
 - Diagnostics: warn on missing @MainActor for VMs, non-async repo APIs, or KeyValueStore cases without associated values.
 - Snapshot tests for macro output; fixtures per macro shape.
 - SwiftPM plugin/CLI task to regenerate snapshots and run tests.
@@ -104,7 +104,7 @@
 - Environment-driven light/dark/high-contrast variants; semantic color enforcement.
 - Preview catalog sweeps token combinations per component.
 - Done when: token import regenerates themes; previews cover light/dark/high-contrast; semantic colors enforced by lint.
-ok
+
 ## 12. Accessibility & Localization
 - Diagnostics for missing accessibility labels, Dynamic Type escapes, contrast.
 - String extraction + pseudo-localization preview macro; RTL snapshot lane; default locales en + pseudo + RTL run.

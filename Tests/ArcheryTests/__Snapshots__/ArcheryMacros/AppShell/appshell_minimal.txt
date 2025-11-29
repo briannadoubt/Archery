@@ -1,0 +1,109 @@
+struct MiniShell {
+    enum Tab: CaseIterable { case home 
+}
+
+    struct ShellView: SwiftUI.View {
+        @SwiftUI.State private var selection: Tab
+        @SwiftUI.State private var paths: [Tab: [AnyHashable]]
+        private var container: EnvContainer
+
+        enum HomeRoute: Hashable {
+            case root
+        }
+
+        // Default builders; override with static funcs matching route types
+        private static func defaultTabContent<Route>(_ route: Route, _ container: EnvContainer) -> some SwiftUI.View {
+            SwiftUI.Text(String(describing: route))
+        }
+
+        private static func defaultDestination<Route>(_ route: Route, _ container: EnvContainer) -> some SwiftUI.View {
+            SwiftUI.Text(String(describing: route))
+        }
+
+        init(
+            selection: Tab = .home,
+            base: EnvContainer = EnvContainer(),
+            mergeFrom parent: EnvContainer? = nil,
+            patch: ((inout EnvContainer) -> Void)? = nil
+        ) {
+            self._selection = SwiftUI.State(initialValue: selection)
+            let initialPaths = Dictionary(uniqueKeysWithValues: Tab.allCases.map {
+                    ($0, [AnyHashable]())
+                })
+            self._paths = SwiftUI.State(initialValue: initialPaths)
+
+            let working = EnvContainer()
+            base.merge(into: working)
+            parent?.merge(into: working)
+            Self.register(into: &working)
+
+            patch?(&working)
+            self.container = working
+        }
+
+        var body: some SwiftUI.View {
+            SwiftUI.TabView(selection: $selection) {
+                SwiftUI.NavigationStack(path: binding(for: .home, as: HomeRoute.self)) {
+                    Self.defaultTabContent(.root, container)
+                }
+                .navigationDestination(for: HomeRoute.self) { route in
+                    Self.defaultDestination(route, container)
+                }
+
+
+                .tabItem {
+                    SwiftUI.Label("home", systemImage: "circle")
+                }
+                .tag(Tab.home)
+            }
+            .environment(\.archeryContainer, container)
+        }
+
+        private func binding<Route: Hashable>(for tab: Tab, as _: Route.Type) -> SwiftUI.Binding<[Route]> {
+            SwiftUI.Binding(
+                get: {
+                    (paths[tab] as? [Route]) ?? []
+                },
+                set: { newValue in
+                    paths[tab] = newValue.map {
+                        $0 as AnyHashable
+                    }
+                }
+            )
+        }
+        static func register(into container: inout EnvContainer) {
+            container.registerFactory {
+                Self.init()
+            }
+            container.register(Tab.allCases)
+
+
+
+        }
+
+        static func previewContainer(seed: ((inout EnvContainer) -> Void)? = nil, mergeFrom parent: EnvContainer? = nil) -> EnvContainer {
+            let c = EnvContainer()
+            parent?.merge(into: c)
+            Self.register(into: &c)
+
+
+            seed?(&c)
+            return c
+        }
+    }
+
+    #if DEBUG
+    struct ShellView_Previews: SwiftUI.PreviewProvider {
+        static var previews: some SwiftUI.View {
+            let container = ShellView.previewContainer()
+            return SwiftUI.Group {
+                ForEach(Array(Tab.allCases), id: \.self) { tab in
+                    ShellView(selection: tab, mergeFrom: container)
+                        .environment(\.archeryContainer, container)
+                        .previewDisplayName(String(describing: tab))
+                }
+            }
+        }
+    }
+    #endif
+}

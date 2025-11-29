@@ -1,0 +1,161 @@
+@MainActor
+class NoLoadVM: Resettable {
+    @ObservationTracked
+    var items: LoadState<[String]> = .idle
+
+    #if canImport(Observation)
+    @ObservationIgnored
+    private let _$observationRegistrar = Observation.ObservationRegistrar()
+    #endif
+
+    #if canImport(Observation)
+    func access<Member>(keyPath: KeyPath<NoLoadVM, Member>) {
+        _$observationRegistrar.access(self, keyPath: keyPath)
+    }
+
+    func withMutation<Member, MutationResult>(
+        keyPath: KeyPath<NoLoadVM, Member>,
+        _ mutation: () throws -> MutationResult
+    ) rethrows -> MutationResult {
+        try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
+    }
+
+    func willSet<Member>(_ keyPath: KeyPath<NoLoadVM, Member>) {
+        _$observationRegistrar.willSet(self, keyPath: keyPath)
+    }
+
+    func didSet<Member>(_ keyPath: KeyPath<NoLoadVM, Member>) {
+        _$observationRegistrar.didSet(self, keyPath: keyPath)
+    }
+
+    private func shouldNotifyObservers<Member>(_ lhs: Member, _ rhs: Member) -> Bool {
+        true
+    }
+    private func shouldNotifyObservers<Member: Equatable>(_ lhs: Member, _ rhs: Member) -> Bool {
+        lhs != rhs
+    }
+    private func shouldNotifyObservers<Member: AnyObject>(_ lhs: Member, _ rhs: Member) -> Bool {
+        lhs !== rhs
+    }
+    private func shouldNotifyObservers<Member: Equatable & AnyObject>(_ lhs: Member, _ rhs: Member) -> Bool {
+        lhs != rhs
+    }
+    #endif
+
+    @MainActor
+    private var __archeryCancelables: [CancelableTask] = []
+
+    @MainActor
+    private var __archeryDebounceTasks: [AnyHashable: Task<Void, Never>] = [:]
+
+    @MainActor
+    private var __archeryThrottleTasks: [AnyHashable: Task<Void, Never>] = [:]
+
+    @MainActor
+    func track(_ task: CancelableTask) {
+        __archeryCancelables.append(task)
+    }
+
+    @MainActor
+    func cancelTrackedTasks() {
+        __archeryCancelables.forEach {
+            $0.cancel()
+        }
+        __archeryCancelables.removeAll()
+    }
+
+    @MainActor
+    func reset() {
+        cancelTrackedTasks()
+    }
+
+    @MainActor
+    func onAppear() {
+        cancelTrackedTasks()
+        let task = Task { @MainActor in
+            await load()
+        }
+        track(CancelableTask {
+                task.cancel()
+            })
+    }
+
+    @MainActor
+    func onDisappear() {
+        cancelTrackedTasks()
+    }
+
+    @MainActor
+    func debounce(
+        id: AnyHashable = #function,
+        dueTime: Duration,
+        action: @escaping @Sendable () async -> Void
+    ) {
+        __archeryDebounceTasks[id]?.cancel()
+        let task = Task { @MainActor in
+            try? await Task.sleep(for: dueTime)
+            guard !Task.isCancelled else {
+                return
+            }
+            await action()
+        }
+        __archeryDebounceTasks[id] = task
+        track(CancelableTask {
+                task.cancel()
+            })
+    }
+
+    @MainActor
+    func throttle(
+        id: AnyHashable = #function,
+        interval: Duration,
+        action: @escaping @Sendable () async -> Void
+    ) {
+        if let existing = __archeryThrottleTasks[id], !existing.isCancelled {
+            return
+        }
+
+        let task = Task { @MainActor in
+            defer {
+                __archeryThrottleTasks[id] = nil
+            }
+            await action()
+            try? await Task.sleep(for: interval)
+        }
+
+        __archeryThrottleTasks[id] = task
+        track(CancelableTask {
+                task.cancel()
+            })
+    }
+
+    @MainActor
+    func beginLoading<Value>(_ keyPath: ReferenceWritableKeyPath<NoLoadVM, LoadState<Value>>) {
+        self[keyPath: keyPath] = .loading
+    }
+
+    @MainActor
+    func endSuccess<Value>(_ keyPath: ReferenceWritableKeyPath<NoLoadVM, LoadState<Value>>, value: Value) {
+        self[keyPath: keyPath] = .success(value)
+    }
+
+    @MainActor
+    func endFailure<Value>(_ keyPath: ReferenceWritableKeyPath<NoLoadVM, LoadState<Value>>, error: Error) {
+        self[keyPath: keyPath] = .failure(error)
+    }
+
+    @MainActor
+    func setIdle<Value>(_ keyPath: ReferenceWritableKeyPath<NoLoadVM, LoadState<Value>>) {
+        self[keyPath: keyPath] = .idle
+    }
+
+    @MainActor
+    func load() async {
+    }
+}
+
+extension NoLoadVM: Observation.Observable {
+}
+
+extension NoLoadVM: ArcheryLoadable {
+}

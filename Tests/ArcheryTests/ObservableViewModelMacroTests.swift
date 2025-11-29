@@ -7,48 +7,55 @@ import XCTest
 private let testMacros: [String: Macro.Type] = ["ObservableViewModel": ObservableViewModelMacro.self]
 #endif
 
+@MainActor
 final class ObservableViewModelMacroTests: XCTestCase {
-    func testAddsResetMember() throws {
+    func testExpandsWithAsyncLoadAndHelpers() throws {
         #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ObservableViewModel
-            class SampleVM {}
-            """,
-            expandedSource: """
-            class SampleVM {
-
-                @MainActor
-                private var __archeryCancelables: [CancelableTask] = []
-
-                @MainActor
-                func track(_ task: CancelableTask) {
-                    __archeryCancelables.append(task)
-                }
-
-                @MainActor
-                func cancelTrackedTasks() {
-                    __archeryCancelables.forEach {
-                        $0.cancel()
-                    }
-                    __archeryCancelables.removeAll()
-                }
-
-                @MainActor
-                func reset() {
-                    cancelTrackedTasks()
-                }
-
-                @MainActor
-                func onAppear() {
-                }
-
-                @MainActor
-                func onDisappear() {
-                    cancelTrackedTasks()
-                }
+            @MainActor
+            class SampleVM: Resettable {
+                func load() async {}
             }
             """,
+            expandedSource: snapshot("ArcheryMacros/ObservableViewModel/observable_with_load"),
+            macros: testMacros,
+            indentationWidth: .spaces(4)
+        )
+        #endif
+    }
+
+    func testAddsLoadStubWhenMissingAndIncludesStateHelpers() throws {
+        #if canImport(ArcheryMacros)
+        assertMacroExpansion(
+            """
+            @ObservableViewModel
+            @MainActor
+            class NoLoadVM: Resettable {
+                @ObservationTracked
+                var items: LoadState<[String]> = .idle
+            }
+            """,
+            expandedSource: snapshot("ArcheryMacros/ObservableViewModel/observable_no_load"),
+            macros: testMacros,
+            indentationWidth: .spaces(4)
+        )
+        #endif
+    }
+
+    func testDiagnosticsRequireMainActorAndResettable() throws {
+        #if canImport(ArcheryMacros)
+        assertMacroExpansion(
+            """
+            @ObservableViewModel
+            class BadVM {}
+            """,
+            expandedSource: snapshot("ArcheryMacros/ObservableViewModel/observable_bad_vm"),
+            diagnostics: [
+                DiagnosticSpec(message: "@ObservableViewModel requires the class to be annotated with @MainActor", line: 1, column: 1),
+                DiagnosticSpec(message: "@ObservableViewModel requires the class to conform to Resettable", line: 1, column: 1)
+            ],
             macros: testMacros,
             indentationWidth: .spaces(4)
         )

@@ -7,6 +7,7 @@ import XCTest
 private let testMacros: [String: Macro.Type] = ["ViewModelBound": ViewModelBoundMacro.self]
 #endif
 
+@MainActor
 final class ViewModelBoundMacroTests: XCTestCase {
     func testInjectsStateViewModel() throws {
         #if canImport(ArcheryMacros)
@@ -15,30 +16,37 @@ final class ViewModelBoundMacroTests: XCTestCase {
             @ViewModelBound<SampleVM>
             struct SampleView {}
             """,
-            expandedSource: """
+            expandedSource: snapshot("ArcheryMacros/ViewModelBound/vmbound_stateobject_autoload"),
+            macros: testMacros,
+            indentationWidth: .spaces(4)
+        )
+        #endif
+    }
+
+    func testUsesCustomPreviewContainerWhenPresent() throws {
+        #if canImport(ArcheryMacros)
+        assertMacroExpansion(
+            """
+            @ViewModelBound<SampleVM>
             struct SampleView {
-
-                @SwiftUI.Environment(\\.archeryContainer) private var __archeryEnv
-                @StateObject private var vmHolder = __ArcheryVMHolder(container: __archeryEnv)
-
-                var vm: SampleVM {
-                    vmHolder.value
-                }
-
-                private final class __ArcheryVMHolder: ObservableObject {
-                    let value: SampleVM
-                    init(container: EnvContainer?, factory: @escaping () -> SampleVM = {
-                            SampleVM()
-                        }) {
-                        if let resolved: SampleVM = container?.resolve() {
-                            self.value = resolved
-                        } else {
-                            self.value = factory()
-                        }
-                    }
-                }
+                static func makePreviewContainer() -> EnvContainer { EnvContainer() }
             }
             """,
+            expandedSource: snapshot("ArcheryMacros/ViewModelBound/vmbound_custom_preview_container"),
+            macros: testMacros,
+            indentationWidth: .spaces(4)
+        )
+        #endif
+    }
+
+    func testObservedObjectAndNoAutoLoad() throws {
+        #if canImport(ArcheryMacros)
+        assertMacroExpansion(
+            """
+            @ViewModelBound<SampleVM>(useStateObject: false, autoLoad: false)
+            struct SampleView {}
+            """,
+            expandedSource: snapshot("ArcheryMacros/ViewModelBound/vmbound_observedobject_no_autoload"),
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
