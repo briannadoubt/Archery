@@ -1,3 +1,7 @@
+import Foundation
+#if canImport(Observation)
+@_exported import Observation
+#endif
 // Runtime shims and macro declarations for Archery.
 
 // MARK: - Navigation & Errors
@@ -17,6 +21,70 @@ public enum RepositoryError: Error, Equatable {
         default: return false
         }
     }
+}
+
+public struct RepositorySourceError: Error, CustomStringConvertible {
+    public let function: String
+    public let file: String
+    public let line: Int
+    public let underlying: Error
+
+    public var description: String {
+        "\(function) @ \(file):\(line) — \(underlying)"
+    }
+}
+
+public struct RepositoryTraceEvent: @unchecked Sendable {
+    public let function: String
+    public let key: String?
+    public let start: ContinuousClock.Instant
+    public let end: ContinuousClock.Instant
+    public let duration: Duration
+    public let cacheHit: Bool
+    public let coalesced: Bool
+    public let error: Error?
+    public let metadata: RepositoryTraceMetadata?
+
+    public init(
+        function: String,
+        key: String?,
+        start: ContinuousClock.Instant,
+        end: ContinuousClock.Instant,
+        duration: Duration,
+        cacheHit: Bool,
+        coalesced: Bool,
+        error: Error?,
+        metadata: RepositoryTraceMetadata? = nil
+    ) {
+        self.function = function
+        self.key = key
+        self.start = start
+        self.end = end
+        self.duration = duration
+        self.cacheHit = cacheHit
+        self.coalesced = coalesced
+        self.error = error
+        self.metadata = metadata
+    }
+}
+
+public typealias RepositoryTraceHandler = @Sendable (RepositoryTraceEvent) -> Void
+
+public struct RepositoryTraceMetadata: Sendable {
+    public let info: [String: Sendable]
+    public init(_ info: [String: Sendable]) { self.info = info }
+}
+
+public func normalizeRepositoryError(_ error: Error, function: String, file: String, line: Int) -> RepositoryError {
+    if let repoError = error as? RepositoryError {
+        return repoError
+    }
+
+    if error is URLError {
+        return .io(RepositorySourceError(function: function, file: file, line: line, underlying: error))
+    }
+
+    return .unknown(RepositorySourceError(function: function, file: file, line: line, underlying: error))
 }
 
 public struct CancelableTask: Sendable {
@@ -54,6 +122,21 @@ public final class EnvContainer: @unchecked Sendable {
         storage.forEach { other.storage[$0.key] = $0.value }
         factories.forEach { other.factories[$0.key] = $0.value }
     }
+
+    /// Merges registrations from another container into this one.
+    public func merge(from other: EnvContainer) {
+        other.merge(into: self)
+    }
+}
+
+public extension EnvContainer {
+    /// Creates a child container that shares registrations/factories from the receiver.
+    /// Useful for constructing child repositories that need the same DI shape without mutating the parent.
+    func makeChildRepo<R>(_ builder: (EnvContainer) -> R) -> R {
+        let child = EnvContainer()
+        merge(into: child)
+        return builder(child)
+    }
 }
 
 // Shared UI types
@@ -74,16 +157,24 @@ public struct AlertState: Equatable {
 }
 
 public protocol Provides<T> { associatedtype T; func resolve() -> T }
-public protocol Resettable { func reset() }
+@MainActor public protocol Resettable { func reset() }
+@MainActor public protocol ArcheryLoadable { func load() async }
+public struct DIManual: Sendable { public init() {} }
+public struct ShellSheet: Sendable { public init() {} }
+public struct ShellFullScreen: Sendable { public init() {} }
+public struct ShellWindow: Sendable { public init() {} }
+public struct AutoRegister: Sendable { public init() {} }
 
 // MARK: - Macro Declarations
 @attached(member, names: arbitrary)
 public macro KeyValueStore() = #externalMacro(module: "ArcheryMacros", type: "KeyValueStoreMacro")
 
-@attached(peer, names: suffixed(Protocol), prefixed(Mock))
+@attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
 public macro Repository() = #externalMacro(module: "ArcheryMacros", type: "RepositoryMacro")
 
 @attached(member, names: arbitrary)
+@attached(memberAttribute)
+@attached(extension, conformances: Observation.Observable, ArcheryLoadable)
 public macro ObservableViewModel() = #externalMacro(module: "ArcheryMacros", type: "ObservableViewModelMacro")
 
 @attached(member, names: arbitrary)

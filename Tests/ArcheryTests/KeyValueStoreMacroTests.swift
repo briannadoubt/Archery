@@ -1,3 +1,4 @@
+import Archery
 import ArcheryMacros
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
@@ -50,7 +51,7 @@ final class KeyValueStoreMacroTests: XCTestCase {
                         applyMigrations()
                     }
 
-                    mutating func set(_ key: UserStore) throws {
+                    mutating func set(_ key: UserStore) async throws {
                         switch key {
                         case .username(let value):
                             storage["UserStore.username"] = try encoder.encode(value)
@@ -61,14 +62,14 @@ final class KeyValueStoreMacroTests: XCTestCase {
                         }
                     }
 
-                    func get<T: Codable>(_ key: UserStore, as type: T.Type = T.self, default defaultValue: T? = nil) throws -> T? {
+                    func get<T: Codable>(_ key: UserStore, as type: T.Type = T.self, default defaultValue: T? = nil) async throws -> T? {
                         guard let data = storage[key.keyName] else {
                             return defaultValue
                         }
                         return try decoder.decode(T.self, from: data)
                     }
 
-                    mutating func remove(_ key: UserStore) {
+                    mutating func remove(_ key: UserStore) async {
                         storage[key.keyName] = nil
                         notify(key: key)
                     }
@@ -100,26 +101,24 @@ final class KeyValueStoreMacroTests: XCTestCase {
                         }
                     }
 
-                    func username() throws -> String? {
+                    func username(default defaultValue: String? = nil) async throws -> String? {
                         guard let data = storage["UserStore.username"] else {
-                            return nil
+                            return defaultValue
                         }
                         return try decoder.decode(String.self, from: data)
                     }
-
-                    func score() throws -> Int? {
+                    func score(default defaultValue: Int? = nil) async throws -> Int? {
                         guard let data = storage["UserStore.score"] else {
-                            return nil
+                            return defaultValue
                         }
                         return try decoder.decode(Int.self, from: data)
                     }
 
-                    mutating func setUsername(_ value: String) throws {
+                    mutating func setUsername(_ value: String) async throws {
                         storage["UserStore.username"] = try encoder.encode(value)
                         notify(key: .username(value))
                     }
-
-                    mutating func setScore(_ value: Int) throws {
+                    mutating func setScore(_ value: Int) async throws {
                         storage["UserStore.score"] = try encoder.encode(value)
                         notify(key: .score(value))
                     }
@@ -130,5 +129,47 @@ final class KeyValueStoreMacroTests: XCTestCase {
             indentationWidth: .spaces(4)
         )
         #endif
+    }
+
+    @KeyValueStore
+    enum RuntimeStore {
+        case username(String)
+        case score(Int)
+    }
+
+    func testMigrationMovesOldKeys() async throws {
+        let legacy = try JSONEncoder().encode("old-name")
+        let store = RuntimeStore.Store(
+            initialValues: ["RuntimeStore.name": legacy],
+            migrations: ["RuntimeStore.name": "RuntimeStore.username"]
+        )
+
+        let migrated = try await store.username()
+        XCTAssertEqual(migrated, "old-name")
+    }
+
+    func testDefaultValueReturnedWhenMissing() async throws {
+        let store = RuntimeStore.Store()
+        let value = try await store.username(default: "guest")
+        XCTAssertEqual(value, "guest")
+    }
+
+    func testChangeNotificationsYieldUpdates() async throws {
+        var store = RuntimeStore.Store()
+        let stream = store.changes()
+        var iterator = stream.makeAsyncIterator()
+
+        try await store.set(.score(42))
+
+        let change = await iterator.next()
+        XCTAssertNotNil(change)
+        XCTAssertEqual(change?.key.keyName, "RuntimeStore.score")
+
+        if let data = change?.data {
+            let decoded = try JSONDecoder().decode(Int.self, from: data)
+            XCTAssertEqual(decoded, 42)
+        } else {
+            XCTFail("Expected data for change")
+        }
     }
 }

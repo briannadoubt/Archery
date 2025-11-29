@@ -56,13 +56,23 @@ public enum KeyValueStoreMacro: MemberMacro {
             .joined(separator: "\n")
 
         let typedGetters = cases.map {
-            "    func \($0.name)() throws -> \($0.type)? {\n        guard let data = storage[\"\(enumName).\($0.name)\"] else { return nil }\n        return try decoder.decode(\($0.type).self, from: data)\n    }"
-        }.joined(separator: "\n\n")
+            """
+    func \($0.name)(default defaultValue: \($0.type)? = nil) async throws -> \($0.type)? {
+        guard let data = storage["\(enumName).\($0.name)"] else { return defaultValue }
+        return try decoder.decode(\($0.type).self, from: data)
+    }
+"""
+        }.joined(separator: "\n")
 
         let typedSetters = cases.map {
             let cap = $0.name.prefix(1).uppercased() + String($0.name.dropFirst())
-            return "    mutating func set\(cap)(_ value: \($0.type)) throws {\n        storage[\"\(enumName).\($0.name)\"] = try encoder.encode(value)\n        notify(key: .\($0.name)(value))\n    }"
-        }.joined(separator: "\n\n")
+            return """
+    mutating func set\(cap)(_ value: \($0.type)) async throws {
+        storage["\(enumName).\($0.name)"] = try encoder.encode(value)
+        notify(key: .\($0.name)(value))
+    }
+"""
+        }.joined(separator: "\n")
 
         let keyNameDecl = """
 \(access)var keyName: String {
@@ -91,18 +101,18 @@ public enum KeyValueStoreMacro: MemberMacro {
         applyMigrations()
     }
 
-    mutating func set(_ key: \(enumName)) throws {
+    mutating func set(_ key: \(enumName)) async throws {
         switch key {
 \(setSwitch)
         }
     }
 
-    func get<T: Codable>(_ key: \(enumName), as type: T.Type = T.self, default defaultValue: T? = nil) throws -> T? {
+    func get<T: Codable>(_ key: \(enumName), as type: T.Type = T.self, default defaultValue: T? = nil) async throws -> T? {
         guard let data = storage[key.keyName] else { return defaultValue }
         return try decoder.decode(T.self, from: data)
     }
 
-    mutating func remove(_ key: \(enumName)) {
+    mutating func remove(_ key: \(enumName)) async {
         storage[key.keyName] = nil
         notify(key: key)
     }
