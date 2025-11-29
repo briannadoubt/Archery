@@ -218,6 +218,14 @@ public macro DesignTokens(manifest: String) = #externalMacro(module: "ArcheryMac
 @attached(extension, conformances: LocalizationKey)
 public macro Localizable() = #externalMacro(module: "ArcheryMacros", type: "LocalizableMacro")
 
+@attached(member, names: arbitrary)
+@attached(extension)
+public macro SharedModel(
+    widget: Bool = true,
+    intent: Bool = true,
+    liveActivity: Bool = false
+) = #externalMacro(module: "ArcheryMacros", type: "SharedModelMacro")
+
 // Minimal handle for tests
 public struct Archery { public init() {} }
 

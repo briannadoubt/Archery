@@ -13,6 +13,7 @@ struct ArcheryPlugin: CompilerPlugin {
         CacheMacro.self,
         DesignTokensMacro.self,
         PersistenceGatewayMacro.self,
-        LocalizableMacro.self
+        LocalizableMacro.self,
+        SharedModelMacro.self
     ]
 }

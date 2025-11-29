@@ -105,13 +105,13 @@
 - Preview catalog sweeps token combinations per component.
 - Done when: token import regenerates themes; previews cover light/dark/high-contrast; semantic colors enforced by lint.
 
-## 12. Accessibility & Localization
+## 12. Accessibility & Localization - DONE
 - Diagnostics for missing accessibility labels, Dynamic Type escapes, contrast.
 - String extraction + pseudo-localization preview macro; RTL snapshot lane; default locales en + pseudo + RTL run.
 - API to attach accessibility metadata to generated views.
 - Done when: a11y lint passes; pseudo/RTL snapshots generated; missing label checks fail CI.
 
-## 13. Widgets, Intents, Background
+## 13. Widgets, Intents, Background ✅ DONE
 - Shared model macro emitting App Intents, Widget timelines, Live Activities stubs.
 - Background task scheduler wrappers with testing doubles.
 - Timeline/intent fixtures for snapshots and previews.
