@@ -4,15 +4,20 @@ import Foundation
 @main
 struct ArcherySnapshotsPlugin: CommandPlugin {
     func performCommand(context: PluginContext, arguments: [String]) throws {
-        try run(toolPath: "/usr/bin/swift", arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"])
-        try run(toolPath: "/usr/bin/swift", arguments: ["test"])
+        let workdir = context.package.directory.string
+        try run(toolPath: "/usr/bin/swift", arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"], workingDirectory: workdir)
+        try run(toolPath: "/usr/bin/swift", arguments: ["test"], workingDirectory: workdir)
     }
 
-    private func run(toolPath: String, arguments: [String]) throws {
+    private func run(toolPath: String, arguments: [String], workingDirectory: String? = nil) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: toolPath)
         process.arguments = arguments
-        process.currentDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        if let workingDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        } else {
+            process.currentDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        }
 
         let stdout = Pipe()
         let stderr = Pipe()
@@ -40,7 +45,9 @@ struct CommandError: Error, CustomStringConvertible {
 import XcodeProjectPlugin
 extension ArcherySnapshotsPlugin: XcodeCommandPlugin {
     func performCommand(context: XcodePluginContext, arguments: [String]) throws {
-        try performCommand(context: context.pluginContext, arguments: arguments)
+        let workdir = context.xcodeProject.directory.string
+        try run(toolPath: "/usr/bin/swift", arguments: ["test", "-e", "ARCHERY_RECORD_SNAPSHOTS=1"], workingDirectory: workdir)
+        try run(toolPath: "/usr/bin/swift", arguments: ["test"], workingDirectory: workdir)
     }
 }
 #endif
