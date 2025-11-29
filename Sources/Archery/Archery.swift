@@ -5,7 +5,7 @@ import Foundation
 // Runtime shims and macro declarations for Archery.
 
 // MARK: - Navigation & Errors
-public protocol NavigationRoute: Hashable {}
+public protocol NavigationRoute: Hashable, Sendable, NavigationSerializable {}
 
 public enum RepositoryError: Error, Equatable {
     case notFound

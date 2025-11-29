@@ -137,7 +137,7 @@ public enum AppShellMacro: MemberMacro {
             if let custom = customRouteEnums[name.capitalizedRouteName] {
                 return "    typealias \(name.capitalizedRouteName) = \(custom)"
             }
-            return "    enum \(name.capitalizedRouteName): Hashable { case root }"
+            return "    enum \(name.capitalizedRouteName): NavigationRoute, Codable { case root }"
         }.joined(separator: "\n")
 
         let tabItems = tabCases.map { name -> String in
@@ -225,6 +225,8 @@ public enum AppShellMacro: MemberMacro {
     @SwiftUI.State private var selection: Tab
     @SwiftUI.State private var paths: [Tab: [AnyHashable]]
 \(sheetState)\(fullState)    private var container: EnvContainer
+    private let restorer: NavigationRestorer<Tab>?
+    private let persistence: NavigationPersistence
 
 \(routeEnums)
 
@@ -241,12 +243,10 @@ public enum AppShellMacro: MemberMacro {
         selection: Tab = .\(firstCase),
         base: EnvContainer = EnvContainer(),
         mergeFrom parent: EnvContainer? = nil,
-        patch: ((inout EnvContainer) -> Void)? = nil
+        patch: ((inout EnvContainer) -> Void)? = nil,
+        persistence: NavigationPersistence = .enabled(key: "archery.navigation.\(Self.self)")
     ) {
-        self._selection = SwiftUI.State(initialValue: selection)
-        let initialPaths = Dictionary(uniqueKeysWithValues: Tab.allCases.map { ($0, [AnyHashable]()) })
-        self._paths = SwiftUI.State(initialValue: initialPaths)
-
+        self.persistence = persistence
         let working = EnvContainer()
         base.merge(into: working)
         parent?.merge(into: working)
@@ -254,6 +254,17 @@ public enum AppShellMacro: MemberMacro {
         \(hasRegisterDeps ? "Self.registerDependencies(into: &working)" : "")
         patch?(&working)
         self.container = working
+
+        let initialPaths = Dictionary(uniqueKeysWithValues: Tab.allCases.map { ($0, [AnyHashable]()) })
+        let restorer = persistence.mode == .enabled ? NavigationRestorer<Tab>(persistence: persistence) : nil
+        let restored = restorer?.restore(tabDecoder: decodeTab, decoder: decodeRoute) ?? (nil, [:])
+        var seededPaths = initialPaths
+        restored.paths.forEach { seededPaths[$0.key] = $0.value }
+
+        let initialSelection = restored.selection ?? selection
+        self._selection = SwiftUI.State(initialValue: initialSelection)
+        self._paths = SwiftUI.State(initialValue: seededPaths)
+        self.restorer = restorer
     }
 
     \(access)var body: some SwiftUI.View {
@@ -261,6 +272,8 @@ public enum AppShellMacro: MemberMacro {
 \(tabItems)
         }
         .environment(\\.archeryContainer, container)
+        .onChange(of: selection) { _ in persistNavigation() }
+        .onChange(of: paths) { _ in persistNavigation() }
     }
 
     private func binding<Route: Hashable>(for tab: Tab, as _: Route.Type) -> SwiftUI.Binding<[Route]> {
@@ -273,7 +286,55 @@ public enum AppShellMacro: MemberMacro {
             }
         )
     }
-\(sheetHelpers)\(fullHelpers)    \(access)static func register(into container: inout EnvContainer) {
+\(sheetHelpers)\(fullHelpers)    private func encodePath(for tab: Tab) -> [String] {
+        switch tab {
+\(tabCases.map { name in
+            let route = name.capitalizedRouteName
+            return "        case .\(name): return (paths[.\(name)] as? [\(route)])?.map(\\.navigationIdentifier) ?? []"
+        }.joined(separator: "\n"))
+        }
+    }
+
+    private func decodeRoute(for tab: Tab, identifier: String) -> AnyHashable? {
+        switch tab {
+\(tabCases.map { name in
+            let route = name.capitalizedRouteName
+            return "        case .\(name): return \(route).decodeNavigationIdentifier(identifier)"
+        }.joined(separator: "\n"))
+        }
+    }
+
+    private func encodeTab(_ tab: Tab) -> String? {
+        switch tab {
+\(tabCases.map { name in
+            "        case .\(name): return \"\(name)\""
+        }.joined(separator: "\n"))
+        }
+    }
+
+    private func decodeTab(_ identifier: String) -> Tab? {
+        switch identifier {
+\(tabCases.map { name in
+            "        case \"\(name)\": return .\(name)"
+        }.joined(separator: "\n"))
+        default: return nil
+        }
+    }
+
+    private func persistNavigation() {
+        guard let restorer else { return }
+        let encoder: NavigationRestorer<Tab>.Encoder = { tab, element in
+            switch tab {
+\(tabCases.map { name in
+            let route = name.capitalizedRouteName
+            return "            case .\(name): return (element as? \(route))?.navigationIdentifier"
+        }.joined(separator: "\n"))
+            }
+        }
+        restorer.persist(selection: selection, paths: paths, tabEncoder: encodeTab, encoder: encoder)
+    }
+
+    \(access)static func register(into container: inout EnvContainer) {
         container.registerFactory { Self.init() }
         container.register(Tab.allCases)
         \(sheetEnum != nil ? "container.registerFactory { Sheet?.none }; container.registerFactory { Sheet.self }" : "")

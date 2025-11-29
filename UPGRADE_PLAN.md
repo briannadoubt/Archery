@@ -93,7 +93,7 @@
 - Keychain helper for secrets/tokens with mockable interface.
 - Done when: one persistent backend demoed end-to-end; migrations tested; keychain mocked in tests.
 
-## 10. Navigation & Deep Links
+## 10. Navigation & Deep Links - DONE
 - Typed deep-link router: URL → Route enums; notification/shortcut handoff.
 - Persist/restore navigation stacks across launches.
 - Guarded routes for auth/entitlements; error surfaces for blocked navigation.

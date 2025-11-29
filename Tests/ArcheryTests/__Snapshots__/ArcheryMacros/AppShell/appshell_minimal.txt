@@ -6,8 +6,10 @@ struct MiniShell {
         @SwiftUI.State private var selection: Tab
         @SwiftUI.State private var paths: [Tab: [AnyHashable]]
         private var container: EnvContainer
+        private let restorer: NavigationRestorer<Tab>?
+        private let persistence: NavigationPersistence
 
-        enum HomeRoute: Hashable {
+        enum HomeRoute: NavigationRoute, Codable {
             case root
         }
 
@@ -24,14 +26,10 @@ struct MiniShell {
             selection: Tab = .home,
             base: EnvContainer = EnvContainer(),
             mergeFrom parent: EnvContainer? = nil,
-            patch: ((inout EnvContainer) -> Void)? = nil
+            patch: ((inout EnvContainer) -> Void)? = nil,
+            persistence: NavigationPersistence = .enabled(key: "archery.navigation.AppShellMacro")
         ) {
-            self._selection = SwiftUI.State(initialValue: selection)
-            let initialPaths = Dictionary(uniqueKeysWithValues: Tab.allCases.map {
-                    ($0, [AnyHashable]())
-                })
-            self._paths = SwiftUI.State(initialValue: initialPaths)
-
+            self.persistence = persistence
             let working = EnvContainer()
             base.merge(into: working)
             parent?.merge(into: working)
@@ -39,6 +37,21 @@ struct MiniShell {
 
             patch?(&working)
             self.container = working
+
+            let initialPaths = Dictionary(uniqueKeysWithValues: Tab.allCases.map {
+                    ($0, [AnyHashable]())
+                })
+            let restorer = persistence.mode == .enabled ? NavigationRestorer<Tab>(persistence: persistence) : nil
+            let restored = restorer?.restore(tabDecoder: decodeTab, decoder: decodeRoute) ?? (nil, [:])
+            var seededPaths = initialPaths
+            restored.paths.forEach {
+                seededPaths[$0.key] = $0.value
+            }
+
+            let initialSelection = restored.selection ?? selection
+            self._selection = SwiftUI.State(initialValue: initialSelection)
+            self._paths = SwiftUI.State(initialValue: seededPaths)
+            self.restorer = restorer
         }
 
         var body: some SwiftUI.View {
@@ -57,6 +70,12 @@ struct MiniShell {
                 .tag(Tab.home)
             }
             .environment(\.archeryContainer, container)
+            .onChange(of: selection) { _ in
+                persistNavigation()
+            }
+            .onChange(of: paths) { _ in
+                persistNavigation()
+            }
         }
 
         private func binding<Route: Hashable>(for tab: Tab, as _: Route.Type) -> SwiftUI.Binding<[Route]> {
@@ -71,6 +90,49 @@ struct MiniShell {
                 }
             )
         }
+        private func encodePath(for tab: Tab) -> [String] {
+            switch tab {
+            case .home:
+                return (paths[.home] as? [HomeRoute])?.map(\.navigationIdentifier) ?? []
+            }
+        }
+
+        private func decodeRoute(for tab: Tab, identifier: String) -> AnyHashable? {
+            switch tab {
+            case .home:
+                return HomeRoute.decodeNavigationIdentifier(identifier)
+            }
+        }
+
+        private func encodeTab(_ tab: Tab) -> String? {
+            switch tab {
+            case .home:
+                return "home"
+            }
+        }
+
+        private func decodeTab(_ identifier: String) -> Tab? {
+            switch identifier {
+            case "home":
+                return .home
+            default:
+                return nil
+            }
+        }
+
+        private func persistNavigation() {
+            guard let restorer else {
+                return
+            }
+            let encoder: NavigationRestorer<Tab>.Encoder = { tab, element in
+                switch tab {
+                case .home:
+                    return (element as? HomeRoute)?.navigationIdentifier
+                }
+            }
+            restorer.persist(selection: selection, paths: paths, tabEncoder: encodeTab, encoder: encoder)
+        }
+
         static func register(into container: inout EnvContainer) {
             container.registerFactory {
                 Self.init()
