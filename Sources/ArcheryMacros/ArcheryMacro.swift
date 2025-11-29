@@ -12,6 +12,7 @@ struct ArcheryPlugin: CompilerPlugin {
         APIClientMacro.self,
         CacheMacro.self,
         DesignTokensMacro.self,
-        PersistenceGatewayMacro.self
+        PersistenceGatewayMacro.self,
+        LocalizableMacro.self
     ]
 }

@@ -214,6 +214,10 @@ public macro Cache(
 @attached(extension, conformances: DesignTokenSet)
 public macro DesignTokens(manifest: String) = #externalMacro(module: "ArcheryMacros", type: "DesignTokensMacro")
 
+@attached(member, names: arbitrary)
+@attached(extension, conformances: LocalizationKey)
+public macro Localizable() = #externalMacro(module: "ArcheryMacros", type: "LocalizableMacro")
+
 // Minimal handle for tests
 public struct Archery { public init() {} }
 

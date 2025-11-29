@@ -6,3 +6,10 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# SQLite temporary files
+:memory:*
+*.sqlite-shm
+*.sqlite-wal
+*.db-shm
+*.db-wal
