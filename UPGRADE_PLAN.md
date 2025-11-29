@@ -99,7 +99,7 @@
 - Guarded routes for auth/entitlements; error surfaces for blocked navigation.
 - Done when: deep-link fixtures navigate correctly; state restoration verified; guarded routes tested.
 
-## 11. Design System & Theming
+## 11. Design System & Theming - DONE
 - DesignTokens macro: colors/typography/spacing from Figma/Style Dictionary or Swift manifest.
 - Environment-driven light/dark/high-contrast variants; semantic color enforcement.
 - Preview catalog sweeps token combinations per component.

@@ -6,6 +6,7 @@ public struct ArcheryClientEntry: View {
 
     public var body: some View {
         ScoreboardView()
+            .archeryThemeScope()
     }
 }
 

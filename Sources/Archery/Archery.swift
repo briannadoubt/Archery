@@ -198,6 +198,9 @@ public macro ViewModelBound<V>() = #externalMacro(module: "ArcheryMacros", type:
 @attached(member, names: arbitrary)
 public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShellMacro")
 
+@attached(member, names: arbitrary)
+public macro PersistenceGateway() = #externalMacro(module: "ArcheryMacros", type: "PersistenceGatewayMacro")
+
 @attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
 public macro APIClient() = #externalMacro(module: "ArcheryMacros", type: "APIClientMacro")
 
@@ -206,6 +209,10 @@ public macro Cache(
     enabled: Bool = true,
     ttl: Duration? = nil
 ) = #externalMacro(module: "ArcheryMacros", type: "CacheMacro")
+
+@attached(member, names: arbitrary)
+@attached(extension, conformances: DesignTokenSet)
+public macro DesignTokens(manifest: String) = #externalMacro(module: "ArcheryMacros", type: "DesignTokensMacro")
 
 // Minimal handle for tests
 public struct Archery { public init() {} }

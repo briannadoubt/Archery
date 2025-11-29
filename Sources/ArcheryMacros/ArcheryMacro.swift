@@ -10,6 +10,8 @@ struct ArcheryPlugin: CompilerPlugin {
         ViewModelBoundMacro.self,
         AppShellMacro.self,
         APIClientMacro.self,
-        CacheMacro.self
+        CacheMacro.self,
+        DesignTokensMacro.self,
+        PersistenceGatewayMacro.self
     ]
 }
