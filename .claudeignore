@@ -1,0 +1,81 @@
+# Build directories
+.build/
+DerivedData/
+build/
+
+# Dependencies
+.swiftpm/
+Pods/
+Carthage/
+
+# IDE
+.vscode/
+.idea/
+*.xcworkspace/
+*.xcodeproj/
+*.xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Testing
+*.xcresult
+coverage/
+*.profraw
+*.profdata
+
+# Documentation build
+docs/_build/
+docs/.build/
+
+# Package resolution
+Package.resolved
+.package.resolved
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+
+# Archives and binaries
+*.zip
+*.tar.gz
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Compiled files
+*.o
+*.dylib
+*.a
+
+# Swift Package Manager Checkouts
+Checkouts/
+
+# Playground
+timeline.xctimeline
+playground.xcworkspace
+
+# Snapshots (but keep snapshot test references)
+__Snapshots__/*.png
+!__Snapshots__/**/*.txt

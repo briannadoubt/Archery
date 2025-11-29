@@ -87,7 +87,7 @@
 - Request/response fixtures + snapshot tests; toggleable network stubs for previews.
 - Done when: APIClient scaffolds compile with retries/caching toggles; AppError surfaces user copy; fixtures drive snapshots.
 
-## 9. Persistence
+## 9. Persistence - DONE
 - SwiftData/Core Data/SQLite gateway macro with migrations + preview seeds (choose one backend for v1 demo).
 - @AppStorage/@SceneStorage wrappers for lightweight settings.
 - Keychain helper for secrets/tokens with mockable interface.
