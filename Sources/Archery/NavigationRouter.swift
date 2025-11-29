@@ -290,14 +290,12 @@ public struct NavigationRestorer<Tab: Hashable> {
 
     public func persist(selection: Tab, paths: [Tab: [AnyHashable]], tabEncoder: TabEncoder, encoder: Encoder) {
         guard persistence.mode == .enabled else { return }
+        guard let selectionId = tabEncoder(selection) else { return }
         let stacks: [NavigationSnapshot.Stack] = paths.compactMap { tab, routes in
             let encoded = routes.compactMap { encoder(tab, $0) }
-            guard !encoded.isEmpty else { return nil }
             guard let tabId = tabEncoder(tab) else { return nil }
             return NavigationSnapshot.Stack(tab: tabId, path: encoded)
         }
-        guard !stacks.isEmpty else { return }
-        guard let selectionId = tabEncoder(selection) else { return }
         let snapshot = NavigationSnapshot(selectedTab: selectionId, stacks: stacks)
         persistence.store.save(snapshot, key: persistence.key)
     }
