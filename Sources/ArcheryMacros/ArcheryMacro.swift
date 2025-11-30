@@ -16,6 +16,7 @@ struct ArcheryPlugin: CompilerPlugin {
         LocalizableMacro.self,
         SharedModelMacro.self,
         AnalyticsEventMacro.self,
-        FeatureFlagMacro.self
+        FeatureFlagMacro.self,
+        AuthenticatedMacro.self
     ]
 }

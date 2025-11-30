@@ -348,7 +348,7 @@ public class LoadSheddingRepository: LoadShedding {
         inflightRequests.removeAll()
     }
     
-    protected func trackRequest<T>(
+    internal func trackRequest<T>(
         key: String,
         critical: Bool = false,
         operation: () async throws -> T
@@ -406,7 +406,7 @@ open class LoadSheddingViewModel: ObservableObject, LoadShedding {
         cancelDebouncedOperations()
     }
     
-    protected func trackLoad(_ operation: @escaping () async -> Void) {
+    internal func trackLoad(_ operation: @escaping () async -> Void) {
         loadTask?.cancel()
         loadTask = Task {
             await operation()

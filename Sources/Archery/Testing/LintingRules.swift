@@ -108,7 +108,7 @@ public struct MainActorLinter {
 
 // MARK: - Accessibility Linting
 
-public struct AccessibilityLinter {
+public struct TestingAccessibilityLinter {
     public struct Violation: Equatable {
         public let file: String
         public let line: Int
@@ -216,12 +216,12 @@ public struct AccessibilityLinter {
 
 public struct LintReport {
     public let mainActorViolations: [MainActorLinter.Violation]
-    public let accessibilityViolations: [AccessibilityLinter.Violation]
+    public let accessibilityViolations: [TestingAccessibilityLinter.Violation]
     public let timestamp: Date
     
     public init(
         mainActorViolations: [MainActorLinter.Violation],
-        accessibilityViolations: [AccessibilityLinter.Violation]
+        accessibilityViolations: [TestingAccessibilityLinter.Violation]
     ) {
         self.mainActorViolations = mainActorViolations
         self.accessibilityViolations = accessibilityViolations

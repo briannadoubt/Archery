@@ -1,7 +1,4 @@
 import Foundation
-import SwiftSyntax
-import SwiftSyntaxBuilder
-import SwiftSyntaxMacros
 
 // MARK: - Macro Snapshot Testing
 
@@ -51,15 +48,15 @@ public final class MacroSnapshotRunner {
             .appendingPathComponent("__Snapshots__")
     }
     
-    public func assertMacroExpansion<M: Macro>(
-        _ macro: M.Type,
+    public func assertMacroExpansion(
+        macroName: String,
         input: String,
         expected: String? = nil,
         file: String = #file,
         line: Int = #line,
         testName: String = #function
     ) throws {
-        let snapshotName = "\(String(describing: macro))_\(testName)"
+        let snapshotName = "\(macroName)_\(testName)"
         let snapshotFile = snapshotDirectory
             .appendingPathComponent("\(snapshotName).swift")
         
@@ -68,13 +65,13 @@ public final class MacroSnapshotRunner {
         if let expected = expected {
             expectedOutput = expected
         } else if FileManager.default.fileExists(atPath: snapshotFile.path) {
-            expectedOutput = try String(contentsOf: snapshotFile)
+            expectedOutput = try String(contentsOf: snapshotFile, encoding: .utf8)
         } else {
             expectedOutput = ""
         }
         
-        // Parse and expand macro
-        let actualOutput = try expandMacro(macro, input: input)
+        // Note: Actual macro expansion should be done in test target with SwiftSyntax
+        let actualOutput = "// Placeholder for macro expansion of \(macroName)\n\(input)"
         
         // Update snapshot if requested
         if updateSnapshots {
@@ -106,11 +103,6 @@ public final class MacroSnapshotRunner {
                 line: line
             )
         }
-    }
-    
-    private func expandMacro<M: Macro>(_ macro: M.Type, input: String) throws -> String {
-        // This is simplified - in practice you'd use the actual macro expansion API
-        return "// Expanded macro output for \(String(describing: macro))\n\(input)"
     }
     
     public func generateReport() -> MacroSnapshotReport {
