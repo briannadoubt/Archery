@@ -148,7 +148,7 @@
 - Secure logging defaults + redaction; jailbreak/debug detection hooks.
 - Done when: guarded routes enforced; refresh flow exercised; redaction tested in logs.
 
-## 19. Offline & Sync
+## 19. Offline & Sync ✅ DONE
 - Offline-first cache with conflict policies (LWW + server-merge hooks).
 - Mutation queue with background replay; connectivity-aware UI signals.
 - Sync diagnostics surfaces in previews/tests.
