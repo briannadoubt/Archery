@@ -154,7 +154,7 @@
 - Sync diagnostics surfaces in previews/tests.
 - Done when: offline mutation queue passes tests; conflicts resolved per policy; connectivity indicators demonstrated.
 
-## 20. Forms & Validation
+## 20. Forms & Validation ✅ DONE
 - Form macro: field models, validation rules, keyboard/accessory behaviors.
 - Error presentation helpers; focus management utilities.
 - Preview seeds for invalid and edge cases.
