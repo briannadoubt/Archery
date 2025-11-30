@@ -33,28 +33,20 @@ extension TokenStorage {
         service: String = Bundle.main.bundleIdentifier ?? "com.app.archery",
         account: String = "auth-token"
     ) -> TokenStorage {
-        TokenStorage(
+        let store = KeychainStore()
+        let key = "\(service).\(account)"
+        
+        return TokenStorage(
             store: {
-                await KeychainHelper.shared.getData(
-                    for: account,
-                    service: service
-                ).flatMap { data in
-                    try? JSONDecoder().decode(StandardAuthToken.self, from: data)
-                }
+                guard let data = try? store.data(for: key) else { return nil }
+                return try? JSONDecoder().decode(StandardAuthToken.self, from: data)
             },
             save: { token in
                 let data = try JSONEncoder().encode(token)
-                try await KeychainHelper.shared.setData(
-                    data,
-                    for: account,
-                    service: service
-                )
+                try store.set(data, for: key)
             },
             delete: {
-                try? await KeychainHelper.shared.deleteData(
-                    for: account,
-                    service: service
-                )
+                try? store.remove(key)
             }
         )
     }
@@ -62,6 +54,10 @@ extension TokenStorage {
     public static func inMemory() -> TokenStorage {
         actor Storage {
             var token: (any AuthToken)?
+            
+            func setToken(_ token: (any AuthToken)?) {
+                self.token = token
+            }
         }
         
         let storage = Storage()
@@ -77,12 +73,6 @@ extension TokenStorage {
                 await storage.setToken(nil)
             }
         )
-    }
-}
-
-private extension TokenStorage.Storage {
-    func setToken(_ token: (any AuthToken)?) {
-        self.token = token
     }
 }
 

@@ -29,7 +29,7 @@ public protocol LogRedactor: Sendable {
     func shouldRedact(_ value: String) -> Bool
 }
 
-public struct PIIRedactor: LogRedactor {
+public struct SecureLogPIIRedactor: LogRedactor {
     private let patterns: [String]
     private let customPatterns: [NSRegularExpression]
     
@@ -102,7 +102,7 @@ public final class SecureLogger: Sendable {
     
     private let logger: Logger
     private let redactor: LogRedactor
-    private let minLevel: LogLevel
+    private nonisolated(unsafe) let minLevel: LogLevel
     private let logToFile: Bool
     private let fileURL: URL?
     private let encryptLogs: Bool
@@ -111,7 +111,7 @@ public final class SecureLogger: Sendable {
     nonisolated init(
         subsystem: String = Bundle.main.bundleIdentifier ?? "com.app.archery",
         category: String = "default",
-        redactor: LogRedactor = PIIRedactor(),
+        redactor: LogRedactor = SecureLogPIIRedactor(),
         minLevel: LogLevel = .info,
         logToFile: Bool = false,
         encryptLogs: Bool = false
@@ -224,8 +224,8 @@ public final class SecureLogger: Sendable {
             } else {
                 return data
             }
-        } catch {
-            error("Failed to export logs: \(error.localizedDescription)")
+        } catch let exportError {
+            error("Failed to export logs: \(exportError.localizedDescription)")
             return nil
         }
     }
@@ -237,7 +237,7 @@ public final class SecureLogger: Sendable {
             try FileManager.default.removeItem(at: fileURL)
             info("Logs cleared successfully")
         } catch {
-            error("Failed to clear logs: \(error.localizedDescription)")
+            self.error("Failed to clear logs: \(error.localizedDescription)")
         }
     }
 }
@@ -262,7 +262,7 @@ public struct SecureLoggerConfiguration {
     public init(
         subsystem: String = Bundle.main.bundleIdentifier ?? "com.app.archery",
         category: String = "default",
-        redactor: LogRedactor = PIIRedactor(),
+        redactor: LogRedactor = SecureLogPIIRedactor(),
         minLevel: LogLevel = .info,
         logToFile: Bool = false,
         encryptLogs: Bool = false,
