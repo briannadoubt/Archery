@@ -172,7 +172,7 @@
 - Compatibility shims for older OS baselines where macros emit alternates.
 - Done when: hosting controllers work; dual persistence pattern demoed; shims compile for old targets.
 
-## 23. Observability Ops
+## 23. Observability Ops ✅ DONE
 - Crash fingerprint enrichment and breadcrumb pipeline hooks.
 - Sampled telemetry exporters; correlation IDs flowing through repos/VMs; cardinality guards.
 - Vendor-neutral OTel export + sample dashboards; no vendor-locked alerts by default.
