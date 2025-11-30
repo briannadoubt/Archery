@@ -142,7 +142,7 @@
 - Recipes for auth gate, paginated list, validated form.
 - Done when: sample app builds; docs generated; recipes runnable.
 
-## 18. Auth & Security
+## 18. Auth & Security ✅ DONE
 - Route/repo annotations for auth requirements; generated guards/denied states.
 - Token refresh scaffolding with PKCE/nonce helpers; pluggable auth providers.
 - Secure logging defaults + redaction; jailbreak/debug detection hooks.
