@@ -226,6 +226,14 @@ public macro SharedModel(
     liveActivity: Bool = false
 ) = #externalMacro(module: "ArcheryMacros", type: "SharedModelMacro")
 
+@attached(member, names: arbitrary)
+@attached(extension, conformances: AnalyticsEvent)
+public macro AnalyticsEvent() = #externalMacro(module: "ArcheryMacros", type: "AnalyticsEventMacro")
+
+@attached(member, names: arbitrary)
+@attached(extension)
+public macro FeatureFlag() = #externalMacro(module: "ArcheryMacros", type: "FeatureFlagMacro")
+
 // Minimal handle for tests
 public struct Archery { public init() {} }
 

@@ -117,7 +117,7 @@
 - Timeline/intent fixtures for snapshots and previews.
 - Done when: widget + intent targets compile; timeline fixtures snapshot-tested; background tasks mocked.
 
-## 14. Analytics & Feature Flags
+## 14. Analytics & Feature Flags ✅ DONE
 - Event schema macro with compile-time checking + provider adapters (Segment/Amplitude/GA4).
 - Feature-flag wrapper with local overrides and typed gates for previews/tests.
 - Redaction helpers for PII in logs/analytics payloads.
