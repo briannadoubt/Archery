@@ -219,7 +219,7 @@ public final class SecureLogger: Sendable {
         do {
             let data = try Data(contentsOf: fileURL)
             
-            if encryptLogs, let key = encryptionKey {
+            if encryptLogs, let _ = encryptionKey {
                 return data
             } else {
                 return data

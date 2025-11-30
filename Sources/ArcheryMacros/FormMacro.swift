@@ -2,6 +2,7 @@ import SwiftCompilerPlugin
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
+import Foundation
 
 public struct FormMacro: MemberMacro {
     public static func expansion(
@@ -14,7 +15,7 @@ public struct FormMacro: MemberMacro {
             return []
         }
         
-        let structName = structDecl.name.text
+        let _ = structDecl.name.text
         let fields = extractFields(from: structDecl)
         
         var members: [DeclSyntax] = []

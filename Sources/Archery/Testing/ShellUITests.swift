@@ -363,6 +363,7 @@ public final class NavigationFlowTester {
         }
     }
     
+    @MainActor
     private func identifyCurrentScreen() -> String {
         if let navBar = app.navigationBars.allElementsBoundByIndex.first(where: { $0.exists }) {
             return navBar.identifier.isEmpty ? "Unknown" : navBar.identifier

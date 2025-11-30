@@ -29,7 +29,7 @@ public final class ViewDiffTracker: ObservableObject {
         }
     }
     
-    public struct RenderEvent {
+    public struct RenderEvent: Sendable {
         public let viewName: String
         public let timestamp: Date
         public let duration: TimeInterval
@@ -38,7 +38,7 @@ public final class ViewDiffTracker: ObservableObject {
         public let previousState: String?
         public let currentState: String?
         
-        public enum RenderTrigger: String {
+        public enum RenderTrigger: String, Sendable {
             case stateChange = "state"
             case parentRender = "parent"
             case environmentChange = "environment"

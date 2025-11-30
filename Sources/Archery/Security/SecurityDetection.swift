@@ -24,14 +24,16 @@ public enum SecurityCheck {
     case environment
 }
 
-public final class SecurityDetection {
+public final class SecurityDetection: @unchecked Sendable {
     public static let shared = SecurityDetection()
     
     public weak var delegate: SecurityDetectionDelegate?
-    private let logger = SecureLogger.shared
+    private let logger: SecureLogger
     private var detectionHooks: [SecurityThreat: [(SecurityThreat) -> Void]] = [:]
     
-    private init() {}
+    private init() {
+        self.logger = SecureLogger.shared
+    }
     
     public func registerHook(for threat: SecurityThreat, action: @escaping (SecurityThreat) -> Void) {
         if detectionHooks[threat] == nil {
@@ -99,6 +101,7 @@ public final class SecurityDetection {
         #endif
     }
     
+    @MainActor
     public func checkDebugger() {
         #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
         var info = kinfo_proc()
@@ -124,15 +127,18 @@ public final class SecurityDetection {
         delegate?.securityDetection(didPassCheck: .debugger)
     }
     
+    @MainActor
     public func checkTampering() {
-        guard let bundleIdentifier = Bundle.main.bundleIdentifier,
-              let appStoreReceipt = Bundle.main.appStoreReceiptURL else {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
             delegate?.securityDetection(didPassCheck: .tampering)
             return
         }
         
+        let appStoreReceipt = Bundle.main.url(forResource: "receipt", withExtension: nil)
+        
         #if !DEBUG
-        if !FileManager.default.fileExists(atPath: appStoreReceipt.path) {
+        if let receiptURL = appStoreReceipt,
+           !FileManager.default.fileExists(atPath: receiptURL.path) {
             handleThreatDetection(.tampered)
             return
         }
@@ -143,7 +149,7 @@ public final class SecurityDetection {
                 let attributes = try FileManager.default.attributesOfItem(atPath: executablePath)
                 if let fileSize = attributes[.size] as? Int64 {
                     let expectedSizeRange = 1_000_000...100_000_000
-                    if !expectedSizeRange.contains(fileSize) {
+                    if !expectedSizeRange.contains(Int(fileSize)) {
                         logger.warning("Unexpected executable size: \(fileSize)")
                     }
                 }

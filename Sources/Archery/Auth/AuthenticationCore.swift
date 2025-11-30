@@ -41,12 +41,27 @@ public struct StandardAuthToken: AuthToken {
     }
 }
 
-public enum AuthenticationState: Sendable {
+public enum AuthenticationState: Sendable, Equatable {
     case unauthenticated
     case authenticating
     case authenticated(any AuthToken)
     case refreshing(any AuthToken)
     case failed(Error)
+    
+    public static func == (lhs: AuthenticationState, rhs: AuthenticationState) -> Bool {
+        switch (lhs, rhs) {
+        case (.unauthenticated, .unauthenticated),
+             (.authenticating, .authenticating):
+            return true
+        case (.authenticated, .authenticated),
+             (.refreshing, .refreshing):
+            return true
+        case (.failed, .failed):
+            return true
+        default:
+            return false
+        }
+    }
     
     public var isAuthenticated: Bool {
         switch self {

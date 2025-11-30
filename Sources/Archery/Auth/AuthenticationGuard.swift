@@ -114,6 +114,7 @@ public struct AuthenticatedView<Content: View>: View {
 }
 
 private struct AuthManagerKey: EnvironmentKey {
+    @MainActor
     static let defaultValue = AuthenticationManager(
         provider: MockAuthProvider()
     )
@@ -140,7 +141,6 @@ public extension View {
     }
 }
 
-@ViewModifier
 public struct ConditionalAuthModifier: ViewModifier {
     @Environment(\.authManager) private var authManager
     let requirement: AuthRequirement
