@@ -130,7 +130,7 @@
 - GitHub Actions workflow for lint/test/snapshot; secret scanning (gitleaks/trufflehog); perf budgets enforced.
 - Done when: CI matrix green; fixture drift detected; compatibility suite passes; perf budgets enforced with opt-outs logged.
 
-## 16. Performance & Stability
+## 16. Performance & Stability ✅ DONE
 - Instruments-friendly trace points; optional signposts.
 - Memory warning hooks + load-shedding helpers in VMs/repos.
 - View diff tracking to flag unnecessary re-renders.
