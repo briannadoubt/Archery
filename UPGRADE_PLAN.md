@@ -123,7 +123,7 @@
 - Redaction helpers for PII in logs/analytics payloads.
 - Done when: event schema generates adapters; flags override in previews/tests; redaction verified.
 
-## 15. Testing & CI
+## 15. Testing & CI ✅ DONE
 - Mandatory: macro snapshots, nav-graph validity, MainActor/a11y lint, smoke UITest of shell.
 - Optional (recommended): property tests, fuzzing, record/replay harness, perf benches.
 - Compatibility suite against N-1/N-2 runtime/tooling.
