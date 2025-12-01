@@ -7,14 +7,14 @@ public struct PerformanceSnapshot: Codable {
     
     public let id: String
     public let timestamp: Date
-    public let version: Version
+    public let version: PerformanceVersion
     public let commit: String?
     public let benchmarks: [BenchmarkSnapshot]
     public let metadata: SnapshotMetadata
     
     public init(
         id: String = UUID().uuidString,
-        version: Version,
+        version: PerformanceVersion,
         commit: String? = nil,
         benchmarks: [BenchmarkSnapshot],
         metadata: SnapshotMetadata = SnapshotMetadata()
@@ -172,9 +172,9 @@ public struct SnapshotMetadata: Codable {
     }
 }
 
-// MARK: - Version
+// MARK: - Performance Version
 
-public struct Version: Codable, Comparable {
+public struct PerformanceVersion: Codable, Comparable {
     public let major: Int
     public let minor: Int
     public let patch: Int
@@ -187,7 +187,7 @@ public struct Version: Codable, Comparable {
         self.build = build
     }
     
-    public static func < (lhs: Version, rhs: Version) -> Bool {
+    public static func < (lhs: PerformanceVersion, rhs: PerformanceVersion) -> Bool {
         if lhs.major != rhs.major { return lhs.major < rhs.major }
         if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
         return lhs.patch < rhs.patch
@@ -374,7 +374,7 @@ public final class SnapshotStorage {
     }
     
     /// Load snapshot for version
-    public func load(version: Version) throws -> PerformanceSnapshot {
+    public func load(version: PerformanceVersion) throws -> PerformanceSnapshot {
         let filename = "\(version.major).\(version.minor).\(version.patch).json"
         let url = baseURL.appendingPathComponent(filename)
         
@@ -396,7 +396,7 @@ public final class SnapshotStorage {
     }
     
     /// Find baseline snapshot
-    public func findBaseline(for version: Version) throws -> PerformanceSnapshot? {
+    public func findBaseline(for version: PerformanceVersion) throws -> PerformanceSnapshot? {
         let snapshots = try listSnapshots()
         
         // Find the most recent snapshot before this version

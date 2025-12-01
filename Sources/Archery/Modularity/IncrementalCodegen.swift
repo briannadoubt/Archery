@@ -440,7 +440,7 @@ struct CodegenManifest: Codable {
     var version: String = "1.0.0"
 }
 
-struct ManifestEntry: Codable {
+struct ManifestEntry: Codable, Sendable {
     let inputHash: String
     let outputPath: String
     let timestamp: Date
@@ -454,7 +454,7 @@ struct ChangeSet {
     let removed: [String]
 }
 
-public struct CodegenResult {
+public struct CodegenResult: Sendable {
     public var generated: [GeneratedOutput] = []
     public var skipped: [String] = []
     public var errors: [CodegenError] = []
@@ -475,13 +475,13 @@ public struct CodegenResult {
     }
 }
 
-public struct GeneratedOutput {
+public struct GeneratedOutput: Sendable {
     public let identifier: String
     public let path: URL
     let entry: ManifestEntry
 }
 
-public struct CodegenError {
+public struct CodegenError: Sendable {
     public let identifier: String
     public let error: Error
     
@@ -490,7 +490,7 @@ public struct CodegenError {
     }
 }
 
-struct ShardResult {
+struct ShardResult: Sendable {
     let id: String
     let result: CodegenResult
 }

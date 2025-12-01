@@ -95,6 +95,8 @@ public struct CancelableTask: Sendable {
 
 // Lightweight DI container used by generated code
 public final class EnvContainer: @unchecked Sendable {
+    public static let shared = EnvContainer()
+    
     private var storage: [ObjectIdentifier: Any] = [:]
     private var factories: [ObjectIdentifier: () -> Any] = [:]
 

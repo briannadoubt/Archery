@@ -1,13 +1,16 @@
 import Foundation
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+public typealias Intent = WidgetConfigurationIntent
 
 #if canImport(WidgetKit)
 
 // MARK: - Enhanced Widget Timeline Provider
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public final class ArcheryWidgetTimelineProvider<Entry: ArcheryTimelineEntry>: ArcheryTimelineProvider {
+public final class ArcheryWidgetTimelineProvider<Entry: ArcheryTimelineEntry>: ArcheryWidgetProvider {
     
     public let container: EnvContainer
     private let dataLoader: WidgetDataLoader
@@ -312,8 +315,8 @@ public final class WidgetAnalytics {
     public func trackWidgetView(kind: String, family: WidgetFamily, hasData: Bool) {
         let familyString = familyString(for: family)
         
-        AnalyticsManager.shared?.track(
-            event: "widget_viewed",
+        AnalyticsManager.shared.trackEvent(
+            "widget_viewed",
             properties: [
                 "widget_kind": kind,
                 "widget_family": familyString,
@@ -337,8 +340,8 @@ public final class WidgetAnalytics {
             properties["action"] = action
         }
         
-        AnalyticsManager.shared?.track(
-            event: "widget_tapped",
+        AnalyticsManager.shared.trackEvent(
+            "widget_tapped",
             properties: properties
         )
     }
@@ -347,8 +350,8 @@ public final class WidgetAnalytics {
     public func trackWidgetConfigured(kind: String, family: WidgetFamily) {
         let familyString = familyString(for: family)
         
-        AnalyticsManager.shared?.track(
-            event: "widget_configured",
+        AnalyticsManager.shared.trackEvent(
+            "widget_configured",
             properties: [
                 "widget_kind": kind,
                 "widget_family": familyString,

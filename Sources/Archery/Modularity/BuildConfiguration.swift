@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Build Configuration System
 
 /// Build configuration with compile-time flags and macro controls
-public struct BuildConfiguration: Codable {
+public struct BuildConfiguration: Codable, Sendable {
     public let name: String
     public let flags: BuildConfigurationFlags
     public let macroOutputs: MacroOutputConfiguration
@@ -43,7 +43,7 @@ public struct BuildConfiguration: Codable {
 
 // MARK: - Build Flags
 
-public struct BuildConfigurationFlags: Codable {
+public struct BuildConfigurationFlags: Codable, @unchecked Sendable {
     public var swiftFlags: [String]
     public var linkerFlags: [String]
     public var preprocessorMacros: [String: String]
@@ -68,14 +68,14 @@ public struct BuildConfigurationFlags: Codable {
     
     public static let debug = BuildConfigurationFlags(
         swiftFlags: ["-Onone", "-DDEBUG"],
-        activeCompilationConditions: ["DEBUG", "TESTING"],
-        preprocessorMacros: ["DEBUG": "1"]
+        preprocessorMacros: ["DEBUG": "1"],
+        activeCompilationConditions: ["DEBUG", "TESTING"]
     )
     
     public static let release = BuildConfigurationFlags(
         swiftFlags: ["-O", "-whole-module-optimization"],
-        activeCompilationConditions: ["RELEASE"],
-        preprocessorMacros: ["RELEASE": "1", "NDEBUG": "1"]
+        preprocessorMacros: ["RELEASE": "1", "NDEBUG": "1"],
+        activeCompilationConditions: ["RELEASE"]
     )
     
     // Custom Codable implementation
@@ -108,7 +108,7 @@ public struct BuildConfigurationFlags: Codable {
 
 // MARK: - Macro Output Configuration
 
-public struct MacroOutputConfiguration: Codable {
+public struct MacroOutputConfiguration: Codable, Sendable {
     public var enabledMacros: Set<String>
     public var disabledMacros: Set<String>
     public var macroSettings: [String: MacroSettings]
@@ -148,7 +148,7 @@ public struct MacroOutputConfiguration: Codable {
     }
 }
 
-public struct MacroSettings: Codable {
+public struct MacroSettings: Codable, Sendable {
     public var generateMocks: Bool
     public var generatePreviews: Bool
     public var generateTests: Bool
@@ -182,7 +182,7 @@ public struct MacroSettings: Codable {
     )
 }
 
-public enum MacroType: String, CaseIterable {
+public enum MacroType: String, CaseIterable, Sendable {
     case keyValueStore = "KeyValueStore"
     case repository = "Repository"
     case observableViewModel = "ObservableViewModel"
@@ -206,7 +206,7 @@ public enum MacroType: String, CaseIterable {
 
 // MARK: - Optimization Settings
 
-public struct OptimizationSettings: Codable {
+public struct OptimizationSettings: Codable, Sendable {
     public var level: OptimizationLevel
     public var wholeModuleOptimization: Bool
     public var linkTimeOptimization: Bool
@@ -244,14 +244,14 @@ public struct OptimizationSettings: Codable {
     )
 }
 
-public enum OptimizationLevel: String, Codable {
+public enum OptimizationLevel: String, Codable, Sendable {
     case none = "-Onone"
     case speed = "-O"
     case size = "-Osize"
     case aggressive = "-Ounchecked"
 }
 
-public enum InliningStrategy: String, Codable {
+public enum InliningStrategy: String, Codable, Sendable {
     case never = "never"
     case automatic = "auto"
     case always = "always"
@@ -260,7 +260,7 @@ public enum InliningStrategy: String, Codable {
 
 // MARK: - Performance Budgets
 
-public struct PerformanceBudgets: Codable {
+public struct PerformanceBudgets: Codable, Sendable {
     public var buildTime: TimeInterval
     public var binarySize: Int // bytes
     public var symbolCount: Int

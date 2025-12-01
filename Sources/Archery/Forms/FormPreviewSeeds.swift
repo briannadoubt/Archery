@@ -7,6 +7,8 @@ public struct FormPreviewSeeds {
     
     // MARK: - Valid Seeds
     
+    @MainActor
+    @MainActor
     public static func validLoginForm() -> FormContainer {
         let fields: [any FormFieldProtocol] = [
             EmailField(
@@ -26,6 +28,7 @@ public struct FormPreviewSeeds {
         return FormContainer(fields: fields)
     }
     
+    @MainActor
     public static func validRegistrationForm() -> FormContainer {
         let fields: [any FormFieldProtocol] = [
             TextField(
@@ -71,6 +74,7 @@ public struct FormPreviewSeeds {
     
     // MARK: - Invalid Seeds
     
+    @MainActor
     public static func invalidEmailForm() -> FormContainer {
         let emailField = EmailField(
             id: "email",
@@ -89,6 +93,7 @@ public struct FormPreviewSeeds {
         return FormContainer(fields: [emailField])
     }
     
+    @MainActor
     public static func passwordMismatchForm() -> FormContainer {
         let passwordField = PasswordField(
             id: "password",
@@ -114,6 +119,7 @@ public struct FormPreviewSeeds {
         return FormContainer(fields: [passwordField, confirmPasswordField])
     }
     
+    @MainActor
     public static func allFieldTypesForm() -> FormContainer {
         let fields: [any FormFieldProtocol] = [
             TextField(
@@ -169,6 +175,7 @@ public struct FormPreviewSeeds {
     
     // MARK: - Edge Cases
     
+    @MainActor
     public static func emptyRequiredFieldsForm() -> FormContainer {
         let firstNameField = TextField(
             id: "firstName",
@@ -215,6 +222,7 @@ public struct FormPreviewSeeds {
         return FormContainer(fields: [firstNameField, lastNameField, emailField])
     }
     
+    @MainActor
     public static func longTextForm() -> FormContainer {
         let loremIpsum = """
         Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
@@ -240,6 +248,7 @@ public struct FormPreviewSeeds {
         return FormContainer(fields: fields)
     }
     
+    @MainActor
     public static func disabledFieldsForm() -> FormContainer {
         let emailField = EmailField(
             id: "email",
@@ -267,6 +276,7 @@ public struct FormPreviewSeeds {
         return FormContainer(fields: [emailField, passwordField, activeField])
     }
     
+    @MainActor
     public static func multipleErrorsForm() -> FormContainer {
         let passwordField = PasswordField(
             id: "password",
@@ -314,12 +324,14 @@ public struct FormPreviewSeeds {
     
     // MARK: - Loading States
     
+    @MainActor
     public static func submittingForm() -> FormContainer {
         let container = validLoginForm()
         container.isSubmitting = true
         return container
     }
     
+    @MainActor
     public static func dirtyForm() -> FormContainer {
         let container = validRegistrationForm()
         container.isDirty = true

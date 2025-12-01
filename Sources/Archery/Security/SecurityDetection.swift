@@ -2,6 +2,9 @@ import Foundation
 #if canImport(UIKit)
 import UIKit
 #endif
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+import MachO
+#endif
 
 public enum SecurityThreat: String, CaseIterable {
     case jailbroken = "Device is jailbroken"
@@ -32,7 +35,9 @@ public final class SecurityDetection: @unchecked Sendable {
     private var detectionHooks: [SecurityThreat: [(SecurityThreat) -> Void]] = [:]
     
     private init() {
-        self.logger = SecureLogger.shared
+        self.logger = MainActor.assumeIsolated {
+            SecureLogger.shared
+        }
     }
     
     public func registerHook(for threat: SecurityThreat, action: @escaping (SecurityThreat) -> Void) {
@@ -44,8 +49,10 @@ public final class SecurityDetection: @unchecked Sendable {
     
     public func performAllChecks() {
         checkJailbreak()
-        checkDebugger()
-        checkTampering()
+        Task { @MainActor in
+            checkDebugger()
+            checkTampering()
+        }
         checkEnvironment()
     }
     
@@ -215,7 +222,9 @@ public final class SecurityDetection: @unchecked Sendable {
     }
     
     private func handleThreatDetection(_ threat: SecurityThreat) {
-        logger.critical("Security threat detected: \(threat.rawValue)")
+        Task { @MainActor in
+            logger.critical("Security threat detected: \(threat.rawValue)")
+        }
         
         delegate?.securityDetection(didDetectThreat: threat)
         

@@ -21,8 +21,8 @@ public final class ConfigValidator {
     // MARK: - Validation
     
     public func validate<T: Configuration>(_ config: T) throws -> ValidationResult {
-        var errors: [ValidationError] = []
-        var warnings: [ValidationError] = []
+        var errors: [ConfigValidationError] = []
+        var warnings: [ConfigValidationError] = []
         
         // Convert to dictionary for validation
         guard let data = try? JSONEncoder().encode(config),
@@ -34,7 +34,7 @@ public final class ConfigValidator {
         for rule in rules {
             do {
                 try validateRule(rule, against: dict, path: "")
-            } catch let error as ValidationError {
+            } catch let error as ConfigValidationError {
                 if error.severity == .error {
                     errors.append(error)
                 } else {
@@ -57,7 +57,7 @@ public final class ConfigValidator {
         switch rule.type {
         case .required:
             if value == nil {
-                throw ValidationError(
+                throw ConfigValidationError(
                     path: fullPath,
                     message: rule.message ?? "Required field is missing",
                     severity: rule.severity ?? .error
@@ -67,7 +67,7 @@ public final class ConfigValidator {
         case .type(let expectedType):
             if let value = value {
                 if !isCorrectType(value, expectedType: expectedType) {
-                    throw ValidationError(
+                    throw ConfigValidationError(
                         path: fullPath,
                         message: rule.message ?? "Expected type \(expectedType)",
                         severity: rule.severity ?? .error
@@ -79,7 +79,7 @@ public final class ConfigValidator {
             if let numberValue = value as? NSNumber {
                 let doubleValue = numberValue.doubleValue
                 if doubleValue < min || doubleValue > max {
-                    throw ValidationError(
+                    throw ConfigValidationError(
                         path: fullPath,
                         message: rule.message ?? "Value must be between \(min) and \(max)",
                         severity: rule.severity ?? .error
@@ -90,7 +90,7 @@ public final class ConfigValidator {
         case .length(let minLength, let maxLength):
             if let stringValue = value as? String {
                 if stringValue.count < minLength || stringValue.count > maxLength {
-                    throw ValidationError(
+                    throw ConfigValidationError(
                         path: fullPath,
                         message: rule.message ?? "Length must be between \(minLength) and \(maxLength)",
                         severity: rule.severity ?? .error
@@ -101,7 +101,7 @@ public final class ConfigValidator {
         case .pattern(let pattern):
             if let stringValue = value as? String {
                 if stringValue.range(of: pattern, options: .regularExpression) == nil {
-                    throw ValidationError(
+                    throw ConfigValidationError(
                         path: fullPath,
                         message: rule.message ?? "Value does not match pattern",
                         severity: rule.severity ?? .error
@@ -113,7 +113,7 @@ public final class ConfigValidator {
             if let value = value {
                 let stringValue = String(describing: value)
                 if !values.contains(stringValue) {
-                    throw ValidationError(
+                    throw ConfigValidationError(
                         path: fullPath,
                         message: rule.message ?? "Value must be one of: \(values.joined(separator: ", "))",
                         severity: rule.severity ?? .error
@@ -125,7 +125,7 @@ public final class ConfigValidator {
             if let value = value,
                let validator = customValidators[validatorName],
                !validator(value) {
-                throw ValidationError(
+                throw ConfigValidationError(
                     path: fullPath,
                     message: rule.message ?? "Custom validation failed",
                     severity: rule.severity ?? .error
@@ -135,7 +135,7 @@ public final class ConfigValidator {
         case .url:
             if let stringValue = value as? String,
                URL(string: stringValue) == nil {
-                throw ValidationError(
+                throw ConfigValidationError(
                     path: fullPath,
                     message: rule.message ?? "Invalid URL format",
                     severity: rule.severity ?? .error
@@ -146,7 +146,7 @@ public final class ConfigValidator {
             if let stringValue = value as? String {
                 let emailPattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
                 if stringValue.range(of: emailPattern, options: .regularExpression) == nil {
-                    throw ValidationError(
+                    throw ConfigValidationError(
                         path: fullPath,
                         message: rule.message ?? "Invalid email format",
                         severity: rule.severity ?? .error
@@ -160,7 +160,7 @@ public final class ConfigValidator {
                 if stringValue.hasPrefix("${") && stringValue.hasSuffix("}") {
                     let secretKey = String(stringValue.dropFirst(2).dropLast())
                     if !SecretsManager.shared.exists(secretKey) {
-                        throw ValidationError(
+                        throw ConfigValidationError(
                             path: fullPath,
                             message: rule.message ?? "Referenced secret '\(secretKey)' not found",
                             severity: rule.severity ?? .error
@@ -172,7 +172,7 @@ public final class ConfigValidator {
         case .environmentSpecific(let allowedEnvironments):
             let currentEnv = ConfigurationEnvironment.current.rawValue
             if !allowedEnvironments.contains(currentEnv) {
-                throw ValidationError(
+                throw ConfigValidationError(
                     path: fullPath,
                     message: rule.message ?? "Not allowed in environment: \(currentEnv)",
                     severity: rule.severity ?? .warning
@@ -261,8 +261,8 @@ public struct ValidationRule {
 
 public struct ValidationResult {
     public let isValid: Bool
-    public let errors: [ValidationError]
-    public let warnings: [ValidationError]
+    public let errors: [ConfigValidationError]
+    public let warnings: [ConfigValidationError]
     
     public var hasWarnings: Bool {
         !warnings.isEmpty
@@ -295,7 +295,7 @@ public struct ValidationResult {
 
 // MARK: - Validation Error
 
-public struct ValidationError: Error {
+public struct ConfigConfigValidationError: Error {
     public let path: String
     public let message: String
     public let severity: ValidationSeverity

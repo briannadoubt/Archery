@@ -1,10 +1,14 @@
 import Foundation
 import WidgetKit
 import SwiftUI
+import AppIntents
 
 #if canImport(WidgetKit)
 
 // MARK: - Widget Support
+
+// Type alias for Widget configuration intent
+public typealias Intent = WidgetConfigurationIntent
 
 /// Base protocol for widgets that integrate with Archery ViewModels
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
@@ -17,7 +21,7 @@ public protocol ArcheryWidget: Widget {
 
 /// Timeline provider that integrates with Archery dependency injection
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public protocol ArcheryTimelineProvider: TimelineProvider where Entry: ArcheryTimelineEntry {
+public protocol ArcheryWidgetProvider: TimelineProvider where Entry: ArcheryTimelineEntry {
     var container: EnvContainer { get }
     
     func createEntry(for configuration: Intent?, at date: Date) async -> Entry
@@ -36,7 +40,7 @@ public protocol ArcheryTimelineEntry: TimelineEntry {
 // MARK: - Default Implementation
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public extension ArcheryTimelineProvider {
+public extension ArcheryWidgetProvider {
     func placeholder(in context: Context) -> Entry {
         Task {
             return await createEntry(for: nil, at: Date())
@@ -232,7 +236,11 @@ public final class WidgetTimelineManager {
     public func getCurrentConfigurations() async -> [WidgetInfo] {
         #if !os(macOS) && !targetEnvironment(macCatalyst)
         do {
-            let configurations = try await WidgetCenter.shared.getCurrentConfigurations()
+            let configurations = try await withCheckedThrowingContinuation { continuation in
+                WidgetCenter.shared.getCurrentConfigurations { result in
+                    continuation.resume(with: result)
+                }
+            }
             return configurations.map { config in
                 WidgetInfo(
                     kind: config.kind,

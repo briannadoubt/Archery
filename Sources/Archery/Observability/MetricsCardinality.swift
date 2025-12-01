@@ -82,7 +82,7 @@ public enum CardinalityCheckResult {
 
 // MARK: - Cardinality Limiter
 
-public struct CardinalityLimiter {
+public struct CardinalityLimiter: Sendable {
     private let allowedDimensions: Set<String>
     private let maxDimensionValues: [String: Int]
     
@@ -124,13 +124,13 @@ public struct CardinalityLimiter {
 
 // MARK: - Dimension Reducer
 
-public struct DimensionReducer {
-    public enum ReductionStrategy {
+public struct DimensionReducer: Sendable {
+    public enum ReductionStrategy: Sendable {
         case keepFirst(Int)
         case keepLast(Int)
         case keepSpecific(Set<String>)
         case dropSpecific(Set<String>)
-        case custom((String, String) -> Bool)
+        case custom(@Sendable (String, String) -> Bool)
     }
     
     private let strategy: ReductionStrategy
@@ -312,7 +312,7 @@ public actor CardinalityMonitor {
 // MARK: - Cardinality Enricher
 
 public struct CardinalityEnricher: TelemetryEnricher {
-    private let guard: CardinalityGuard
+    private let `guard`: CardinalityGuard
     private let limiter: CardinalityLimiter
     private let reducer: DimensionReducer
     private let monitor: CardinalityMonitor
@@ -323,7 +323,7 @@ public struct CardinalityEnricher: TelemetryEnricher {
         reducer: DimensionReducer = DimensionReducer(strategy: .keepFirst(10)),
         monitor: CardinalityMonitor
     ) {
-        self.guard = guard
+        self.guard = `guard`
         self.limiter = limiter
         self.reducer = reducer
         self.monitor = monitor
@@ -332,7 +332,10 @@ public struct CardinalityEnricher: TelemetryEnricher {
     public func enrich(span: inout Span) {
         // Spans typically have lower cardinality, just reduce dimensions
         let reduced = reducer.reduce(span.attributes)
-        span.setAttribute("cardinality.reduced", value: reduced.count < span.attributes.count)
+        span.setAttribute(
+            "cardinality.reduced",
+            value: (reduced.count < span.attributes.count).description
+        )
         
         for (key, value) in reduced {
             span.setAttribute(key, value: value)
@@ -342,7 +345,7 @@ public struct CardinalityEnricher: TelemetryEnricher {
     public func enrich(metric: inout any Metric) {
         // Apply cardinality controls to metrics
         Task {
-            let result = await guard.checkCardinality(
+            let result = await `guard`.checkCardinality(
                 metricName: metric.name,
                 attributes: metric.attributes
             )
@@ -354,7 +357,7 @@ public struct CardinalityEnricher: TelemetryEnricher {
                 let reduced = reducer.reduce(limited)
                 
                 // Record cardinality
-                let cardinality = await guard.getCardinality(for: metric.name)
+                let cardinality = await `guard`.getCardinality(for: metric.name)
                 await monitor.recordCardinality(
                     metricName: metric.name,
                     cardinality: cardinality

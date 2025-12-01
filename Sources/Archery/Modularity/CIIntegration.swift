@@ -1,5 +1,7 @@
 import Foundation
 
+#if os(macOS) || os(Linux)
+
 // MARK: - CI Integration and Performance Monitoring
 
 public final class CIIntegration {
@@ -167,27 +169,30 @@ public final class PerformanceMonitor {
         // Check build time
         if metrics.buildTime > budgets.buildTime {
             results.violations.append(BudgetViolation(
-                metric: .buildTime,
-                limit: budgets.buildTime,
-                actual: metrics.buildTime
+                constraint: "buildTime",
+                message: "Build time exceeded budget",
+                actual: metrics.buildTime,
+                threshold: budgets.buildTime
             ))
         }
-        
+
         // Check binary size
         if metrics.binarySize > budgets.binarySize {
             results.violations.append(BudgetViolation(
-                metric: .binarySize,
-                limit: Double(budgets.binarySize),
-                actual: Double(metrics.binarySize)
+                constraint: "binarySize",
+                message: "Binary size exceeded budget",
+                actual: Double(metrics.binarySize),
+                threshold: Double(budgets.binarySize)
             ))
         }
-        
+
         // Check symbol count
         if metrics.symbolCount > budgets.symbolCount {
             results.violations.append(BudgetViolation(
-                metric: .symbolCount,
-                limit: Double(budgets.symbolCount),
-                actual: Double(metrics.symbolCount)
+                constraint: "symbolCount",
+                message: "Symbol count exceeded budget",
+                actual: Double(metrics.symbolCount),
+                threshold: Double(budgets.symbolCount)
             ))
         }
         
@@ -415,7 +420,7 @@ public struct GitHubActionsGenerator {
 
 // MARK: - Configuration Types
 
-public struct CIConfiguration: Codable {
+public struct CIConfiguration: Codable, Sendable {
     public let buildFlags: [String]
     public let testFlags: [String]
     public let platforms: [Platform]
@@ -431,7 +436,7 @@ public struct CIConfiguration: Codable {
     )
 }
 
-public struct CacheConfiguration: Codable {
+public struct CacheConfiguration: Codable, Sendable {
     public let enabled: Bool
     public let directory: URL
     public let keys: [String]
@@ -475,17 +480,14 @@ public struct BudgetCheckResults {
             return "All performance budgets met"
         } else {
             return violations.map { violation in
-                "❌ \(violation.metric): limit=\(violation.limit), actual=\(violation.actual)"
+                "❌ \(violation.constraint): \(violation.message) - actual=\(violation.actual), threshold=\(violation.threshold)"
             }.joined(separator: "\n")
         }
     }
 }
 
-public struct BudgetViolation {
-    public let metric: PerformanceMetric
-    public let limit: Double
-    public let actual: Double
-}
+// BudgetViolation is defined in Benchmarking/PerformanceBudget.swift
+// PerformanceMetric is defined in BuildConfiguration.swift
 
 struct BuildOutput {
     let output: String
@@ -529,3 +531,5 @@ public enum CIError: LocalizedError {
         }
     }
 }
+
+#endif // os(macOS) || os(Linux)

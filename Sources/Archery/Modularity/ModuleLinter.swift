@@ -1,6 +1,6 @@
 import Foundation
 import SwiftSyntax
-import SwiftSyntaxParser
+import SwiftParser
 
 // MARK: - Module Boundary Linter
 
@@ -11,10 +11,19 @@ public final class ModuleBoundaryLinter {
     private let configuration: LinterConfiguration
     
     public init(
-        moduleRegistry: ModuleRegistry = .shared,
+        moduleRegistry: ModuleRegistry? = nil,
         configuration: LinterConfiguration = .default
     ) {
-        self.moduleRegistry = moduleRegistry
+        if let moduleRegistry {
+            self.moduleRegistry = moduleRegistry
+        } else {
+            @MainActor func getSharedRegistry() -> ModuleRegistry {
+                return ModuleRegistry.shared
+            }
+            self.moduleRegistry = MainActor.assumeIsolated {
+                ModuleRegistry.shared
+            }
+        }
         self.configuration = configuration
     }
     
@@ -73,7 +82,8 @@ public final class ModuleBoundaryLinter {
         let visitor = ImportVisitor(
             currentModule: module,
             filePath: fileURL.path,
-            configuration: configuration
+            configuration: configuration,
+            sourceFile: sourceFile
         )
         
         visitor.walk(sourceFile)
@@ -136,16 +146,19 @@ private class ImportVisitor: SyntaxVisitor {
     let currentModule: String
     let filePath: String
     let configuration: LinterConfiguration
+    let sourceFile: SourceFileSyntax
     var violations: [BoundaryViolation] = []
-    
+
     init(
         currentModule: String,
         filePath: String,
-        configuration: LinterConfiguration
+        configuration: LinterConfiguration,
+        sourceFile: SourceFileSyntax
     ) {
         self.currentModule = currentModule
         self.filePath = filePath
         self.configuration = configuration
+        self.sourceFile = sourceFile
         super.init(viewMode: .sourceAccurate)
     }
     
@@ -159,8 +172,8 @@ private class ImportVisitor: SyntaxVisitor {
                 sourceModule: currentModule,
                 targetModule: importedModule,
                 filePath: filePath,
-                line: node.startLocation(converter: .init()).line,
-                column: node.startLocation(converter: .init()).column,
+                line: node.startLocation(converter: SourceLocationConverter(fileName: filePath, tree: sourceFile)).line,
+                column: node.startLocation(converter: SourceLocationConverter(fileName: filePath, tree: sourceFile)).column,
                 message: "Module '\(currentModule)' cannot import '\(importedModule)' - only contracts are allowed"
             ))
         }
@@ -201,7 +214,7 @@ private class ImportVisitor: SyntaxVisitor {
 
 // MARK: - Linter Configuration
 
-public struct LinterConfiguration: Codable {
+public struct LinterConfiguration: Codable, Sendable {
     public var allowedSystemModules: Set<String>
     public var sharedModules: Set<String>
     public var allowedImports: [String: Set<String>]
@@ -234,8 +247,8 @@ public struct LinterConfiguration: Codable {
     ]
     
     public static let strict = LinterConfiguration(
-        enableStrictMode: true,
-        sharedModules: ["Core", "Common", "Shared", "Utilities"]
+        sharedModules: ["Core", "Common", "Shared", "Utilities"],
+        enableStrictMode: true
     )
     
     /// Load configuration from file
@@ -281,8 +294,8 @@ public struct LintResult {
     }
 }
 
-public struct BoundaryViolation: CustomStringConvertible {
-    public enum ViolationType {
+public struct BoundaryViolation: CustomStringConvertible, Sendable {
+    public enum ViolationType: Sendable {
         case illegalImport
         case circularDependency
         case missingContract

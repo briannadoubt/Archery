@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Navigation Graph Validation
 
-public struct NavigationNode: Hashable {
+public struct NavValidationNode: Hashable {
     public let id: String
     public let type: NavigationType
     public let destinations: Set<String>
@@ -33,11 +33,11 @@ public enum NavigationType {
     case alert
 }
 
-public struct NavigationGraph {
-    public let nodes: [String: NavigationNode]
+public struct NavValidationGraph {
+    public let nodes: [String: NavValidationNode]
     public let rootId: String
     
-    public init(nodes: [NavigationNode], rootId: String) {
+    public init(nodes: [NavValidationNode], rootId: String) {
         self.nodes = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         self.rootId = rootId
     }
@@ -171,14 +171,14 @@ public enum NavigationValidationError: Error, Equatable {
 // MARK: - Navigation Test Builder
 
 public struct NavigationTestBuilder {
-    private var nodes: [NavigationNode] = []
-    private var currentNode: NavigationNode?
+    private var nodes: [NavValidationNode] = []
+    private var currentNode: NavValidationNode?
     
     public init() {}
     
     public func root(_ id: String) -> Self {
         var builder = self
-        let node = NavigationNode(id: id, type: .root)
+        let node = NavValidationNode(id: id, type: .root)
         builder.nodes.append(node)
         builder.currentNode = node
         return builder
@@ -186,7 +186,7 @@ public struct NavigationTestBuilder {
     
     public func tab(_ id: String, destinations: Set<String> = []) -> Self {
         var builder = self
-        let node = NavigationNode(id: id, type: .tab, destinations: destinations)
+        let node = NavValidationNode(id: id, type: .tab, destinations: destinations)
         builder.nodes.append(node)
         
         // Add to current node's destinations if it exists
@@ -195,7 +195,7 @@ public struct NavigationTestBuilder {
             var updated = current
             var newDestinations = updated.destinations
             newDestinations.insert(id)
-            updated = NavigationNode(
+            updated = NavValidationNode(
                 id: updated.id,
                 type: updated.type,
                 destinations: newDestinations,
@@ -210,7 +210,7 @@ public struct NavigationTestBuilder {
     
     public func screen(_ id: String, destinations: Set<String> = [], requiredAuth: Bool = false, deepLinkable: Bool = false) -> Self {
         var builder = self
-        let node = NavigationNode(
+        let node = NavValidationNode(
             id: id,
             type: .screen,
             destinations: destinations,
@@ -223,20 +223,20 @@ public struct NavigationTestBuilder {
     
     public func modal(_ id: String, destinations: Set<String> = []) -> Self {
         var builder = self
-        let node = NavigationNode(id: id, type: .modal, destinations: destinations)
+        let node = NavValidationNode(id: id, type: .modal, destinations: destinations)
         builder.nodes.append(node)
         return builder
     }
     
-    public func build(rootId: String = "root") -> NavigationGraph {
-        NavigationGraph(nodes: nodes, rootId: rootId)
+    public func build(rootId: String = "root") -> NavValidationGraph {
+        NavValidationGraph(nodes: nodes, rootId: rootId)
     }
 }
 
 // MARK: - Navigation Coverage
 
-public struct NavigationCoverage {
-    public let graph: NavigationGraph
+public struct NavValidationCoverage {
+    public let graph: NavValidationGraph
     public let visitedNodes: Set<String>
     public let visitedTransitions: Set<Transition>
     
@@ -245,7 +245,7 @@ public struct NavigationCoverage {
         public let to: String
     }
     
-    public init(graph: NavigationGraph) {
+    public init(graph: NavValidationGraph) {
         self.graph = graph
         self.visitedNodes = []
         self.visitedTransitions = []

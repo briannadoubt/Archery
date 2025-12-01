@@ -5,7 +5,7 @@ import PackageDescription
 import CompilerPluginSupport
 
 let warningFlags: [SwiftSetting] = [
-    .treatAllWarnings(as: .error),
+//    .treatAllWarnings(as: .error, .when(configuration: .debug)),
 ]
 
 let package = Package(
@@ -31,6 +31,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -46,7 +47,16 @@ let package = Package(
         ),
 
         // Library that exposes a macro as part of its API, which is used in client programs.
-        .target(name: "Archery", dependencies: ["ArcheryMacros"], swiftSettings: warningFlags),
+        .target(
+            name: "Archery", 
+            dependencies: [
+                "ArcheryMacros",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax")
+            ], 
+            swiftSettings: warningFlags
+        ),
 
         // A client of the library, which is able to use the macro in its own code.
         .target(

@@ -100,7 +100,7 @@ public class FormField<T>: FormFieldProtocol, Identifiable {
 
 // MARK: - Specialized Field Types
 
-public final class TextField: FormField<String> {
+public class TextField: FormField<String> {
     public let keyboardType: UIKeyboardType
     public let textContentType: UITextContentType?
     public let autocapitalization: TextInputAutocapitalization
@@ -308,10 +308,10 @@ public final class BooleanField: FormField<Bool> {
 }
 
 public final class SelectField<T: Hashable>: FormField<T?> {
-    public let options: [SelectOption<T>]
+    public let options: [SelectOption]
     public let allowMultiple: Bool
     
-    public struct SelectOption<T: Hashable>: Identifiable {
+    public struct SelectOption: Identifiable {
         public let id = UUID()
         public let value: T
         public let label: String
@@ -328,7 +328,7 @@ public final class SelectField<T: Hashable>: FormField<T?> {
         id: String,
         label: String,
         value: T? = nil,
-        options: [SelectOption<T>],
+        options: [SelectOption],
         placeholder: String? = "Select an option",
         helpText: String? = nil,
         isRequired: Bool = false,

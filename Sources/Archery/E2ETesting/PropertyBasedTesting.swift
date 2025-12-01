@@ -279,25 +279,7 @@ public extension Generator {
 
 // MARK: - Load State Testing
 
-public enum LoadState<T: Equatable>: Equatable {
-    case idle
-    case loading
-    case success(T)
-    case failure(Error)
-    
-    public static func == (lhs: LoadState<T>, rhs: LoadState<T>) -> Bool {
-        switch (lhs, rhs) {
-        case (.idle, .idle), (.loading, .loading):
-            return true
-        case (.success(let l), .success(let r)):
-            return l == r
-        case (.failure, .failure):
-            return true // Simplified - errors not directly comparable
-        default:
-            return false
-        }
-    }
-}
+// Note: LoadState is defined in Archery.swift
 
 public enum LoadAction {
     case startLoading

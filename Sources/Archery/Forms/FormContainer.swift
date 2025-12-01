@@ -308,7 +308,15 @@ public enum FormSubmissionState {
 
 // MARK: - Form Configuration
 
-public struct FormConfiguration {
+#if canImport(UIKit)
+public enum KeyboardDismissMode: String, Sendable {
+    case none
+    case onDrag
+    case interactive
+}
+#endif
+
+public struct FormConfiguration: Sendable {
     public var spacing: CGFloat = 16
     public var labelWidth: CGFloat? = nil
     public var showRequiredIndicator = true
@@ -317,7 +325,9 @@ public struct FormConfiguration {
     public var focusColor = Color.accentColor
     public var disabledOpacity = 0.6
     public var animationDuration = 0.2
-    public var keyboardDismissMode: UIScrollView.KeyboardDismissMode = .interactive
+    #if canImport(UIKit)
+    public var keyboardDismissMode = KeyboardDismissMode.interactive
+    #endif
     
     public init() {}
     

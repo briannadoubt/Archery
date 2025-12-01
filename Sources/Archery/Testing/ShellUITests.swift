@@ -261,7 +261,7 @@ public final class UITestMockDataProvider {
 
 // MARK: - Accessibility Audit
 
-public final class AccessibilityAudit {
+public final class UITestAccessibilityAudit {
     public static func audit(_ app: XCUIApplication) -> [AccessibilityIssue] {
         var issues: [AccessibilityIssue] = []
         
@@ -333,7 +333,7 @@ public final class NavigationFlowTester {
         )
     }
     
-    private func exploreScreen(depth: Int) {
+    private func exploreScreen(depth: Int) async {
         guard depth > 0 else { return }
         
         // Find all navigable elements
@@ -345,7 +345,7 @@ public final class NavigationFlowTester {
                 element.tap()
                 
                 // Check if we navigated somewhere new
-                let currentScreen = identifyCurrentScreen()
+                let currentScreen = await MainActor.run { identifyCurrentScreen() }
                 if !visitedScreens.contains(currentScreen) {
                     visitedScreens.insert(currentScreen)
                     navigationStack.append(currentScreen)
