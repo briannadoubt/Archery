@@ -1,0 +1,17 @@
+{
+  "apiUrl": "http://localhost:8080",
+  "apiTimeout": 30,
+  "maxRetries": 10,
+  "databaseUrl": "sqlite:///dev.db",
+  "connectionPoolSize": 5,
+  "databaseSSL": false,
+  "debugMode": true,
+  "experimentalFeatures": true,
+  "logLevel": "debug",
+  "maxLogFileSize": 50,
+  "tokenExpirationTime": 86400,
+  "redisUrl": "redis://localhost:6379",
+  "cacheDefaultTTL": 60,
+  "enableMonitoring": false,
+  "monitoringUrl": null
+}

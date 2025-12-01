@@ -1,0 +1,17 @@
+{
+  "apiUrl": "https://api.staging.example.com",
+  "apiTimeout": 45,
+  "maxRetries": 5,
+  "databaseUrl": "postgresql://stage-db:5432/app",
+  "connectionPoolSize": 20,
+  "databaseSSL": true,
+  "debugMode": false,
+  "experimentalFeatures": true,
+  "logLevel": "info",
+  "maxLogFileSize": 200,
+  "tokenExpirationTime": 3600,
+  "redisUrl": "redis://stage-redis:6379",
+  "cacheDefaultTTL": 300,
+  "enableMonitoring": true,
+  "monitoringUrl": "https://staging-monitoring.example.com"
+}

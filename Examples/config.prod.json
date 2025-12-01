@@ -1,0 +1,17 @@
+{
+  "apiUrl": "https://api.production.example.com",
+  "apiTimeout": 60,
+  "maxRetries": 3,
+  "databaseUrl": "postgresql://prod-db:5432/app",
+  "connectionPoolSize": 50,
+  "databaseSSL": true,
+  "debugMode": false,
+  "experimentalFeatures": false,
+  "logLevel": "warning",
+  "maxLogFileSize": 500,
+  "tokenExpirationTime": 7200,
+  "redisUrl": "redis://prod-redis:6379",
+  "cacheDefaultTTL": 600,
+  "enableMonitoring": true,
+  "monitoringUrl": "https://monitoring.example.com"
+}

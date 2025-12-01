@@ -166,6 +166,7 @@ public struct ViewRenderingSuite: PerformanceSuite {
         self.viewCount = viewCount
     }
     
+    @MainActor
     public func run() async throws -> [String: Double] {
         var metrics: [String: Double] = [:]
         
@@ -184,7 +185,7 @@ public struct ViewRenderingSuite: PerformanceSuite {
     
     @MainActor
     private func renderList() -> some View {
-        List(0..<viewCount) { index in
+        List(Array(0..<viewCount), id: \.self) { index in
             HStack {
                 Image(systemName: "star")
                 Text("Item \(index)")

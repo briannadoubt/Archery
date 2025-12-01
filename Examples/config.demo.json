@@ -1,0 +1,17 @@
+{
+  "apiUrl": "https://api.demo.example.com",
+  "apiTimeout": 30,
+  "maxRetries": 3,
+  "databaseUrl": "sqlite:///demo.db",
+  "connectionPoolSize": 10,
+  "databaseSSL": false,
+  "debugMode": false,
+  "experimentalFeatures": true,
+  "logLevel": "info",
+  "maxLogFileSize": 100,
+  "tokenExpirationTime": 3600,
+  "redisUrl": "redis://demo-redis:6379",
+  "cacheDefaultTTL": 300,
+  "enableMonitoring": false,
+  "monitoringUrl": "https://demo-monitoring.example.com"
+}

@@ -1,0 +1,150 @@
+{
+  "version": "1.0",
+  "title": "Archery App Configuration Schema",
+  "description": "Configuration schema for Archery-based applications",
+  "type": "object",
+  "properties": {
+    "apiUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://.*",
+      "description": "API base URL",
+      "examples": [
+        "https://api.example.com",
+        "http://localhost:8080"
+      ]
+    },
+    "apiTimeout": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300,
+      "default": 30,
+      "description": "API request timeout in seconds"
+    },
+    "maxRetries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 10,
+      "description": "Maximum number of API retries"
+    },
+    "databaseUrl": {
+      "type": "string",
+      "pattern": "^(sqlite|postgresql|mysql)://.*",
+      "description": "Database connection URL",
+      "examples": [
+        "sqlite:///app.db",
+        "postgresql://user:pass@host:5432/db"
+      ]
+    },
+    "connectionPoolSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 10,
+      "description": "Database connection pool size"
+    },
+    "databaseSSL": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable SSL for database connections",
+      "environmentSpecific": true
+    },
+    "debugMode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable debug mode",
+      "environmentSpecific": true,
+      "allowedEnvironments": ["dev", "test"]
+    },
+    "experimentalFeatures": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable experimental features"
+    },
+    "logLevel": {
+      "type": "string",
+      "enum": ["trace", "debug", "info", "warning", "error", "critical"],
+      "default": "info",
+      "description": "Log level"
+    },
+    "maxLogFileSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 100,
+      "description": "Maximum log file size in MB"
+    },
+    "jwtSecret": {
+      "type": "string",
+      "secret": true,
+      "description": "JWT signing secret",
+      "minLength": 32
+    },
+    "apiKey": {
+      "type": "string", 
+      "secret": true,
+      "description": "API key for external services",
+      "pattern": "^[a-zA-Z0-9-_]+$"
+    },
+    "tokenExpirationTime": {
+      "type": "integer",
+      "minimum": 300,
+      "maximum": 86400,
+      "default": 3600,
+      "description": "Token expiration time in seconds"
+    },
+    "redisUrl": {
+      "type": "string",
+      "pattern": "^redis://.*",
+      "default": "redis://localhost:6379",
+      "description": "Redis connection URL"
+    },
+    "cacheDefaultTTL": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 3600,
+      "default": 300,
+      "description": "Default cache TTL in seconds"
+    },
+    "enableMonitoring": {
+      "type": "boolean",
+      "default": false,
+      "environmentSpecific": true,
+      "description": "Enable performance monitoring"
+    },
+    "monitoringUrl": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "Monitoring endpoint URL"
+    }
+  },
+  "required": [
+    "apiUrl",
+    "databaseUrl",
+    "jwtSecret",
+    "apiKey"
+  ],
+  "additionalProperties": false,
+  "environments": {
+    "production": {
+      "requiredOverrides": {
+        "databaseSSL": true,
+        "debugMode": false,
+        "logLevel": "warning"
+      }
+    },
+    "staging": {
+      "requiredOverrides": {
+        "databaseSSL": true,
+        "debugMode": false
+      }
+    },
+    "development": {
+      "allowedOverrides": {
+        "debugMode": true,
+        "experimentalFeatures": true
+      }
+    }
+  }
+}

@@ -113,6 +113,7 @@ public struct AuthenticatedView<Content: View>: View {
     }
 }
 
+@preconcurrency 
 private struct AuthManagerKey: EnvironmentKey {
     @MainActor
     static let defaultValue = AuthenticationManager(

@@ -33,14 +33,14 @@
 - Productization: Full App Generation, Configuration/Branding, Monetization, Developer Portal.
 - Release: Rollout steps and migration hygiene.
 
-## 1. KeyValueStore — DONE
+## 1. KeyValueStore — ✅ DONE
 - Codable-backed async/throwing get/set with default values.
 - Namespaced keys + migration hooks (old→new key mapping).
 - Change notifications via AsyncStream.
 - Auto-generated mock/in-memory store for tests and previews.
 - Done when: generated store compiles in sample app, migration path tested, snapshots cover namespacing/defaults.
 
-## 2. Repository — DONE
+## 2. Repository — ✅ DONE
 - Generate protocol + live/mock implementations; DI initializer.
 - Error normalization into RepositoryError with source context.
 - Optional caching + in-flight request coalescing.
@@ -48,64 +48,64 @@
 - Child-repo factory helpers for shared DI shape.
 - Done when: live + mock compile, caching/coalescing toggles tested, normalized errors snapshot-tested.
 
-## 3. ObservableViewModel — DONE
+## 3. ObservableViewModel — ✅ DONE
 - Enforce @MainActor + Resettable; synthesize onAppear/onDisappear hooks.
 - Auto-cancel tracked tasks via CancelableTask; optional load() auto-call.
 - State-machine scaffolding: loading/success/error helpers.
 - Debounce/throttle utilities for inputs.
 - Done when: annotations enforced; auto-cancel tested; state-machine snapshots generated.
 
-## 4. ViewModelBound — DONE
+## 4. ViewModelBound — ✅ DONE
 - DI: inject repos/stores from EnvContainer or factory closure; fail-fast if missing.
 - Option to use @StateObject for identity preservation.
 - Generated previews with mock repos + seeded data.
 - Optional .task { await vm.load() } wrapper when load() exists.
 - Done when: generated view compiles; previews build with mocks; load() wrapper verified by snapshot.
 
-## 5. AppShell (new macro) — DONE
+## 5. AppShell (new macro) — ✅ DONE
 - Root TabView + per-tab NavigationStacks with typed Route enums.
 - Declarative sheets/fullScreen covers/window scenes from annotations.
 - Auto DI registration (hybrid model); accepts container merge + patch closures; `@DIManual` opt-outs.
 - Previews for each tab with mock data.
 - Done when: sample app boots with generated shell; routes type-safe; per-tab previews render.
 
-## 6. Tooling & DX - DONE
+## 6. Tooling & DX - ✅ DONE
 - Diagnostics: warn on missing @MainActor for VMs, non-async repo APIs, or KeyValueStore cases without associated values.
 - Snapshot tests for macro output; fixtures per macro shape.
 - SwiftPM plugin/CLI task to regenerate snapshots and run tests.
 - Done when: CLI regenerates snapshots + runs tests in CI; diagnostics show in Xcode; fixtures stable.
 
-## 7. Runtime Glue — DONE (EnvContainer + DI wiring)
+## 7. Runtime Glue — ✅ DONE (EnvContainer + DI wiring)
 - Lightweight EnvContainer for registration/lookup of repositories/stores.
 - Shared types: LoadState<Value>, AlertState, CancelableTask manager.
 - Minimal logging interface consumed by generated tracing hooks.
 - Done when: EnvContainer used by generated code; shared types adopted; logging hook exercised in tests.
 
-## 8. Networking & Errors - DONE
+## 8. Networking & Errors - ✅ DONE
 - APIClient macro: async/await, retry/backoff, caching, configurable decoding strategies.
 - Shared AppError type with user-facing messaging + logging/analytics hooks (redaction mandatory).
 - Request/response fixtures + snapshot tests; toggleable network stubs for previews.
 - Done when: APIClient scaffolds compile with retries/caching toggles; AppError surfaces user copy; fixtures drive snapshots.
 
-## 9. Persistence - DONE
+## 9. Persistence - ✅ DONE
 - SwiftData/Core Data/SQLite gateway macro with migrations + preview seeds (choose one backend for v1 demo).
 - @AppStorage/@SceneStorage wrappers for lightweight settings.
 - Keychain helper for secrets/tokens with mockable interface.
 - Done when: one persistent backend demoed end-to-end; migrations tested; keychain mocked in tests.
 
-## 10. Navigation & Deep Links - DONE
+## 10. Navigation & Deep Links - ✅ DONE
 - Typed deep-link router: URL → Route enums; notification/shortcut handoff.
 - Persist/restore navigation stacks across launches.
 - Guarded routes for auth/entitlements; error surfaces for blocked navigation.
 - Done when: deep-link fixtures navigate correctly; state restoration verified; guarded routes tested.
 
-## 11. Design System & Theming - DONE
+## 11. Design System & Theming - ✅ DONE
 - DesignTokens macro: colors/typography/spacing from Figma/Style Dictionary or Swift manifest.
 - Environment-driven light/dark/high-contrast variants; semantic color enforcement.
 - Preview catalog sweeps token combinations per component.
 - Done when: token import regenerates themes; previews cover light/dark/high-contrast; semantic colors enforced by lint.
 
-## 12. Accessibility & Localization - DONE
+## 12. Accessibility & Localization - ✅ DONE
 - Diagnostics for missing accessibility labels, Dynamic Type escapes, contrast.
 - String extraction + pseudo-localization preview macro; RTL snapshot lane; default locales en + pseudo + RTL run.
 - API to attach accessibility metadata to generated views.
@@ -136,7 +136,7 @@
 - View diff tracking to flag unnecessary re-renders.
 - Done when: perf suite runs; signposts visible in Instruments; diff tracking highlights regressions.
 
-## 17. Documentation & Examples
+## 17. Documentation & Examples ✅ DONE
 - Sample app showing KeyValueStore/Repository/ViewModelBound/AppShell end-to-end across supported platforms.
 - Doc comment emission for generated APIs; docs site generated from schema/macros.
 - Recipes for auth gate, paginated list, validated form.
@@ -160,13 +160,13 @@
 - Preview seeds for invalid and edge cases.
 - Done when: generated form renders with validation errors; focus utilities tested; edge-case previews exist.
 
-## 21. Modularity & Build
+## 21. Modularity & Build ✅ DONE
 - Feature-module templates with shared contracts; forbid cross-feature imports beyond contracts (linted).
 - Build-time flags to toggle macro outputs; size/perf budgets enforced in CI (build time, symbols).
 - Incremental/sharded codegen; CI caching to keep builds fast.
 - Done when: feature modules compile independently; flags gate outputs; CI fails on budget violations.
 
-## 22. Interop
+## 22. Interop ✅ DONE
 - Bridges for UIKit/AppKit hosting; Share/ActivityView wrappers.
 - Coexistence patterns for SwiftData + Core Data; migration aids.
 - Compatibility shims for older OS baselines where macros emit alternates.
@@ -197,7 +197,7 @@
 - Safety rails: PII redaction defaults, secret scanning for generated configs, compliance checklist toggles.
 - Done when: given a schema + tokens + provider config, a runnable app target builds with passing tests and previews.
 
-## 26. Configuration & Environments
+## 26. Configuration & Environments ✅ DONE
 - Hierarchical config (build-time + runtime) with type-safe access and env overrides.
 - Per-target variants (prod/stage/dev/demo) and runtime remote-config merge.
 - Secrets handling and validation; config diff detection with safe fallbacks.
@@ -209,19 +209,19 @@
 - Multi-target build pipeline templates for white-label outputs.
 - Done when: two brand targets build with distinct assets/icons; feature toggles differ per brand; pipeline produces branded artifacts.
 
-## 28. Monetization
+## 28. Monetization ✅ DONE
 - StoreKit 2 scaffolding: products, entitlements, subscription status observers.
 - Paywall/upsell templates; entitlement-aware UI states.
 - Receipt validation hooks; sandbox/TestFlight preview seeds.
 - Done when: sandbox purchases succeed; entitlement state drives UI; paywall snapshots generated.
 
-## 29. End-to-End & Fuzz Testing
+## 29. End-to-End & Fuzz Testing ✅ DONE
 - UI tests for critical flows; navigation graph fuzzing.
 - Property-based tests for state machines and load states (opt-in).
 - Record/replay harness for API stubs; deterministic previews.
 - Done when: UITest bundle passes; fuzzing catches bad routes; record/replay used in CI (when enabled).
 
-## 30. Benchmarking
+## 30. Benchmarking ✅ DONE
 - Microbench harness for EnvContainer lookup, repo caching, rendering hotspots.
 - Perf budgets enforced in CI; Instruments template configs.
 - Perf snapshot comparisons across macro revisions.
