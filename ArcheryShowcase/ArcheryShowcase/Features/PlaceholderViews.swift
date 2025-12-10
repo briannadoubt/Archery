@@ -574,12 +574,19 @@ struct ProfileView: View {
 
 // MARK: - Task Detail View
 struct TaskDetailView: View {
+    let taskId: String
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Task Details")
                     .font(.largeTitle)
                     .fontWeight(.bold)
+                    .padding(.horizontal)
+
+                Text("Task ID: \(taskId)")
+                    .font(.subheadline.monospaced())
+                    .foregroundStyle(.secondary)
                     .padding(.horizontal)
 
                 Text("This view would show detailed task information.")
