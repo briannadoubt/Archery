@@ -90,17 +90,18 @@ public final class ConfigurationManager<T: Configuration> {
         environmentPrefix: String = "APP"
     ) {
         self.defaultConfig = T.defaultValues
-        self.buildTimeConfig = buildTimeConfig ?? T.defaultValues
-        self.current = self.buildTimeConfig
-        
+        let config = buildTimeConfig ?? T.defaultValues
+        self.buildTimeConfig = config
+        self.current = config
+
         // Load configurations in order
         loadFileConfig()
         loadEnvironmentConfig(prefix: environmentPrefix)
         mergeConfigurations()
     }
     
-    deinit {
-        remoteConfigTask?.cancel()
+    nonisolated deinit {
+        // Task cancellation handled by the runtime when the class is deallocated
     }
     
     // MARK: - Configuration Loading
@@ -112,8 +113,8 @@ public final class ConfigurationManager<T: Configuration> {
         let searchPaths = [
             Bundle.main.bundleURL,
             Bundle.main.bundleURL.appendingPathComponent("Resources"),
-            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
-            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first as URL?,
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first as URL?
         ].compactMap { $0 }
         
         for basePath in searchPaths {

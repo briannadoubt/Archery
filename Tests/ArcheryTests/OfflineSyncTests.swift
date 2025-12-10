@@ -44,7 +44,7 @@ struct TestMutation: Mutation {
         if shouldFail {
             return .failure(TestError.executionFailed)
         }
-        return .success("completed")
+        return .success("completed".data(using: .utf8))
     }
     
     func canRetry() -> Bool {
@@ -192,9 +192,9 @@ final class MutationQueueTests: XCTestCase {
             if mutation.shouldFail {
                 return .failure(TestError.executionFailed)
             }
-            return .success("completed")
+            return .success("completed".data(using: .utf8))
         }
-        
+
         let mutation = TestMutation(shouldFail: false)
         await queue.enqueue(mutation)
         
@@ -224,14 +224,14 @@ final class MutationQueueTests: XCTestCase {
             if mutation.retryCount == 0 {
                 return .failure(TestError.executionFailed)
             }
-            return .success("completed")
+            return .success("completed".data(using: .utf8))
         }
-        
+
         var mutation = TestMutation()
         mutation.retryCount = 3
         
         let record = try! MutationRecord(mutation: mutation)
-        queue.failedMutations.append(record)
+        queue._testAddFailed(record)
         
         await queue.retry(record.id)
         
@@ -248,7 +248,7 @@ final class MutationQueueTests: XCTestCase {
         
         for mutation in mutations {
             let record = try! MutationRecord(mutation: mutation)
-            queue.failedMutations.append(record)
+            queue._testAddFailed(record)
         }
         
         await queue.retryAll()
@@ -311,7 +311,7 @@ final class SyncCoordinatorTests: XCTestCase {
             remoteValue: "remote"
         )
         
-        coordinator.conflicts.append(conflict)
+        coordinator._testAddConflict(conflict)
         
         await coordinator.resolveConflict(conflict.id, resolution: .lastWriteWins)
         
@@ -357,18 +357,12 @@ final class SyncDiagnosticsTests: XCTestCase {
     
     func testRecordConflictResolution() async {
         let diagnostics = SyncDiagnostics()
-        
-        let conflict = ConflictRecord(
-            key: "test",
-            localValue: "local",
-            remoteValue: "remote"
-        )
-        
+
         await diagnostics.recordConflictResolution(
-            conflict: conflict,
+            key: "test",
             resolution: .lastWriteWins
         )
-        
+
         let history = await diagnostics.getConflictHistory()
         XCTAssertEqual(history.count, 1)
         XCTAssertEqual(history[0].key, "test")

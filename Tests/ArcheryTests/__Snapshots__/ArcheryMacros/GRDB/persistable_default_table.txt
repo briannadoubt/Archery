@@ -1,0 +1,13 @@
+struct Task: Codable, Identifiable {
+    var id: UUID
+    var title: String
+    var completed: Bool
+
+    enum Columns {
+        static let id = GRDB.Column(CodingKeys.id)
+        static let title = GRDB.Column(CodingKeys.title)
+        static let completed = GRDB.Column(CodingKeys.completed)
+    }
+
+    static let databaseTableName = "task"
+}

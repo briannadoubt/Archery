@@ -8,7 +8,6 @@ public struct FormPreviewSeeds {
     // MARK: - Valid Seeds
     
     @MainActor
-    @MainActor
     public static func validLoginForm() -> FormContainer {
         let fields: [any FormFieldProtocol] = [
             EmailField(
@@ -323,19 +322,17 @@ public struct FormPreviewSeeds {
     }
     
     // MARK: - Loading States
-    
+
     @MainActor
     public static func submittingForm() -> FormContainer {
-        let container = validLoginForm()
-        container.isSubmitting = true
-        return container
+        // Note: isSubmitting is private(set), use for basic preview
+        return validLoginForm()
     }
-    
+
     @MainActor
     public static func dirtyForm() -> FormContainer {
-        let container = validRegistrationForm()
-        container.isDirty = true
-        return container
+        // Note: isDirty is private(set), use for basic preview
+        return validRegistrationForm()
     }
 }
 

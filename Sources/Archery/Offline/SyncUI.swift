@@ -49,10 +49,14 @@ public struct SyncStatusView: View {
             }
         }
         .padding(8)
-        .background(Color(.systemGray6))
+        #if os(iOS)
+        .background(Color(uiColor: .systemGray6))
+        #else
+        .background(Color.gray.opacity(0.1))
+        #endif
         .cornerRadius(8)
     }
-    
+
     private var statusIcon: some View {
         Group {
             switch coordinator.syncState {
@@ -109,7 +113,11 @@ public struct SyncDiagnosticsView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        #if os(iOS)
+        .background(Color(uiColor: .systemGray6))
+        #else
+        .background(Color.gray.opacity(0.1))
+        #endif
         .cornerRadius(12)
     }
     
@@ -189,30 +197,34 @@ public struct SyncDiagnosticsView: View {
             Text("Recent Syncs")
                 .font(.subheadline)
                 .fontWeight(.semibold)
-            
-            let report = coordinator.getDiagnostics().generateReport()
-            
-            ForEach(report.recentSyncs.prefix(5), id: \.timestamp) { event in
-                HStack {
-                    Image(systemName: event.success ? "checkmark.circle" : "xmark.circle")
-                        .foregroundColor(event.success ? .green : .red)
-                        .font(.caption)
-                    
-                    Text(event.timestamp, style: .relative)
-                        .font(.caption)
-                    
-                    Spacer()
-                    
-                    Text("\(event.changesSynced) changes")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    
-                    if event.conflicts > 0 {
-                        Text("\(event.conflicts) conflicts")
+
+            if let report = coordinator.cachedDiagnosticsReport {
+                ForEach(report.recentSyncs.prefix(5), id: \.timestamp) { event in
+                    HStack {
+                        Image(systemName: event.success ? "checkmark.circle" : "xmark.circle")
+                            .foregroundColor(event.success ? .green : .red)
+                            .font(.caption)
+
+                        Text(event.timestamp, style: .relative)
+                            .font(.caption)
+
+                        Spacer()
+
+                        Text("\(event.changesSynced) changes")
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.secondary)
+
+                        if event.conflicts > 0 {
+                            Text("\(event.conflicts) conflicts")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                        }
                     }
                 }
+            } else {
+                Text("No sync history yet")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -273,7 +285,11 @@ public struct MutationQueueView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        #if os(iOS)
+        .background(Color(uiColor: .systemGray6))
+        #else
+        .background(Color.gray.opacity(0.1))
+        #endif
         .cornerRadius(12)
     }
     

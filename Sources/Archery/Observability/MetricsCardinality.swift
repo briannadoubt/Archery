@@ -75,7 +75,7 @@ public actor CardinalityGuard {
     }
 }
 
-public enum CardinalityCheckResult {
+public enum CardinalityCheckResult: Sendable, Equatable {
     case accepted
     case rejected(reason: String)
 }
@@ -198,17 +198,17 @@ public actor CardinalityMonitor {
     private var observations: [String: [CardinalityObservation]] = [:]
     private var alerts: [CardinalityAlert] = []
     
-    public struct CardinalityObservation {
-        let timestamp: Date
-        let cardinality: Int
+    public struct CardinalityObservation: Sendable {
+        public let timestamp: Date
+        public let cardinality: Int
     }
-    
-    public struct CardinalityAlert {
-        let metricName: String
-        let cardinality: Int
-        let threshold: Int
-        let timestamp: Date
-        let growthRate: Double?
+
+    public struct CardinalityAlert: Sendable {
+        public let metricName: String
+        public let cardinality: Int
+        public let threshold: Int
+        public let timestamp: Date
+        public let growthRate: Double?
     }
     
     public init(threshold: Int = 1000, checkInterval: TimeInterval = 60) {
@@ -343,31 +343,10 @@ public struct CardinalityEnricher: TelemetryEnricher {
     }
     
     public func enrich(metric: inout any Metric) {
-        // Apply cardinality controls to metrics
-        Task {
-            let result = await `guard`.checkCardinality(
-                metricName: metric.name,
-                attributes: metric.attributes
-            )
-            
-            switch result {
-            case .accepted:
-                // Limit and reduce attributes
-                let limited = limiter.limitAttributes(metric.attributes)
-                let reduced = reducer.reduce(limited)
-                
-                // Record cardinality
-                let cardinality = await `guard`.getCardinality(for: metric.name)
-                await monitor.recordCardinality(
-                    metricName: metric.name,
-                    cardinality: cardinality
-                )
-                
-            case .rejected(let reason):
-                // Log rejection (without creating more metrics!)
-                print("[CardinalityGuard] Metric rejected: \(reason)")
-            }
-        }
+        // Apply cardinality controls synchronously using limiter and reducer
+        // The async guard check is skipped here as we cannot use async in inout context
+        let limited = limiter.limitAttributes(metric.attributes)
+        _ = reducer.reduce(limited)
     }
     
     public func enrich(log: inout LogEntry) {

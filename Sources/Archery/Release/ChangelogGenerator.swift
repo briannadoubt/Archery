@@ -18,7 +18,7 @@ public struct ChangelogGenerator {
         public let showAuthors: Bool
         public let dateFormat: DateFormatter
         
-        public enum Format {
+        public enum Format: Sendable {
             case markdown
             case html
             case json
@@ -49,7 +49,7 @@ public struct ChangelogGenerator {
             self.dateFormat.timeStyle = .none
         }
         
-        public static let `default` = Configuration()
+        public nonisolated(unsafe) static let `default` = Configuration()
     }
     
     // MARK: - Generation

@@ -1,9 +1,11 @@
+#if canImport(XCTest)
 import XCTest
 import SwiftUI
 
 // MARK: - UI Test Runner
 
 /// Manages UI tests for critical application flows
+@MainActor
 public final class UITestRunner {
     
     private let app: XCUIApplication
@@ -487,3 +489,4 @@ public struct AccessibilityReport {
     public let issues: [AccessibilityIssue]
     public let passed: Bool
 }
+#endif

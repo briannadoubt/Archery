@@ -41,12 +41,12 @@ public final class AnalyticsManager: ObservableObject {
     @Published public private(set) var isEnabled: Bool = true
     @Published public private(set) var debugMode: Bool = false
     
-    private var providers: [AnalyticsProvider] = []
+    private var providers: [any AnalyticsProvider] = []
     private let queue = DispatchQueue(label: "com.archery.analytics", qos: .background)
     
     private init() {}
     
-    public func configure(providers: [AnalyticsProvider], enabled: Bool = true, debugMode: Bool = false) {
+    public func configure(providers: [any AnalyticsProvider], enabled: Bool = true, debugMode: Bool = false) {
         self.providers = providers
         self.isEnabled = enabled
         self.debugMode = debugMode
@@ -54,7 +54,7 @@ public final class AnalyticsManager: ObservableObject {
     
     public func track<Event: AnalyticsEvent>(_ event: Event) {
         guard isEnabled else { return }
-        
+
         // Validate synchronously before queueing
         do {
             try event.validate()
@@ -62,19 +62,39 @@ public final class AnalyticsManager: ObservableObject {
             print("[Analytics] Failed to validate event: \(error)")
             return
         }
-        
+
         let eventName = event.eventName
         let properties = debugMode ? event.properties : event.redactedProperties()
         let debug = debugMode
         let providers = self.providers
-        
+
         Task {
             if debug {
                 print("[Analytics] Tracking: \(eventName) with properties: \(properties)")
             }
-            
+
             for provider in providers {
                 provider.track(eventName: eventName, properties: properties)
+            }
+        }
+    }
+
+    /// Track a raw event with name and properties (no validation)
+    /// Used for framework-level auto-tracked events
+    public func track(_ eventName: String, properties: [String: Any]) {
+        guard isEnabled else { return }
+
+        let redactedProperties = debugMode ? properties : redact(properties)
+        let debug = debugMode
+        let providers = self.providers
+
+        Task {
+            if debug {
+                print("[Analytics] Tracking: \(eventName) with properties: \(redactedProperties)")
+            }
+
+            for provider in providers {
+                provider.track(eventName: eventName, properties: redactedProperties)
             }
         }
     }

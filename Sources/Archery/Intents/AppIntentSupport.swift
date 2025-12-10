@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 #if canImport(AppIntents)
 import AppIntents
@@ -8,11 +9,10 @@ import AppIntents
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
 public protocol ArcheryAppIntent: AppIntent {
     associatedtype Repository: DataRepository
-    
+
     var container: EnvContainer { get }
-    
+
     func repository() -> Repository?
-    func performAction() async throws -> IntentResult
 }
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
@@ -20,17 +20,9 @@ public extension ArcheryAppIntent {
     var container: EnvContainer {
         .shared
     }
-    
+
     func repository() -> Repository? {
-        container.resolve(Repository.self)
-    }
-    
-    func perform() async throws -> some IntentResult {
-        do {
-            return try await performAction()
-        } catch {
-            throw IntentError.executionFailed(reason: error.localizedDescription)
-        }
+        container.resolve()
     }
 }
 
@@ -38,104 +30,94 @@ public extension ArcheryAppIntent {
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
 public struct IntentResultBuilder {
-    
+
     /// Success result with message
-    public static func success(_ message: String) -> IntentResult {
+    public static func success(_ message: String) -> some IntentResult {
         .result(value: message)
     }
-    
+
     /// Success result with dialog
-    public static func success(_ dialog: IntentDialog) -> IntentResult {
+    public static func success(_ dialog: IntentDialog) -> some IntentResult {
         .result(dialog: dialog)
-    }
-    
-    /// Result that opens the app
-    public static func openApp(to route: String? = nil) -> IntentResult {
-        if let route = route {
-            let url = URL(string: "archery://intent/\(route)")!
-            return .result(opensIntent: OpenURLIntent(url))
-        } else {
-            return .result(opensIntent: OpenAppIntent())
-        }
-    }
-    
-    /// Result that continues in app
-    public static func continueInApp(_ message: String, route: String? = nil) -> IntentResult {
-        .result(
-            dialog: IntentDialog(message),
-            opensIntent: route.map { OpenURLIntent(url: URL(string: "archery://intent/\($0)")!) }
-        )
     }
 }
 
 // MARK: - Intent Parameters
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
-public protocol IntentParameter: AppEntity {
+public protocol ArcheryIntentEntity: AppEntity {
     associatedtype Value
-    
-    var value: Value { get }
-}
 
-@available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
-public extension IntentParameter {
-    static var defaultQuery: IntentParameterQuery<Self> {
-        IntentParameterQuery()
-    }
+    var value: Value { get }
 }
 
 // MARK: - Common Intent Entities
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
-public struct TextEntity: IntentParameter {
+public struct TextEntity: ArcheryIntentEntity {
     public let id: String
     public let displayString: String
     public let value: String
-    
+
     public init(id: String = UUID().uuidString, displayString: String, value: String) {
         self.id = id
         self.displayString = displayString
         self.value = value
     }
-    
+
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Text")
+
+    public var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(displayString)")
+    }
+
+    public static var defaultQuery: TextEntityQuery { TextEntityQuery() }
 }
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
-public struct NumberEntity: IntentParameter {
+public struct TextEntityQuery: EntityQuery {
+    public init() {}
+
+    public func entities(for identifiers: [String]) async throws -> [TextEntity] {
+        []
+    }
+
+    public func suggestedEntities() async throws -> [TextEntity] {
+        []
+    }
+}
+
+@available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
+public struct NumberEntity: ArcheryIntentEntity {
     public let id: String
     public let displayString: String
     public let value: Double
-    
+
     public init(id: String = UUID().uuidString, displayString: String, value: Double) {
         self.id = id
         self.displayString = displayString
         self.value = value
     }
-    
+
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Number")
+
+    public var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(displayString)")
+    }
+
+    public static var defaultQuery: NumberEntityQuery { NumberEntityQuery() }
 }
 
-// MARK: - Intent Query Support
-
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
-public struct IntentParameterQuery<Entity: IntentParameter>: EntityQuery {
-    
+public struct NumberEntityQuery: EntityQuery {
     public init() {}
-    
-    public func entities(for identifiers: [Entity.ID]) async throws -> [Entity] {
-        // Override in subclasses to provide entity resolution
-        return []
+
+    public func entities(for identifiers: [String]) async throws -> [NumberEntity] {
+        []
     }
-    
-    public func suggestedEntities() async throws -> [Entity] {
-        // Override in subclasses to provide suggestions
-        return []
-    }
-    
-    public func entities(matching string: String) async throws -> [Entity] {
-        // Override in subclasses to provide search
-        return []
+
+    public func suggestedEntities() async throws -> [NumberEntity] {
+        []
     }
 }
 
@@ -262,11 +244,12 @@ public macro AppIntent(
 public struct OpenAppIntent: AppIntent {
     public static let title: LocalizedStringResource = "Open App"
     public static let description = IntentDescription("Opens the main application")
-    
+    public static let openAppWhenRun: Bool = true
+
     public init() {}
-    
+
     public func perform() async throws -> some IntentResult {
-        .result(opensIntent: self)
+        .result()
     }
 }
 
@@ -274,20 +257,21 @@ public struct OpenAppIntent: AppIntent {
 public struct OpenURLIntent: AppIntent {
     public static let title: LocalizedStringResource = "Open URL"
     public static let description = IntentDescription("Opens a specific URL in the app")
-    
+    public static let openAppWhenRun: Bool = true
+
     @Parameter(title: "URL")
     public var url: URL
-    
+
     public init(url: URL) {
         self.url = url
     }
-    
+
     public init() {
         self.url = URL(string: "archery://")!
     }
-    
+
     public func perform() async throws -> some IntentResult {
-        .result(opensIntent: self)
+        .result()
     }
 }
 
@@ -313,27 +297,23 @@ public struct IntentShortcutsProvider: AppShortcutsProvider {
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
 public struct IntentAnalytics {
-    
+
     public static func track(intent: String, parameters: [String: Any] = [:]) {
         var sanitizedParams = parameters
-        
+
         // Remove PII
         for (key, value) in sanitizedParams {
             if isPII(key: key, value: value) {
                 sanitizedParams[key] = "[REDACTED]"
             }
         }
-        
-        // Send to analytics
-        AnalyticsManager.shared?.track(
-            event: "intent_executed",
-            properties: [
-                "intent_name": intent,
-                "parameters": sanitizedParams
-            ]
-        )
+
+        // Log the intent execution - actual analytics would be sent here
+        #if DEBUG
+        print("[IntentAnalytics] Executed: \(intent), params: \(sanitizedParams)")
+        #endif
     }
-    
+
     private static func isPII(key: String, value: Any) -> Bool {
         let piiKeys = ["email", "phone", "name", "address", "ssn", "password", "token"]
         return piiKeys.contains { key.lowercased().contains($0) }
@@ -344,14 +324,6 @@ public struct IntentAnalytics {
 
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
 public extension View {
-    func siriTip<Intent: AppIntent>(intent: Intent) -> some View {
-        if #available(iOS 17.0, macOS 14.0, watchOS 10.0, *) {
-            return self.siriShortcutTip(intent)
-        } else {
-            return self
-        }
-    }
-    
     func addToSiri<Intent: AppIntent>(_ intent: Intent, phrase: String) -> some View {
         self.contextMenu {
             Button("Add to Siri") {

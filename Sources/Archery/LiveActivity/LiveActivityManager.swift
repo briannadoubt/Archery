@@ -2,12 +2,13 @@ import Foundation
 import SwiftUI
 
 #if canImport(ActivityKit) && os(iOS)
-import ActivityKit
+@preconcurrency import ActivityKit
 
 @available(iOS 16.1, *)
+@MainActor
 public protocol LiveActivityManaging {
     associatedtype Attributes: ActivityAttributes
-    
+
     func start(attributes: Attributes, contentState: Attributes.ContentState) async throws -> String
     func update(id: String, contentState: Attributes.ContentState) async throws
     func end(id: String, contentState: Attributes.ContentState?, dismissalPolicy: ActivityUIDismissalPolicy) async throws
@@ -16,6 +17,7 @@ public protocol LiveActivityManaging {
 }
 
 @available(iOS 16.1, *)
+@MainActor
 public class LiveActivityManager<Attributes: ActivityAttributes>: ObservableObject, LiveActivityManaging {
     @Published public private(set) var activities: [String: Activity<Attributes>] = [:]
     private let staleTimeout: TimeInterval
@@ -78,15 +80,11 @@ public class LiveActivityManager<Attributes: ActivityAttributes>: ObservableObje
         guard let activity = activities[id] else {
             throw LiveActivityError.activityNotFound(id)
         }
-        
-        let finalContent: ActivityContent<Attributes.ContentState>? = contentState.map { state in
-            ActivityContent(
-                state: state,
-                staleDate: Date()
-            )
+
+        nonisolated(unsafe) let content: ActivityContent<Attributes.ContentState>? = contentState.map {
+            ActivityContent(state: $0, staleDate: Date())
         }
-        
-        await activity.end(finalContent, dismissalPolicy: dismissalPolicy)
+        await activity.end(content, dismissalPolicy: dismissalPolicy)
         activities[id] = nil
     }
     
@@ -159,6 +157,7 @@ public struct LiveActivityFixture<Attributes: ActivityAttributes> {
 
 #if DEBUG
 @available(iOS 16.1, *)
+@MainActor
 public class MockLiveActivityManager<Attributes: ActivityAttributes>: ObservableObject, LiveActivityManaging {
     @Published public var activities: [String: MockActivity<Attributes>] = [:]
     private var nextId = 0

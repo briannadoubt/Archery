@@ -11,10 +11,11 @@ import AppKit
 public struct HostingBridge {
     
     #if canImport(UIKit)
-    
+
     // MARK: - UIKit Hosting
-    
+
     /// Creates a UIViewController hosting a SwiftUI view
+    @MainActor
     public static func makeViewController<Content: View>(
         rootView: Content,
         configuration: HostingConfiguration = .default
@@ -36,6 +37,7 @@ public struct HostingBridge {
     }
     
     /// Embed a SwiftUI view in an existing UIView
+    @MainActor
     public static func embed<Content: View>(
         _ view: Content,
         in containerView: UIView,
@@ -89,8 +91,9 @@ public struct HostingBridge {
     #elseif canImport(AppKit)
     
     // MARK: - AppKit Hosting
-    
+
     /// Creates an NSViewController hosting a SwiftUI view
+    @MainActor
     public static func makeViewController<Content: View>(
         rootView: Content,
         configuration: HostingConfiguration = .default
@@ -109,6 +112,7 @@ public struct HostingBridge {
     }
     
     /// Embed a SwiftUI view in an existing NSView
+    @MainActor
     public static func embed<Content: View>(
         _ view: Content,
         in containerView: NSView,
@@ -163,13 +167,13 @@ public struct HostingBridge {
 
 // MARK: - Configuration Types
 
-public struct HostingConfiguration {
+public struct HostingConfiguration: @unchecked Sendable {
     public var preferredContentSize: CGSize
     public var backgroundColor: PlatformColor?
     public var disableSafeArea: Bool
     public var navigationBarHidden: Bool
     public var tabBarHidden: Bool
-    
+
     public init(
         preferredContentSize: CGSize = .zero,
         backgroundColor: PlatformColor? = nil,
@@ -183,15 +187,15 @@ public struct HostingConfiguration {
         self.navigationBarHidden = navigationBarHidden
         self.tabBarHidden = tabBarHidden
     }
-    
+
     public static let `default` = HostingConfiguration()
 }
 
-public struct EmbeddingConfiguration {
+public struct EmbeddingConfiguration: @unchecked Sendable {
     public var insets: EdgeInsets
     public var backgroundColor: PlatformColor?
     public var cornerRadius: CGFloat
-    
+
     public init(
         insets: EdgeInsets = .zero,
         backgroundColor: PlatformColor? = nil,
@@ -201,23 +205,23 @@ public struct EmbeddingConfiguration {
         self.backgroundColor = backgroundColor
         self.cornerRadius = cornerRadius
     }
-    
+
     public static let `default` = EmbeddingConfiguration()
 }
 
-public struct EdgeInsets {
+public struct EdgeInsets: Sendable {
     public let top: CGFloat
     public let left: CGFloat
     public let bottom: CGFloat
     public let right: CGFloat
-    
+
     public init(top: CGFloat = 0, left: CGFloat = 0, bottom: CGFloat = 0, right: CGFloat = 0) {
         self.top = top
         self.left = left
         self.bottom = bottom
         self.right = right
     }
-    
+
     public static let zero = EdgeInsets()
 }
 

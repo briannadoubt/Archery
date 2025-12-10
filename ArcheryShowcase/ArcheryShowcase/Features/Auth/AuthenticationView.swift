@@ -1,283 +1,162 @@
 import SwiftUI
 import Archery
+import AuthenticationServices
 
-// MARK: - Authentication View with @ViewModelBound
+// MARK: - Authentication View
 
-@ViewModelBound(viewModel: AuthViewModel.self)
 struct AuthenticationView: View {
-    @StateObject var vm: AuthViewModel
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isLoading = false
     @State private var showingSignUp = false
     @State private var showingForgotPassword = false
-    
+    @State private var error: AuthError?
+    @EnvironmentObject var themeManager: ThemeManager
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                // Logo and branding
-                Image(systemName: "target")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.accent)
-                    .padding(.top, 60)
-                
-                Text("Archery Showcase")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-                Text("Macro-powered SwiftUI Architecture")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                
-                Spacer()
-                
-                // Login form
+        ScrollView {
+            VStack(spacing: 32) {
+                // Logo/Header
+                VStack(spacing: 8) {
+                    Image(systemName: "target")
+                        .font(.system(size: 60))
+                        .foregroundStyle(Color.accentColor)
+
+                    Text("Archery")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+
+                    Text("Macro-powered SwiftUI Architecture")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 40)
+
+                // Login Form
                 VStack(spacing: 16) {
-                    TextField("Email", text: $vm.email)
+                    TextField("Email", text: $email)
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.emailAddress)
                         .autocapitalization(.none)
-                        .disabled(vm.isLoading)
-                    
-                    SecureField("Password", text: $vm.password)
+                        .keyboardType(.emailAddress)
+
+                    SecureField("Password", text: $password)
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.password)
-                        .disabled(vm.isLoading)
-                    
-                    if let error = vm.error {
-                        Text(error.localizedDescription)
+
+                    // Error message
+                    if let error = error {
+                        Text(error.errorDescription ?? "An error occurred")
                             .font(.caption)
                             .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    
-                    Button(action: { Task { await vm.login() } }) {
+
+                    // Login button
+                    Button(action: login) {
                         HStack {
-                            if vm.isLoading {
+                            if isLoading {
                                 ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("Sign In")
+                                    .tint(.white)
                             }
+                            Text("Sign In")
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(vm.isLoading || !vm.isValid)
-                    
-                    HStack {
-                        Button("Forgot Password?") {
-                            showingForgotPassword = true
-                        }
-                        .font(.caption)
-                        
-                        Spacer()
-                        
-                        Button("Create Account") {
-                            showingSignUp = true
-                        }
-                        .font(.caption)
+                    .controlSize(.large)
+                    .disabled(isLoading || email.isEmpty || password.isEmpty)
+
+                    // Forgot password
+                    Button("Forgot Password?") {
+                        showingForgotPassword = true
                     }
-                    .padding(.horizontal, 4)
+                    .font(.caption)
                 }
-                .padding(.horizontal, 32)
-                
-                Divider()
-                    .padding(.vertical)
-                
-                // Social login options
+                .padding(.horizontal)
+
+                // Divider
+                HStack {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(height: 1)
+                    Text("or continue with")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(height: 1)
+                }
+                .padding(.horizontal)
+
+                // Social Login
                 VStack(spacing: 12) {
-                    Button(action: { Task { await vm.loginWithApple() } }) {
-                        Label("Sign in with Apple", systemImage: "apple.logo")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = [.email, .fullName]
+                    } onCompletion: { _ in
+                        // Handle Apple sign in
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 50)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    Button(action: {}) {
+                        HStack {
+                            Image(systemName: "g.circle.fill")
+                            Text("Sign in with Google")
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    
-                    Button(action: { Task { await vm.loginWithGoogle() } }) {
-                        Label("Sign in with Google", systemImage: "globe")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                    .controlSize(.large)
+                }
+                .padding(.horizontal)
+
+                // Sign up link
+                HStack {
+                    Text("Don't have an account?")
+                        .foregroundStyle(.secondary)
+                    Button("Sign Up") {
+                        showingSignUp = true
                     }
-                    .buttonStyle(.bordered)
                 }
-                .padding(.horizontal, 32)
-                
-                Spacer()
-                
-                // Demo mode
-                Button("Continue with Demo Account") {
-                    Task { await vm.loginAsDemo() }
-                }
-                .font(.caption)
-                .padding(.bottom, 32)
+                .font(.callout)
             }
-            .navigationBarHidden(true)
-            .sheet(isPresented: $showingSignUp) {
+            .padding(.bottom, 32)
+        }
+        .navigationTitle("")
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showingSignUp) {
+            NavigationStack {
                 SignUpView()
             }
-            .sheet(isPresented: $showingForgotPassword) {
+        }
+        .sheet(isPresented: $showingForgotPassword) {
+            NavigationStack {
                 ForgotPasswordView()
             }
         }
     }
-}
 
-// MARK: - Auth ViewModel with @ObservableViewModel
+    private func login() {
+        isLoading = true
+        error = nil
 
-@ObservableViewModel
-class AuthViewModel: ObservableObject {
-    @Published var email = ""
-    @Published var password = ""
-    @Published var isLoading = false
-    @Published var error: AuthError?
-    
-    @Injected private var authRepository: AuthRepository
-    @Injected private var analyticsService: AnalyticsService
-    @Injected private var keychainStore: KeychainStore
-    
-    var isValid: Bool {
-        !email.isEmpty && !password.isEmpty && email.contains("@")
-    }
-    
-    @MainActor
-    func login() async {
-        isLoading = true
-        error = nil
-        
-        do {
-            let credentials = try await authRepository.login(
-                email: email,
-                password: password
-            )
-            
-            // Store tokens securely
-            try await keychainStore.store(
-                credentials.accessToken,
-                for: .accessToken
-            )
-            try await keychainStore.store(
-                credentials.refreshToken,
-                for: .refreshToken
-            )
-            
-            // Track successful login
-            analyticsService.track(.userLoggedIn(method: "email"))
-            
-            // Update auth state
-            await AuthManager.shared.setAuthenticated(true, user: credentials.user)
-            
-        } catch let authError as AuthError {
-            error = authError
-            analyticsService.track(.loginFailed(reason: authError.analyticsReason))
-        } catch {
-            self.error = .unknown(error)
+        // Simulate login
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            isLoading = false
+            // For demo, just show success or error based on email
+            if email.contains("@") {
+                // Success - in real app would update auth state
+            } else {
+                error = .invalidCredentials
+            }
         }
-        
-        isLoading = false
-    }
-    
-    @MainActor
-    func loginWithApple() async {
-        isLoading = true
-        error = nil
-        
-        do {
-            let credentials = try await authRepository.loginWithApple()
-            try await storeCredentials(credentials)
-            analyticsService.track(.userLoggedIn(method: "apple"))
-            await AuthManager.shared.setAuthenticated(true, user: credentials.user)
-        } catch {
-            error = .socialLoginFailed("Apple")
-        }
-        
-        isLoading = false
-    }
-    
-    @MainActor
-    func loginWithGoogle() async {
-        isLoading = true
-        error = nil
-        
-        do {
-            let credentials = try await authRepository.loginWithGoogle()
-            try await storeCredentials(credentials)
-            analyticsService.track(.userLoggedIn(method: "google"))
-            await AuthManager.shared.setAuthenticated(true, user: credentials.user)
-        } catch {
-            error = .socialLoginFailed("Google")
-        }
-        
-        isLoading = false
-    }
-    
-    @MainActor
-    func loginAsDemo() async {
-        isLoading = true
-        
-        // Create demo credentials
-        let demoUser = User(
-            id: "demo-user",
-            email: "demo@archery.app",
-            name: "Demo User",
-            avatar: nil,
-            subscription: .premium
-        )
-        
-        let demoCredentials = AuthCredentials(
-            user: demoUser,
-            accessToken: "demo-access-token",
-            refreshToken: "demo-refresh-token"
-        )
-        
-        try? await storeCredentials(demoCredentials)
-        analyticsService.track(.userLoggedIn(method: "demo"))
-        await AuthManager.shared.setAuthenticated(true, user: demoUser)
-        
-        isLoading = false
-    }
-    
-    private func storeCredentials(_ credentials: AuthCredentials) async throws {
-        try await keychainStore.store(credentials.accessToken, for: .accessToken)
-        try await keychainStore.store(credentials.refreshToken, for: .refreshToken)
     }
 }
 
-// MARK: - Auth Manager
+// MARK: - Preview
 
-@MainActor
-class AuthManager: ObservableObject {
-    static let shared = AuthManager()
-    
-    @Published var isAuthenticated = false
-    @Published var currentUser: User?
-    
-    @Injected private var authRepository: AuthRepository
-    @Injected private var keychainStore: KeychainStore
-    
-    func setAuthenticated(_ authenticated: Bool, user: User? = nil) async {
-        isAuthenticated = authenticated
-        currentUser = user
-    }
-    
-    func refreshTokenIfNeeded() async {
-        guard let refreshToken = try? await keychainStore.retrieve(for: .refreshToken) else {
-            return
-        }
-        
-        do {
-            let credentials = try await authRepository.refreshToken(refreshToken)
-            try await keychainStore.store(credentials.accessToken, for: .accessToken)
-            currentUser = credentials.user
-        } catch {
-            // Token refresh failed, log out
-            await logout()
-        }
-    }
-    
-    func logout() async {
-        try? await keychainStore.delete(for: .accessToken)
-        try? await keychainStore.delete(for: .refreshToken)
-        isAuthenticated = false
-        currentUser = nil
-    }
+#Preview {
+    AuthenticationView()
+        .environmentObject(ThemeManager())
 }

@@ -5,7 +5,7 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import Foundation
 
-public struct AnalyticsEventMacro: MemberMacro, ExtensionMacro {
+public struct AnalyticsEventMacro: MemberMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -15,9 +15,9 @@ public struct AnalyticsEventMacro: MemberMacro, ExtensionMacro {
         guard let enumDecl = declaration.as(EnumDeclSyntax.self) else {
             throw AnalyticsMacroError.notAnEnum
         }
-        
+
         var members: [DeclSyntax] = []
-        
+
         // Generate event name property
         members.append(
             """
@@ -28,7 +28,7 @@ public struct AnalyticsEventMacro: MemberMacro, ExtensionMacro {
             }
             """
         )
-        
+
         // Generate properties dictionary
         members.append(
             """
@@ -39,7 +39,7 @@ public struct AnalyticsEventMacro: MemberMacro, ExtensionMacro {
             }
             """
         )
-        
+
         // Generate validation method
         members.append(
             """
@@ -50,98 +50,92 @@ public struct AnalyticsEventMacro: MemberMacro, ExtensionMacro {
             }
             """
         )
-        
-        return members
-    }
-    
-    public static func expansion(
-        of node: AttributeSyntax,
-        attachedTo declaration: some DeclGroupSyntax,
-        providingExtensionsOf type: some TypeSyntaxProtocol,
-        conformingTo protocols: [TypeSyntax],
-        in context: some MacroExpansionContext
-    ) throws -> [ExtensionDeclSyntax] {
-        guard let enumDecl = declaration.as(EnumDeclSyntax.self) else {
-            throw AnalyticsMacroError.notAnEnum
-        }
-        
-        let extensionDecl = try ExtensionDeclSyntax(
+
+        // Generate track method
+        members.append(
             """
-            extension \(enumDecl.name): AnalyticsEvent {
-                public func track(with provider: AnalyticsProvider) {
-                    do {
-                        try validate()
-                        provider.track(eventName: eventName, properties: properties)
-                    } catch {
-                        print("[Analytics] Failed to track event: \\(error)")
-                    }
-                }
-                
-                public func redactedProperties() -> [String: Any] {
-                    var redacted = properties
-                    for (key, value) in redacted {
-                        if isPII(key: key) {
-                            redacted[key] = "[REDACTED]"
-                        } else if let string = value as? String, containsPII(string) {
-                            redacted[key] = redactPII(from: string)
-                        }
-                    }
-                    return redacted
-                }
-                
-                private func isPII(key: String) -> Bool {
-                    let piiKeys = ["email", "phone", "ssn", "creditCard", "password", "token", "apiKey"]
-                    return piiKeys.contains { key.lowercased().contains($0) }
-                }
-                
-                private func containsPII(_ string: String) -> Bool {
-                    // Check for email pattern
-                    let emailRegex = try? NSRegularExpression(pattern: "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}")
-                    if let matches = emailRegex?.matches(in: string, range: NSRange(string.startIndex..., in: string)),
-                       !matches.isEmpty {
-                        return true
-                    }
-                    
-                    // Check for phone pattern
-                    let phoneRegex = try? NSRegularExpression(pattern: "\\\\b\\\\d{3}[-.]?\\\\d{3}[-.]?\\\\d{4}\\\\b")
-                    if let matches = phoneRegex?.matches(in: string, range: NSRange(string.startIndex..., in: string)),
-                       !matches.isEmpty {
-                        return true
-                    }
-                    
-                    return false
-                }
-                
-                private func redactPII(from string: String) -> String {
-                    var result = string
-                    
-                    // Redact emails
-                    if let emailRegex = try? NSRegularExpression(pattern: "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}") {
-                        result = emailRegex.stringByReplacingMatches(
-                            in: result,
-                            range: NSRange(result.startIndex..., in: result),
-                            withTemplate: "[EMAIL]"
-                        )
-                    }
-                    
-                    // Redact phone numbers
-                    if let phoneRegex = try? NSRegularExpression(pattern: "\\\\b\\\\d{3}[-.]?\\\\d{3}[-.]?\\\\d{4}\\\\b") {
-                        result = phoneRegex.stringByReplacingMatches(
-                            in: result,
-                            range: NSRange(result.startIndex..., in: result),
-                            withTemplate: "[PHONE]"
-                        )
-                    }
-                    
-                    return result
+            public func track(with provider: Archery.AnalyticsProvider) {
+                do {
+                    try validate()
+                    provider.track(eventName: eventName, properties: properties)
+                } catch {
+                    print("[Analytics] Failed to track event: \\(error)")
                 }
             }
             """
         )
-        
-        return [extensionDecl]
+
+        // Generate redactedProperties method
+        members.append(
+            """
+            public func redactedProperties() -> [String: Any] {
+                var redacted = properties
+                for (key, value) in redacted {
+                    if Self.isPIIKey(key) {
+                        redacted[key] = "[REDACTED]"
+                    } else if let string = value as? String, Self.containsPII(string) {
+                        redacted[key] = Self.redactPII(from: string)
+                    }
+                }
+                return redacted
+            }
+            """
+        )
+
+        // Generate PII detection helpers as static methods
+        members.append(
+            """
+            private static func isPIIKey(_ key: String) -> Bool {
+                let piiKeys = ["email", "phone", "ssn", "creditCard", "password", "token", "apiKey"]
+                return piiKeys.contains { key.lowercased().contains($0) }
+            }
+            """
+        )
+
+        members.append(
+            """
+            private static func containsPII(_ string: String) -> Bool {
+                let emailRegex = try? NSRegularExpression(pattern: "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}")
+                if let matches = emailRegex?.matches(in: string, range: NSRange(string.startIndex..., in: string)),
+                   !matches.isEmpty {
+                    return true
+                }
+                let phoneRegex = try? NSRegularExpression(pattern: "\\\\b\\\\d{3}[-.]?\\\\d{3}[-.]?\\\\d{4}\\\\b")
+                if let matches = phoneRegex?.matches(in: string, range: NSRange(string.startIndex..., in: string)),
+                   !matches.isEmpty {
+                    return true
+                }
+                return false
+            }
+            """
+        )
+
+        members.append(
+            """
+            private static func redactPII(from string: String) -> String {
+                var result = string
+                if let emailRegex = try? NSRegularExpression(pattern: "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}") {
+                    result = emailRegex.stringByReplacingMatches(
+                        in: result,
+                        range: NSRange(result.startIndex..., in: result),
+                        withTemplate: "[EMAIL]"
+                    )
+                }
+                if let phoneRegex = try? NSRegularExpression(pattern: "\\\\b\\\\d{3}[-.]?\\\\d{3}[-.]?\\\\d{4}\\\\b") {
+                    result = phoneRegex.stringByReplacingMatches(
+                        in: result,
+                        range: NSRange(result.startIndex..., in: result),
+                        withTemplate: "[PHONE]"
+                    )
+                }
+                return result
+            }
+            """
+        )
+
+        return members
     }
-    
+
     private static func generateEventNameCases(for enumDecl: EnumDeclSyntax) -> String {
         let cases = enumDecl.memberBlock.members.compactMap { member -> String? in
             guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) else { return nil }
@@ -221,9 +215,9 @@ public struct AnalyticsEventMacro: MemberMacro, ExtensionMacro {
     
     private static func generateValidation(for property: (name: String, type: String)) -> String? {
         if property.type == "String" {
-            return "    if \(property.name).isEmpty { throw AnalyticsError.invalidProperty(\"\(property.name) cannot be empty\") }"
+            return "    if \(property.name).isEmpty { throw Archery.AnalyticsError.invalidProperty(\"\(property.name) cannot be empty\") }"
         } else if property.type == "Int" || property.type == "Double" {
-            return "    if \(property.name) < 0 { throw AnalyticsError.invalidProperty(\"\(property.name) cannot be negative\") }"
+            return "    if \(property.name) < 0 { throw Archery.AnalyticsError.invalidProperty(\"\(property.name) cannot be negative\") }"
         }
         return nil
     }

@@ -10,7 +10,8 @@ public final class SyncCoordinator: ObservableObject {
     @Published public private(set) var syncProgress: Double = 0
     @Published public private(set) var conflicts: [ConflictRecord] = []
     @Published public private(set) var metrics: SyncMetrics
-    
+    @Published public private(set) var cachedDiagnosticsReport: SyncDiagnosticsReport?
+
     private let mutationQueue: MutationQueue
     private let connectivity: ConnectivityMonitor
     private var syncTask: Task<Void, Never>?
@@ -109,10 +110,11 @@ public final class SyncCoordinator: ObservableObject {
                 changesSync: pendingChanges,
                 conflicts: conflicts.count
             )
+            cachedDiagnosticsReport = await diagnostics.generateReport()
         } catch {
             syncState = .failed
             metrics.failedSyncs += 1
-            
+
             await diagnostics.recordSync(
                 success: false,
                 duration: Date().timeIntervalSince(startTime),
@@ -120,6 +122,7 @@ public final class SyncCoordinator: ObservableObject {
                 conflicts: conflicts.count,
                 error: error
             )
+            cachedDiagnosticsReport = await diagnostics.generateReport()
         }
     }
     
@@ -134,12 +137,12 @@ public final class SyncCoordinator: ObservableObject {
         guard let index = conflicts.firstIndex(where: { $0.id == conflictId }) else {
             return
         }
-        
-        let conflict = conflicts[index]
+
+        let conflictKey = conflicts[index].key
         conflicts.remove(at: index)
-        
+
         await diagnostics.recordConflictResolution(
-            conflict: conflict,
+            key: conflictKey,
             resolution: resolution
         )
     }
@@ -153,6 +156,15 @@ public final class SyncCoordinator: ObservableObject {
     public func getDiagnostics() -> SyncDiagnostics {
         diagnostics
     }
+
+    // MARK: - Test Helpers
+
+    #if DEBUG
+    /// Test helper to directly add a conflict record
+    public func _testAddConflict(_ conflict: ConflictRecord) {
+        conflicts.append(conflict)
+    }
+    #endif
 }
 
 public struct ConflictRecord: Identifiable {
@@ -194,17 +206,17 @@ public actor SyncDiagnostics {
     private var syncHistory: [SyncEvent] = []
     private var conflictHistory: [ConflictEvent] = []
     private let maxHistorySize = 100
-    
-    public struct SyncEvent {
+
+    public struct SyncEvent: Sendable {
         public let timestamp: Date
         public let success: Bool
         public let duration: TimeInterval
         public let changesSynced: Int
         public let conflicts: Int
-        public let error: Error?
+        public let errorMessage: String?
     }
-    
-    public struct ConflictEvent {
+
+    public struct ConflictEvent: Sendable {
         public let timestamp: Date
         public let key: String
         public let resolution: ConflictResolution
@@ -223,7 +235,7 @@ public actor SyncDiagnostics {
             duration: duration,
             changesSynced: changesSync,
             conflicts: conflicts,
-            error: error
+            errorMessage: error?.localizedDescription
         )
         
         syncHistory.append(event)
@@ -234,12 +246,12 @@ public actor SyncDiagnostics {
     }
     
     public func recordConflictResolution(
-        conflict: ConflictRecord,
+        key: String,
         resolution: ConflictResolution
     ) {
         let event = ConflictEvent(
             timestamp: Date(),
-            key: conflict.key,
+            key: key,
             resolution: resolution
         )
         
@@ -282,7 +294,7 @@ public actor SyncDiagnostics {
     }
 }
 
-public struct SyncDiagnosticsReport {
+public struct SyncDiagnosticsReport: Sendable {
     public let totalSyncs: Int
     public let successfulSyncs: Int
     public let failedSyncs: Int
@@ -292,7 +304,7 @@ public struct SyncDiagnosticsReport {
     public let conflictsResolved: Int
     public let recentSyncs: [SyncDiagnostics.SyncEvent]
     public let recentConflicts: [SyncDiagnostics.ConflictEvent]
-    
+
     public var successRate: Double {
         guard totalSyncs > 0 else { return 0 }
         return Double(successfulSyncs) / Double(totalSyncs)

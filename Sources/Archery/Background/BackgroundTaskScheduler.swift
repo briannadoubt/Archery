@@ -1,9 +1,9 @@
-import BackgroundTasks
+@preconcurrency import BackgroundTasks
 import Foundation
 import Combine
 
-public protocol BackgroundTaskScheduling {
-    func register(identifier: String, handler: @escaping () async throws -> Void)
+public protocol BackgroundTaskScheduling: Sendable {
+    func register(identifier: String, handler: @escaping @Sendable () async throws -> Void)
     func schedule(identifier: String, at date: Date?) async throws
     func cancel(identifier: String) throws
     func cancelAll()
@@ -13,16 +13,16 @@ public protocol BackgroundTaskScheduling {
 @available(iOS 13.0, macOS 11.0, *)
 public final class BackgroundTaskScheduler: BackgroundTaskScheduling, @unchecked Sendable {
     public static let shared = BackgroundTaskScheduler()
-    
-    private var handlers: [String: () async throws -> Void] = [:]
+
+    private var handlers: [String: @Sendable () async throws -> Void] = [:]
     private var registeredIdentifiers: Set<String> = []
     private let queue = DispatchQueue(label: "com.archery.backgroundtasks", qos: .utility)
-    
+
     private init() {}
-    
+
     public func register(
         identifier: String,
-        handler: @escaping () async throws -> Void
+        handler: @escaping @Sendable () async throws -> Void
     ) {
         queue.sync {
             handlers[identifier] = handler
@@ -121,7 +121,7 @@ public enum BackgroundTaskError: LocalizedError {
     }
 }
 
-public struct BackgroundTaskConfiguration {
+public struct BackgroundTaskConfiguration: Sendable {
     public let identifier: String
     public let interval: TimeInterval
     public let requiresNetworkConnectivity: Bool
@@ -149,17 +149,17 @@ public protocol BackgroundTaskHandling {
     func nextScheduleDate() -> Date?
 }
 
-public struct BackgroundTaskManager {
+public struct BackgroundTaskManager: Sendable {
     private let scheduler: BackgroundTaskScheduling
     private var configurations: [String: BackgroundTaskConfiguration] = [:]
-    
+
     public init(scheduler: BackgroundTaskScheduling = BackgroundTaskScheduler.shared) {
         self.scheduler = scheduler
     }
-    
+
     public mutating func registerTask(
         _ configuration: BackgroundTaskConfiguration,
-        handler: @escaping () async throws -> Void
+        handler: @escaping @Sendable () async throws -> Void
     ) {
         configurations[configuration.identifier] = configuration
         scheduler.register(identifier: configuration.identifier, handler: handler)
@@ -182,14 +182,14 @@ public struct BackgroundTaskManager {
 }
 
 #if DEBUG
-public class MockBackgroundTaskScheduler: BackgroundTaskScheduling {
-    public var handlers: [String: () async throws -> Void] = [:]
+public final class MockBackgroundTaskScheduler: BackgroundTaskScheduling, @unchecked Sendable {
+    public var handlers: [String: @Sendable () async throws -> Void] = [:]
     public var scheduledTasks: [String: Date] = [:]
     public var cancelledTasks: Set<String> = []
-    
+
     public init() {}
-    
-    public func register(identifier: String, handler: @escaping () async throws -> Void) {
+
+    public func register(identifier: String, handler: @escaping @Sendable () async throws -> Void) {
         handlers[identifier] = handler
     }
     

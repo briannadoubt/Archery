@@ -9,17 +9,23 @@ public struct PaywallView: View {
     @State private var selectedProduct: Product?
     @State private var isPurchasing = false
     @State private var showingError = false
-    
+
     let configuration: PaywallConfiguration
+    let source: String
+    let requiredEntitlement: EntitlementRequirement?
     let onDismiss: (() -> Void)?
-    let onPurchaseComplete: ((Transaction) -> Void)?
-    
+    let onPurchaseComplete: ((StoreKit.Transaction) -> Void)?
+
     public init(
         configuration: PaywallConfiguration = .default,
+        source: String = "unknown",
+        requiredEntitlement: EntitlementRequirement? = nil,
         onDismiss: (() -> Void)? = nil,
-        onPurchaseComplete: ((Transaction) -> Void)? = nil
+        onPurchaseComplete: ((StoreKit.Transaction) -> Void)? = nil
     ) {
         self.configuration = configuration
+        self.source = source
+        self.requiredEntitlement = requiredEntitlement
         self.onDismiss = onDismiss
         self.onPurchaseComplete = onPurchaseComplete
     }
@@ -48,18 +54,36 @@ public struct PaywallView: View {
                 .padding()
             }
             .navigationTitle(configuration.title)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            #endif
             .toolbar {
                 if configuration.showCloseButton {
+                    #if os(iOS)
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Close") {
                             onDismiss?()
                         }
                     }
+                    #else
+                    ToolbarItem(placement: .automatic) {
+                        Button("Close") {
+                            onDismiss?()
+                        }
+                    }
+                    #endif
                 }
             }
         }
         .task {
+            // Auto-track paywall viewed
+            ArcheryAnalyticsConfiguration.shared.track(
+                .paywallViewed(
+                    source: source,
+                    requiredEntitlement: requiredEntitlement?.analyticsDescription
+                )
+            )
+
             await store.loadProducts()
             if let firstProduct = store.products.first {
                 selectedProduct = firstProduct
@@ -178,15 +202,42 @@ public struct PaywallView: View {
     
     private func purchase() {
         guard let product = selectedProduct else { return }
-        
+
+        // Auto-track purchase started
+        ArcheryAnalyticsConfiguration.shared.track(
+            .purchaseStarted(
+                productId: product.id,
+                price: NSDecimalNumber(decimal: product.price).doubleValue
+            )
+        )
+
         Task {
             isPurchasing = true
             defer { isPurchasing = false }
-            
+
             if let transaction = await store.purchase(product) {
+                // Auto-track purchase completed
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .purchaseCompleted(
+                        productId: product.id,
+                        price: NSDecimalNumber(decimal: product.price).doubleValue,
+                        transactionId: String(transaction.id)
+                    )
+                )
+
                 onPurchaseComplete?(transaction)
                 onDismiss?()
-            } else if store.error != nil {
+            } else if let error = store.error {
+                // Auto-track purchase failed
+                let nsError = error as NSError
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .purchaseFailed(
+                        productId: product.id,
+                        errorCode: String(nsError.code),
+                        errorMessage: error.localizedDescription
+                    )
+                )
+
                 showingError = true
             }
         }
@@ -221,8 +272,8 @@ struct ProductRowView: View {
                         }
                     }
                     
-                    if let description = product.description {
-                        Text(description)
+                    if !product.description.isEmpty {
+                        Text(product.description)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -234,9 +285,8 @@ struct ProductRowView: View {
                     Text(product.displayPrice)
                         .font(.headline)
                     
-                    if let subscription = product.subscription,
-                       let period = subscription.subscriptionPeriod {
-                        Text(period.debugDescription)
+                    if let subscription = product.subscription {
+                        Text(subscription.subscriptionPeriod.debugDescription)
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -305,9 +355,9 @@ public struct PaywallConfiguration {
         self.privacyURL = privacyURL
     }
     
-    public static let `default` = PaywallConfiguration()
-    
-    public static let premium = PaywallConfiguration(
+    nonisolated(unsafe) public static let `default` = PaywallConfiguration()
+
+    nonisolated(unsafe) public static let premium = PaywallConfiguration(
         title: "Go Premium",
         headline: "Unlock All Features",
         subtitle: "Get unlimited access to all premium features",
@@ -366,7 +416,10 @@ public struct MiniUpsellView: View {
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showingPaywall) {
-            PaywallView(configuration: configuration.paywallConfiguration)
+            PaywallView(
+                configuration: configuration.paywallConfiguration,
+                source: "mini_upsell"
+            )
         }
     }
 }
@@ -395,7 +448,7 @@ public struct MiniUpsellConfiguration {
         self.paywallConfiguration = paywallConfiguration
     }
     
-    public static let `default` = MiniUpsellConfiguration()
+    nonisolated(unsafe) public static let `default` = MiniUpsellConfiguration()
 }
 
 // MARK: - Entitlement-Aware Views
@@ -428,21 +481,21 @@ public struct EntitlementGated: ViewModifier {
 public struct EntitlementLockedView: View {
     @State private var showingPaywall = false
     let entitlement: Entitlement
-    
+
     public var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "lock.fill")
                 .font(.largeTitle)
                 .foregroundColor(.secondary)
-            
+
             Text("Premium Feature")
                 .font(.headline)
-            
+
             Text("Upgrade to \(entitlement.displayName) to unlock this feature")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button("Unlock Now") {
                 showingPaywall = true
             }
@@ -450,7 +503,10 @@ public struct EntitlementLockedView: View {
         }
         .padding()
         .sheet(isPresented: $showingPaywall) {
-            PaywallView()
+            PaywallView(
+                source: "entitlement_locked",
+                requiredEntitlement: .required(entitlement)
+            )
         }
     }
 }
@@ -461,7 +517,9 @@ public struct EntitlementLockedView: View {
 public struct SubscriptionStatusView: View {
     @StateObject private var store = StoreKitManager.shared
     @State private var showingManageSubscription = false
-    
+
+    public init() {}
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("Subscription", systemImage: "creditcard.fill")
@@ -534,24 +592,191 @@ struct ManageSubscriptionView: View {
                 }
             }
             .navigationTitle("Manage Subscription")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+                #endif
             }
         }
     }
-    
+
     private func openAppStoreSubscriptionManagement() async {
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+        #if os(iOS)
+        if let scene = await UIApplication.shared.connectedScenes.first as? UIWindowScene {
             do {
                 try await AppStore.showManageSubscriptions(in: scene)
             } catch {
                 // Handle error
             }
+        }
+        #endif
+    }
+}
+
+// MARK: - EntitlementRequirement-Aware Views
+
+/// View modifier that shows content based on EntitlementRequirement
+public struct RequirementGated: ViewModifier {
+    @StateObject private var store = StoreKitManager.shared
+    let requirement: EntitlementRequirement
+    let behavior: GatedTabBehavior
+    let autoPaywall: Bool
+
+    public init(
+        requirement: EntitlementRequirement,
+        behavior: GatedTabBehavior = .locked,
+        autoPaywall: Bool = true
+    ) {
+        self.requirement = requirement
+        self.behavior = behavior
+        self.autoPaywall = autoPaywall
+    }
+
+    public func body(content: Content) -> some View {
+        let hasAccess = requirement.isSatisfied(by: store.entitlements)
+
+        switch (hasAccess, behavior) {
+        case (true, _):
+            content
+        case (false, .hidden):
+            EmptyView()
+        case (false, .locked):
+            RequirementLockedView(requirement: requirement, autoPaywall: autoPaywall)
+        case (false, .disabled):
+            content
+                .disabled(true)
+                .opacity(0.4)
+                .overlay(
+                    Image(systemName: "lock.fill")
+                        .font(.title)
+                        .foregroundStyle(.secondary)
+                )
+        case (false, .limited):
+            content
+                .environment(\.entitlementLimited, true)
+        }
+    }
+}
+
+/// Locked view for EntitlementRequirement (supports anyOf/allOf)
+public struct RequirementLockedView: View {
+    @State private var showingPaywall = false
+    let requirement: EntitlementRequirement
+    let autoPaywall: Bool
+    let source: String
+
+    public init(
+        requirement: EntitlementRequirement,
+        autoPaywall: Bool = true,
+        source: String = "requirement_locked"
+    ) {
+        self.requirement = requirement
+        self.autoPaywall = autoPaywall
+        self.source = source
+    }
+
+    public var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("Premium Feature")
+                .font(.headline)
+
+            Text(requirement.displayDescription)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            if autoPaywall {
+                Button("Unlock Now") {
+                    showingPaywall = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(
+                source: source,
+                requiredEntitlement: requirement
+            )
+        }
+    }
+}
+
+/// Tab item view that handles gated behavior
+public struct GatedTabItem<Content: View>: View {
+    @StateObject private var store = StoreKitManager.shared
+    @State private var showingPaywall = false
+
+    let requirement: EntitlementRequirement
+    let behavior: GatedTabBehavior
+    let label: String
+    let icon: String
+    let content: () -> Content
+
+    public init(
+        requirement: EntitlementRequirement,
+        behavior: GatedTabBehavior = .locked,
+        label: String,
+        icon: String,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.requirement = requirement
+        self.behavior = behavior
+        self.label = label
+        self.icon = icon
+        self.content = content
+    }
+
+    public var body: some View {
+        let hasAccess = requirement.isSatisfied(by: store.entitlements)
+
+        Group {
+            switch (hasAccess, behavior) {
+            case (true, _):
+                content()
+            case (false, .hidden):
+                EmptyView()
+            case (false, .locked):
+                RequirementLockedView(requirement: requirement, source: "gated_tab:\(label)")
+            case (false, .disabled):
+                content()
+                    .disabled(true)
+                    .opacity(0.4)
+            case (false, .limited):
+                content()
+                    .environment(\.entitlementLimited, true)
+            }
+        }
+        .tabItem {
+            if hasAccess {
+                Label(label, systemImage: icon)
+            } else {
+                Label(label, systemImage: behavior == .locked ? "lock.fill" : icon)
+            }
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView(
+                source: "gated_tab:\(label)",
+                requiredEntitlement: requirement
+            )
         }
     }
 }
@@ -563,11 +788,29 @@ public extension View {
     func requiresEntitlement(_ entitlement: Entitlement, fallback: AnyView? = nil) -> some View {
         modifier(EntitlementGated(entitlement: entitlement, fallback: fallback))
     }
-    
-    /// Show paywall when triggered
-    func paywall(isPresented: Binding<Bool>, configuration: PaywallConfiguration = .default) -> some View {
+
+    /// Gate content behind an EntitlementRequirement with configurable behavior
+    func gated(
+        by requirement: EntitlementRequirement,
+        behavior: GatedTabBehavior = .locked,
+        autoPaywall: Bool = true
+    ) -> some View {
+        modifier(RequirementGated(requirement: requirement, behavior: behavior, autoPaywall: autoPaywall))
+    }
+
+    /// Show paywall when triggered with source tracking
+    func paywall(
+        isPresented: Binding<Bool>,
+        configuration: PaywallConfiguration = .default,
+        source: String = "view_modifier",
+        requiredEntitlement: EntitlementRequirement? = nil
+    ) -> some View {
         sheet(isPresented: isPresented) {
-            PaywallView(configuration: configuration)
+            PaywallView(
+                configuration: configuration,
+                source: source,
+                requiredEntitlement: requiredEntitlement
+            )
         }
     }
 }

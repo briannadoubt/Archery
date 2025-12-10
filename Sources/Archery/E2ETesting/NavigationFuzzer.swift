@@ -29,11 +29,11 @@ public final class NavigationFuzzer {
     public func fuzz() async -> FuzzingReport {
         let startTime = Date()
         var results: [FuzzingResult] = []
-        var crashes: [CrashReport] = []
+        var crashes: [FuzzCrashReport] = []
         var invalidRoutes: [InvalidRoute] = []
-        
+
         // Initialize random generator
-        var generator = seed.map { SeededRandomNumberGenerator(seed: $0) } ?? SystemRandomNumberGenerator()
+        var generator = SeededRandomNumberGenerator(seed: seed ?? UInt64.random(in: 0...UInt64.max))
         
         for iteration in 0..<maxIterations {
             let result = await fuzzIteration(
@@ -73,7 +73,7 @@ public final class NavigationFuzzer {
         var path: [NavigationNode] = []
         var currentNode = graph.root
         var invalidRoutes: [InvalidRoute] = []
-        var crash: CrashReport?
+        var crash: FuzzCrashReport?
         
         // Random walk through navigation graph
         for depth in 0..<maxDepth {
@@ -105,7 +105,7 @@ public final class NavigationFuzzer {
                 break
                 
             case .crashed(let error):
-                crash = CrashReport(
+                crash = FuzzCrashReport(
                     iteration: iteration,
                     path: path,
                     action: action,
@@ -228,7 +228,7 @@ public struct NavigationGraph {
     }
     
     func availableActions(from node: NavigationNode) -> [NavigationAction] {
-        Array(transitions[node]?.keys ?? [])
+        transitions[node].map { Array($0.keys) } ?? []
     }
     
     func navigate(from node: NavigationNode, via action: NavigationAction) async throws -> NavigationNode {
@@ -257,20 +257,20 @@ public struct NavigationGraph {
 public struct NavigationNode: Hashable, CustomStringConvertible {
     public let id: String
     public let type: NodeType
-    
-    public enum NodeType {
+
+    public enum NodeType: Hashable {
         case root
         case tab(String)
         case screen(String)
         case modal(String)
         case alert(String)
     }
-    
+
     public init(id: String, type: NodeType = .screen("")) {
         self.id = id
         self.type = type
     }
-    
+
     public var description: String { id }
 }
 
@@ -303,7 +303,7 @@ public struct FuzzingResult {
     public let iteration: Int
     public let path: [NavigationNode]
     public let invalidRoutes: [InvalidRoute]
-    public let crash: CrashReport?
+    public let crash: FuzzCrashReport?
 }
 
 public struct InvalidRoute {
@@ -312,7 +312,7 @@ public struct InvalidRoute {
     public let reason: String
 }
 
-public struct CrashReport {
+public struct FuzzCrashReport {
     public let iteration: Int
     public let path: [NavigationNode]
     public let action: NavigationAction
@@ -329,7 +329,7 @@ public struct FuzzingReport {
     public let duration: TimeInterval
     public let iterations: Int
     public let results: [FuzzingResult]
-    public let crashes: [CrashReport]
+    public let crashes: [FuzzCrashReport]
     public let invalidRoutes: [InvalidRoute]
     public let coverage: NavigationCoverage
     

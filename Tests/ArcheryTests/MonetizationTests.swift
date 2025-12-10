@@ -102,7 +102,7 @@ final class MonetizationTests: XCTestCase {
     // MARK: - Error Tests
     
     func testStoreKitErrorDescriptions() {
-        let errors: [StoreKitError] = [
+        let errors: [Archery.StoreKitError] = [
             .failedToLoadProducts(NSError(domain: "", code: 0)),
             .purchaseFailed(NSError(domain: "", code: 0)),
             .purchaseCancelled,

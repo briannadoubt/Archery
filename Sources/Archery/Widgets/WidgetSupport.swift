@@ -7,24 +7,26 @@ import AppIntents
 
 // MARK: - Widget Support
 
-// Type alias for Widget configuration intent
-public typealias Intent = WidgetConfigurationIntent
+// Note: Intent typealias is defined in WidgetTimelineProvider.swift as ArcheryIntent
 
 /// Base protocol for widgets that integrate with Archery ViewModels
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
 public protocol ArcheryWidget: Widget {
-    associatedtype Provider: ArcheryTimelineProvider
+    associatedtype Provider: ArcheryWidgetProviderProtocol
     associatedtype Entry: ArcheryTimelineEntry
-    
+
     var provider: Provider { get }
 }
 
 /// Timeline provider that integrates with Archery dependency injection
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public protocol ArcheryWidgetProvider: TimelineProvider where Entry: ArcheryTimelineEntry {
+public protocol ArcheryWidgetProviderProtocol where Entry: ArcheryTimelineEntry {
+    associatedtype Entry: TimelineEntry
+
     var container: EnvContainer { get }
-    
-    func createEntry(for configuration: Intent?, at date: Date) async -> Entry
+
+    func createEntry(for configuration: WidgetConfigurationIntent?, at date: Date) async -> Entry
+    func createPlaceholderEntry(in context: TimelineProviderContext) -> Entry
     func nextUpdateDate(after date: Date) -> Date
 }
 
@@ -34,58 +36,28 @@ public protocol ArcheryTimelineEntry: TimelineEntry {
     associatedtype ViewModel: ObservableObject
     
     var viewModel: ViewModel { get }
-    var configuration: Intent? { get }
+    var configuration: WidgetConfigurationIntent? { get }
 }
 
 // MARK: - Default Implementation
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public extension ArcheryWidgetProvider {
-    func placeholder(in context: Context) -> Entry {
-        Task {
-            return await createEntry(for: nil, at: Date())
-        }
-        // Synchronous fallback
-        return createPlaceholderEntry(in: context)
-    }
-    
-    func getSnapshot(for configuration: Intent?, in context: Context, completion: @escaping (Entry) -> Void) {
-        Task {
-            let entry = await createEntry(for: configuration, at: Date())
-            completion(entry)
-        }
-    }
-    
-    func getTimeline(for configuration: Intent?, in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
-        Task {
-            let currentDate = Date()
-            let entries = await createTimelineEntries(for: configuration, starting: currentDate)
-            let nextUpdate = nextUpdateDate(after: currentDate)
-            
-            let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
-            completion(timeline)
-        }
-    }
-    
-    func createTimelineEntries(for configuration: Intent?, starting date: Date) async -> [Entry] {
+public extension ArcheryWidgetProviderProtocol {
+    func createTimelineEntries(for configuration: WidgetConfigurationIntent?, starting date: Date) async -> [Entry] {
         var entries: [Entry] = []
         let currentEntry = await createEntry(for: configuration, at: date)
         entries.append(currentEntry)
-        
+
         // Create entries for the next few hours
         for minuteOffset in [15, 30, 60, 120] {
             let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: date) ?? date
             let entry = await createEntry(for: configuration, at: entryDate)
             entries.append(entry)
         }
-        
+
         return entries
     }
-    
-    func createPlaceholderEntry(in context: Context) -> Entry {
-        fatalError("Subclasses must implement createPlaceholderEntry or override placeholder(in:)")
-    }
-    
+
     func nextUpdateDate(after date: Date) -> Date {
         // Default to 15 minutes
         Calendar.current.date(byAdding: .minute, value: 15, to: date) ?? date.addingTimeInterval(900)
@@ -95,7 +67,7 @@ public extension ArcheryWidgetProvider {
 // MARK: - Widget Configuration
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public struct WidgetConfiguration<Provider: ArcheryTimelineProvider> {
+public struct WidgetConfiguration<Provider: ArcheryWidgetProviderProtocol> {
     public let kind: String
     public let displayName: String
     public let description: String
@@ -120,18 +92,33 @@ public struct WidgetConfiguration<Provider: ArcheryTimelineProvider> {
 // MARK: - Widget View Helpers
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
+@MainActor
 public struct WidgetViewBuilder<Entry: ArcheryTimelineEntry, Content: View> {
-    private let content: (Entry) -> Content
-    
-    public init(@ViewBuilder content: @escaping (Entry) -> Content) {
+    private let content: @MainActor (Entry) -> Content
+
+    public init(@ViewBuilder content: @escaping @MainActor (Entry) -> Content) {
         self.content = content
     }
-    
+
     @ViewBuilder
     public func build(entry: Entry, family: WidgetFamily) -> some View {
         content(entry)
             .widgetBackground()
-            .environment(\.widgetFamily, family)
+            .environment(\.archeryWidgetFamily, family)
+    }
+}
+
+// Custom environment key for widget family (since \.widgetFamily is read-only)
+@available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
+private struct ArcheryWidgetFamilyKey: EnvironmentKey {
+    static let defaultValue: WidgetFamily = .systemSmall
+}
+
+@available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
+public extension EnvironmentValues {
+    var archeryWidgetFamily: WidgetFamily {
+        get { self[ArcheryWidgetFamilyKey.self] }
+        set { self[ArcheryWidgetFamilyKey.self] = newValue }
     }
 }
 
@@ -149,12 +136,22 @@ public extension View {
         widgetURL(URL(string: "archery://widget/\(route)"))
     }
     
-    func widgetAccentable(_ isAccentable: Bool = true) -> some View {
+    @ViewBuilder
+    func archeryWidgetAccentable(_ isAccentable: Bool = true) -> some View {
         if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
-            return self.widgetAccentable(isAccentable)
+            self.modifier(WidgetAccentableModifier(isAccentable: isAccentable))
         } else {
-            return self
+            self
         }
+    }
+}
+
+@available(iOS 16.0, macOS 13.0, watchOS 9.0, *)
+private struct WidgetAccentableModifier: ViewModifier {
+    let isAccentable: Bool
+
+    func body(content: Content) -> some View {
+        content.widgetAccentable(isAccentable)
     }
 }
 
@@ -174,48 +171,36 @@ public macro WidgetDefinition(
 
 /// Allows widgets to access repository data through the DI container
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public final class WidgetStore: ObservableObject {
+public final class WidgetStore: ObservableObject, @unchecked Sendable {
     private let container: EnvContainer
-    
+
+    @MainActor
     public init(container: EnvContainer = .shared) {
         self.container = container
     }
-    
+
     /// Resolve a repository for use in widgets
+    @MainActor
     public func repository<T>(_ type: T.Type) -> T? {
-        container.resolve(type)
+        container.resolve()
     }
-    
+
     /// Create a ViewModel instance for widgets
+    @MainActor
     public func viewModel<T: ObservableObject>(_ type: T.Type) -> T? {
-        container.resolve(type)
-    }
-    
-    /// Fetch data for widget timeline
-    public func fetchData<T, Repository: DataRepository>(
-        from repository: Repository,
-        id: T.ID
-    ) async throws -> T where Repository.Model == T, T: Identifiable {
-        try await repository.fetch(id: id)
-    }
-    
-    /// Fetch multiple items for widget display
-    public func fetchItems<T, Repository: DataRepository>(
-        from repository: Repository,
-        limit: Int = 5
-    ) async throws -> [T] where Repository.Model == T {
-        try await repository.fetchAll().prefix(limit).map { $0 }
+        container.resolve()
     }
 }
 
 // MARK: - Widget Timeline Manager
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
+@MainActor
 public final class WidgetTimelineManager {
     private let store = WidgetStore()
-    
+
     public static let shared = WidgetTimelineManager()
-    
+
     private init() {}
     
     /// Reload all widgets
@@ -287,9 +272,10 @@ public struct WidgetInfo {
 // MARK: - Widget Data Helpers
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
+@MainActor
 public struct WidgetDataLoader {
     private let store: WidgetStore
-    
+
     public init(store: WidgetStore = WidgetStore()) {
         self.store = store
     }
@@ -309,13 +295,13 @@ public struct WidgetDataLoader {
     /// Load data with caching
     public func loadCachedData<T: Codable>(
         key: String,
-        loader: () async throws -> T,
+        loader: @escaping @Sendable () async throws -> T,
         fallback: T
     ) async -> T {
         // Try cache first
         if let cached = UserDefaults.standard.data(forKey: "widget_cache_\(key)"),
            let decoded = try? JSONDecoder().decode(T.self, from: cached) {
-            
+
             // Load fresh data in background
             Task {
                 if let fresh = try? await loader() {
@@ -323,10 +309,10 @@ public struct WidgetDataLoader {
                     UserDefaults.standard.set(encoded, forKey: "widget_cache_\(key)")
                 }
             }
-            
+
             return decoded
         }
-        
+
         // Load fresh data
         do {
             let data = try await loader()
@@ -350,8 +336,8 @@ public extension EnvironmentValues {
 }
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-private struct WidgetStoreKey: EnvironmentKey {
-    static let defaultValue = WidgetStore()
+private struct WidgetStoreKey: @preconcurrency EnvironmentKey {
+    @MainActor public static var defaultValue: WidgetStore { WidgetStore() }
 }
 
 #endif

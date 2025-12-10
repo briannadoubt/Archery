@@ -216,7 +216,7 @@ final class FormContainerTests: XCTestCase {
         container.updateField(id: "test", value: "new value")
         
         XCTAssertTrue(container.isDirty)
-        if let updatedField = container.field(withId: "test") as? TextField {
+        if let updatedField: TextField = container.field(withId: "test") {
             XCTAssertEqual(updatedField.value, "new value")
         } else {
             XCTFail("Field not found or wrong type")

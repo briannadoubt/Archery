@@ -74,7 +74,7 @@ public struct LocalizableMacro: MemberMacro {
         
         let localizedProperty = """
             public var localized: String {
-                LocalizationEngine.shared.transform(
+                Archery.LocalizationEngine.shared.transform(
                     Bundle.main.localizedString(forKey: key, value: defaultValue, table: tableName)
                 )
             }
@@ -132,6 +132,9 @@ public struct LocalizableMacro: MemberMacro {
         caseName: String,
         parameters: EnumCaseParameterListSyntax?
     ) -> DeclSyntax {
+        // Use a prefixed name to avoid conflicts with enum cases
+        let funcName = "localized\(caseName.prefix(1).uppercased())\(caseName.dropFirst())"
+
         if let parameters = parameters {
             let paramList = parameters.map { param in
                 let label = param.firstName?.text ?? "_"
@@ -139,13 +142,13 @@ public struct LocalizableMacro: MemberMacro {
                 let type = param.type
                 return "\(label) \(name): \(type)"
             }.joined(separator: ", ")
-            
+
             let args = parameters.enumerated().map { index, _ in
                 return "arg\(index)"
             }.joined(separator: ", ")
-            
+
             return DeclSyntax(stringLiteral: """
-                public static func \(caseName)(\(paramList)) -> String {
+                public static func \(funcName)(\(paramList)) -> String {
                     let key = "\(caseName)"
                     let format = Bundle.main.localizedString(forKey: key, value: nil, table: nil)
                     return String(format: format, \(args))
@@ -153,9 +156,9 @@ public struct LocalizableMacro: MemberMacro {
                 """)
         } else {
             return DeclSyntax(stringLiteral: """
-                public static var \(caseName): String {
+                public static var \(funcName): String {
                     let key = "\(caseName)"
-                    return LocalizationEngine.shared.transform(
+                    return Archery.LocalizationEngine.shared.transform(
                         Bundle.main.localizedString(forKey: key, value: nil, table: nil)
                     )
                 }
@@ -170,12 +173,12 @@ public struct LocalizableMacro: MemberMacro {
         let defaultValue = caseName
             .replacingOccurrences(of: "_", with: " ")
             .capitalized
-        
+
         return DeclSyntax(stringLiteral: """
             #if DEBUG
             private static let _extract_\(caseName): Void = {
-                LocalizationEngine.shared.recordExtractedString(
-                    ExtractedString(
+                Archery.LocalizationEngine.shared.recordExtractedString(
+                    Archery.ExtractedString(
                         key: "\(enumName).\(caseName)",
                         defaultValue: "\(defaultValue)",
                         comment: "Localized string for \(caseName)",
@@ -196,10 +199,8 @@ extension LocalizableMacro: ExtensionMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
-        let localizationKeyConformance = try ExtensionDeclSyntax("""
-            extension \(type): LocalizationKey {}
-            """)
-        
-        return [localizationKeyConformance]
+        // Don't add LocalizationKey conformance since it requires RawRepresentable
+        // The generated member properties provide localization functionality directly
+        return []
     }
 }

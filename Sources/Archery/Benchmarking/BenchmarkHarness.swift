@@ -212,7 +212,7 @@ public struct BenchmarkResult {
           95th %ile: \(String(format: "%.3f", statistics.percentile95 * 1000))ms
         
         Memory:
-          Mean: \(formatBytes(Int64(memoryMeasurements.reduce(0, +) / memoryMeasurements.count)))
+          Mean: \(formatBytes(memoryMeasurements.reduce(Int64(0), +) / Int64(memoryMeasurements.count)))
           Max: \(formatBytes(memoryMeasurements.max() ?? 0))
         """
     }
@@ -237,19 +237,20 @@ public struct Statistics {
     
     public init(measurements: [TimeInterval]) {
         self.measurements = measurements
-        
+
         let sorted = measurements.sorted()
-        
-        self.mean = measurements.reduce(0, +) / Double(measurements.count)
+
+        let calculatedMean = measurements.reduce(0, +) / Double(measurements.count)
+        self.mean = calculatedMean
         self.median = sorted[sorted.count / 2]
         self.min = sorted.first ?? 0
         self.max = sorted.last ?? 0
-        
-        let variance = measurements.map { pow($0 - mean, 2) }.reduce(0, +) / Double(measurements.count)
+
+        let variance = measurements.map { pow($0 - calculatedMean, 2) }.reduce(0, +) / Double(measurements.count)
         self.standardDeviation = sqrt(variance)
-        
+
         let index95 = Int(Double(sorted.count) * 0.95)
-        self.percentile95 = sorted[min(index95, sorted.count - 1)]
+        self.percentile95 = sorted[Swift.min(index95, sorted.count - 1)]
     }
 }
 

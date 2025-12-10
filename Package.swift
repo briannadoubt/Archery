@@ -28,10 +28,16 @@ let package = Package(
             name: "ArcheryClient",
             targets: ["ArcheryClient"]
         ),
+        // Build tool plugin for validating @Route paths at compile time
+        .plugin(
+            name: "RouteValidationPlugin",
+            targets: ["RouteValidationPlugin"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
+        .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -48,13 +54,21 @@ let package = Package(
 
         // Library that exposes a macro as part of its API, which is used in client programs.
         .target(
-            name: "Archery", 
+            name: "Archery",
             dependencies: [
                 "ArcheryMacros",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax")
-            ], 
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "GRDB", package: "GRDB.swift")
+            ],
+            exclude: [
+                "Testing/ShellUITests.swift",
+                "Testing/CompatibilityTests.swift",
+                "E2ETesting/UITestRunner.swift",
+                "Performance/PerformanceSuite.swift",
+                "Documentation/DocGeneratorCLI.swift"
+            ],
             swiftSettings: warningFlags
         ),
 
@@ -93,5 +107,27 @@ let package = Package(
             ),
             dependencies: []
         ),
-    ]
+
+        // Route validation CLI tool (used by RouteValidationPlugin)
+        .executableTarget(
+            name: "route-validator",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
+            path: "Sources/RouteValidator",
+            swiftSettings: warningFlags
+        ),
+
+        // Build tool plugin for validating @Route paths at compile time
+        .plugin(
+            name: "RouteValidationPlugin",
+            capability: .buildTool(),
+            dependencies: [
+                .target(name: "route-validator")
+            ],
+            path: "Plugins/RouteValidationPlugin"
+        ),
+    ],
+    swiftLanguageModes: [.v6]
 )

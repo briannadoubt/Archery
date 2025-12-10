@@ -186,6 +186,10 @@ public enum APIClientMacro: PeerMacro {
                 return try await operation()
             } catch {
                 if !retryPolicy.shouldRetry(error) {
+                    // Auto-track API error
+                    await MainActor.run {
+                        ArcheryErrorTracker.trackNetworkError(error, endpoint: function)
+                    }
                     throw error
                 }
                 lastError = error
@@ -198,7 +202,12 @@ public enum APIClientMacro: PeerMacro {
             attempt += 1
         }
 
-        throw lastError ?? URLError(.unknown)
+        let finalError = lastError ?? URLError(.unknown)
+        // Auto-track API error after all retries exhausted
+        await MainActor.run {
+            ArcheryErrorTracker.trackNetworkError(finalError, endpoint: function)
+        }
+        throw finalError
     }
 
     func decode<T: Decodable>(_ data: Data, as type: T.Type = T.self) throws -> T {

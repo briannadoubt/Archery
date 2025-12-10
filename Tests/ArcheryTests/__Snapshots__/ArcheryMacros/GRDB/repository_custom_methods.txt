@@ -1,0 +1,144 @@
+class PlayerStore {
+    func topScorers(limit: Int) async throws -> [Player] {
+        fatalError("Implemented by generated Live class")
+    }
+}
+
+protocol PlayerStoreProtocol: Sendable {
+    // CRUD operations
+    func fetchAll() async throws -> [Player]
+    func fetch(id: Player.ID) async throws -> Player?
+    func insert(_ record: Player) async throws -> Player
+    func update(_ record: Player) async throws
+    func upsert(_ record: Player) async throws -> Player
+    func delete(id: Player.ID) async throws -> Bool
+    func deleteAll() async throws -> Int
+    func count() async throws -> Int
+
+    // Custom methods
+    func topScorers(limit: Int) async throws -> [Player]
+}
+
+final class PlayerStoreLive: PlayerStoreProtocol, @unchecked Sendable {
+    private let db: any GRDB.DatabaseWriter
+    private let base: PlayerStore
+
+    init(db: any GRDB.DatabaseWriter) {
+        self.db = db
+        self.base = PlayerStore()
+    }
+
+    init(container: EnvContainer) {
+        guard let grdb = container.grdb else {
+            fatalError("GRDBContainer not registered in EnvContainer")
+        }
+        self.db = grdb.writer
+        self.base = PlayerStore()
+    }
+
+    // CRUD operations
+
+    func fetchAll() async throws -> [Player] {
+        try await db.read { db in try Player.fetchAll(db) }
+    }
+
+    func fetch(id: Player.ID) async throws -> Player? {
+        try await db.read { db in try Player.fetchOne(db, id: id) }
+    }
+
+    func insert(_ record: Player) async throws -> Player {
+        try await db.write { db in
+            var record = record
+            try record.insert(db)
+            return record
+        }
+    }
+
+    func update(_ record: Player) async throws {
+        try await db.write { db in try record.update(db) }
+    }
+
+    func upsert(_ record: Player) async throws -> Player {
+        try await db.write { db in
+            var record = record
+            try record.save(db)
+            return record
+        }
+    }
+
+    func delete(id: Player.ID) async throws -> Bool {
+        try await db.write { db in try Player.deleteOne(db, id: id) }
+    }
+
+    func deleteAll() async throws -> Int {
+        try await db.write { db in try Player.deleteAll(db) }
+    }
+
+    func count() async throws -> Int {
+        try await db.read { db in try Player.fetchCount(db) }
+    }
+
+    // Custom methods
+    func topScorers(limit: Int) async throws -> [Player] {
+        return try await base.topScorers(limit: limit)
+    }
+}
+
+final class MockPlayerStore: PlayerStoreProtocol, @unchecked Sendable {
+    // CRUD handlers
+    var fetchAllHandler: () async throws -> [Player] = { [] }
+    var fetchHandler: (Player.ID) async throws -> Player? = { _ in nil }
+    var insertHandler: (Player) async throws -> Player = { $0 }
+    var updateHandler: (Player) async throws -> Void = { _ in }
+    var upsertHandler: (Player) async throws -> Player = { $0 }
+    var deleteHandler: (Player.ID) async throws -> Bool = { _ in true }
+    var deleteAllHandler: () async throws -> Int = { 0 }
+    var countHandler: () async throws -> Int = { 0 }
+
+    // Custom method handlers
+    var topScorersHandler: ((Int) async throws -> [Player])?
+
+    init() {}
+
+    // CRUD operations
+
+    func fetchAll() async throws -> [Player] {
+        try await fetchAllHandler()
+    }
+
+    func fetch(id: Player.ID) async throws -> Player? {
+        try await fetchHandler(id)
+    }
+
+    func insert(_ record: Player) async throws -> Player {
+        try await insertHandler(record)
+    }
+
+    func update(_ record: Player) async throws {
+        try await updateHandler(record)
+    }
+
+    func upsert(_ record: Player) async throws -> Player {
+        try await upsertHandler(record)
+    }
+
+    func delete(id: Player.ID) async throws -> Bool {
+        try await deleteHandler(id)
+    }
+
+    func deleteAll() async throws -> Int {
+        try await deleteAllHandler()
+    }
+
+    func count() async throws -> Int {
+        try await countHandler()
+    }
+
+    // Custom methods
+    func topScorers(limit: Int) async throws -> [Player] {
+        guard let handler = topScorersHandler else {
+            fatalError("topScorersHandler not set in mock")
+        }
+        return try await handler(limit)
+    }
+}

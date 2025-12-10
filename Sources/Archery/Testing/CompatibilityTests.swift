@@ -1,4 +1,6 @@
 import Foundation
+
+#if canImport(XCTest)
 import XCTest
 
 // MARK: - Platform Compatibility Tests
@@ -310,6 +312,7 @@ public final class CrossPlatformTests: XCTestCase {
         func multiply(_ a: Int, _ b: Int) -> Int { a * b }
     }
 }
+#endif
 
 // MARK: - Compatibility Report
 

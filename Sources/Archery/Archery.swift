@@ -203,6 +203,45 @@ public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShel
 @attached(member, names: arbitrary)
 public macro PersistenceGateway() = #externalMacro(module: "ArcheryMacros", type: "PersistenceGatewayMacro")
 
+/// Generates GRDB conformances helpers: Columns enum and databaseTableName.
+/// User must manually add FetchableRecord, PersistableRecord conformances.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "players")
+/// struct Player: Codable, Identifiable, FetchableRecord, PersistableRecord {
+///     var id: Int64
+///     var name: String
+///     var score: Int
+/// }
+/// // Macro generates: enum Columns { ... } and static let databaseTableName = "players"
+/// ```
+@attached(member, names: named(Columns), named(databaseTableName))
+@attached(extension, names: arbitrary)
+public macro Persistable(
+    table: String? = nil,
+    primaryKey: String = "id"
+) = #externalMacro(module: "ArcheryMacros", type: "PersistableMacro")
+
+/// Generates a repository pattern for GRDB with protocol, live, and mock implementations.
+///
+/// Example:
+/// ```swift
+/// @GRDBRepository(record: Player.self)
+/// class PlayerStore {
+///     func topScorers(limit: Int) async throws -> [Player] {
+///         try await db.read { db in
+///             try Player.order(Player.Columns.score.desc).limit(limit).fetchAll(db)
+///         }
+///     }
+/// }
+/// ```
+@attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
+public macro GRDBRepository<T>(
+    record: T.Type,
+    tracing: Bool = false
+) = #externalMacro(module: "ArcheryMacros", type: "GRDBRepositoryMacro")
+
 @attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
 public macro APIClient() = #externalMacro(module: "ArcheryMacros", type: "APIClientMacro")
 
@@ -228,16 +267,294 @@ public macro SharedModel(
     liveActivity: Bool = false
 ) = #externalMacro(module: "ArcheryMacros", type: "SharedModelMacro")
 
+/// Generates analytics event tracking methods for enums.
+/// Generates: `eventName`, `properties`, `validate()`, `track(with:)`, `redactedProperties()`
+/// You add: `AnalyticsEvent` conformance to your enum via extension.
 @attached(member, names: arbitrary)
-@attached(extension, conformances: AnalyticsEvent)
 public macro AnalyticsEvent() = #externalMacro(module: "ArcheryMacros", type: "AnalyticsEventMacro")
 
+/// Generates nested flag types for each enum case.
+/// Each case generates a struct conforming to `Archery.FeatureFlag`.
 @attached(member, names: arbitrary)
-@attached(extension)
 public macro FeatureFlag() = #externalMacro(module: "ArcheryMacros", type: "FeatureFlagMacro")
 
-// Minimal handle for tests
-public struct Archery { public init() {} }
+/// Generates URL pattern matching and auto-registration for route enums.
+/// Generates: `fromURL()`, `toURLPath()`, `decodeNavigationIdentifier()`, `navigationIdentifier`
+/// You add: `NavigationRoute` conformance to your enum.
+///
+/// Example:
+/// ```swift
+/// @Route(path: "tasks")
+/// enum TasksRoute: NavigationRoute {  // You add NavigationRoute
+///     case list              // matches /tasks/list
+///     case detail(id: String) // matches /tasks/:id
+/// }
+/// ```
+@attached(member, names: named(fromURL), named(toURLPath), named(entitlementRequirement), named(shouldAutoPaywall), named(presentationStyle), named(presentationMetadata))
+@attached(extension, names: arbitrary)
+public macro Route(
+    path: String,
+    requires: Entitlement? = nil,
+    autoPaywall: Bool = true
+) = #externalMacro(module: "ArcheryMacros", type: "RouteMacro")
+
+// MARK: - Entitlement Gating Macros
+
+/// Marks an enum case, tab, or ViewModel as requiring a specific entitlement.
+/// Used with @Route enums to gate access to specific routes.
+///
+/// Example:
+/// ```swift
+/// @Route(path: "features")
+/// enum FeatureRoute: NavigationRoute {
+///     case free                           // No requirement
+///     @requires(.premium)
+///     case advancedTools                  // Requires premium
+///     @requires(.pro, autoPaywall: false)
+///     case analytics                      // Requires pro, manual paywall
+/// }
+/// ```
+@attached(peer)
+public macro requires(
+    _ entitlement: Entitlement,
+    autoPaywall: Bool = true,
+    behavior: GatedTabBehavior = .locked
+) = #externalMacro(module: "ArcheryMacros", type: "RequiresMacro")
+
+/// Marks content as requiring ANY of the specified entitlements (OR logic).
+/// Access is granted if the user has at least one of the listed entitlements.
+///
+/// Example:
+/// ```swift
+/// @requiresAny(.premium, .pro)
+/// case reports  // Accessible with premium OR pro
+/// ```
+@attached(peer)
+public macro requiresAny(
+    _ entitlements: Entitlement...,
+    autoPaywall: Bool = true,
+    behavior: GatedTabBehavior = .locked
+) = #externalMacro(module: "ArcheryMacros", type: "RequiresAnyMacro")
+
+/// Marks content as requiring ALL of the specified entitlements (AND logic).
+/// Access is granted only if the user has all listed entitlements.
+///
+/// Example:
+/// ```swift
+/// @requiresAll(.premium, .unlimitedAccess)
+/// case bulkExport  // Requires both premium AND unlimited access
+/// ```
+@attached(peer)
+public macro requiresAll(
+    _ entitlements: Entitlement...,
+    autoPaywall: Bool = true,
+    behavior: GatedTabBehavior = .locked
+) = #externalMacro(module: "ArcheryMacros", type: "RequiresAllMacro")
+
+/// Marks a ViewModel class as requiring a specific entitlement.
+/// Generates `requiredEntitlement` and `checkEntitlement()` members.
+///
+/// Example:
+/// ```swift
+/// @Entitled(.premium)
+/// @ObservableViewModel
+/// @MainActor
+/// class PremiumDashboardViewModel: Resettable {
+///     // Generated: static let requiredEntitlement = .required(.premium)
+///     // Generated: func checkEntitlement(store:) -> Bool
+/// }
+/// ```
+@attached(member, names: named(requiredEntitlement), named(checkEntitlement))
+public macro Entitled(
+    _ entitlement: Entitlement
+) = #externalMacro(module: "ArcheryMacros", type: "EntitledMacro")
+
+/// Marks a ViewModel as requiring ANY of the specified entitlements.
+@attached(member, names: named(requiredEntitlement), named(checkEntitlement))
+public macro EntitledAny(
+    _ entitlements: Entitlement...
+) = #externalMacro(module: "ArcheryMacros", type: "EntitledAnyMacro")
+
+/// Marks a ViewModel as requiring ALL of the specified entitlements.
+@attached(member, names: named(requiredEntitlement), named(checkEntitlement))
+public macro EntitledAll(
+    _ entitlements: Entitlement...
+) = #externalMacro(module: "ArcheryMacros", type: "EntitledAllMacro")
+
+// MARK: - Navigation Presentation Macros
+
+/// Specifies how a route case should be presented.
+/// Used with @Route enums to declare presentation style for each case.
+///
+/// Example:
+/// ```swift
+/// @Route(path: "tasks")
+/// enum TasksRoute: NavigationRoute {
+///     case list                    // Default: push
+///     case detail(id: String)      // Default: push
+///
+///     @presents(.sheet)
+///     case create                  // Presents as sheet
+///
+///     @presents(.fullScreen)
+///     case bulkEdit               // Presents full screen
+///
+///     @presents(.sheet, detents: [.medium, .large])
+///     case quickAction            // Sheet with configurable detents
+/// }
+/// ```
+@attached(peer)
+public macro presents(
+    _ style: RoutePresentationStyle,
+    detents: [RouteSheetDetent] = [.large],
+    interactiveDismissDisabled: Bool = false
+) = #externalMacro(module: "ArcheryMacros", type: "PresentsMacro")
+
+/// Presentation styles for routes (used by @presents macro)
+public enum RoutePresentationStyle: String, Sendable, Codable {
+    case push
+    case replace
+    case sheet
+    case fullScreen
+    case popover
+    case window
+}
+
+/// Sheet detent options for routes (used by @presents macro)
+public enum RouteSheetDetent: String, Sendable, Codable, CaseIterable {
+    case small
+    case medium
+    case large
+}
+
+// MARK: - Flow Navigation Macros
+
+/// Defines a multi-step navigation flow.
+///
+/// Flows are wizard-like sequences with automatic step tracking,
+/// back/forward navigation, and deep link support.
+///
+/// Example:
+/// ```swift
+/// @Flow(path: "onboarding", persists: true)
+/// enum OnboardingFlow: NavigationFlow {
+///     case welcome
+///     case permissions
+///     case accountSetup
+///     case complete
+///
+///     @branch(replacing: .accountSetup, when: .hasExistingAccount)
+///     case signIn
+/// }
+/// ```
+@attached(extension, conformances: NavigationFlow, names: arbitrary)
+public macro Flow(
+    path: String,
+    persists: Bool = false
+) = #externalMacro(module: "ArcheryMacros", type: "FlowMacro")
+
+/// Marks a flow step as a conditional branch.
+/// When the condition is met, this step replaces the specified step.
+@attached(peer)
+public macro branch(
+    replacing: Any,
+    when condition: Any
+) = #externalMacro(module: "ArcheryMacros", type: "FlowBranchMacro")
+
+/// Marks a flow step as skippable when a condition is met.
+@attached(peer)
+public macro skip(
+    when condition: Any
+) = #externalMacro(module: "ArcheryMacros", type: "FlowSkipMacro")
+
+// MARK: - Platform Scene Macros
+
+/// Marks an enum as a scene for a separate window (macOS/iPadOS).
+///
+/// Usage:
+/// ```swift
+/// @AppShell
+/// struct MyApp: App {
+///     @Window(id: "preferences", title: "Preferences")
+///     enum PreferencesScene {
+///         case general
+///         case accounts
+///     }
+/// }
+/// ```
+@attached(peer)
+public macro Window(
+    id: String,
+    title: String? = nil
+) = #externalMacro(module: "ArcheryMacros", type: "WindowSceneMacro")
+
+#if os(visionOS)
+/// Marks an enum as an immersive space scene (visionOS only).
+///
+/// Usage:
+/// ```swift
+/// @AppShell
+/// struct MyApp: App {
+///     @ImmersiveSpace(id: "viewer", style: .mixed)
+///     enum ViewerSpace {
+///         case model(id: String)
+///     }
+/// }
+/// ```
+@attached(peer)
+public macro ImmersiveSpace(
+    id: String,
+    style: ImmersiveSpaceStyle = .mixed
+) = #externalMacro(module: "ArcheryMacros", type: "ImmersiveSpaceMacro")
+
+/// Style for immersive space presentation
+public enum ImmersiveSpaceStyle: String, Sendable {
+    case mixed
+    case full
+    case progressive
+}
+#endif
+
+#if os(macOS)
+/// Marks an enum as a settings scene (macOS only).
+///
+/// Usage:
+/// ```swift
+/// @AppShell
+/// struct MyApp: App {
+///     @Settings
+///     enum AppSettings {
+///         case general
+///         case advanced
+///     }
+/// }
+/// ```
+@attached(peer)
+public macro Settings() = #externalMacro(module: "ArcheryMacros", type: "SettingsSceneMacro")
+#endif
+
+#if canImport(AppIntents)
+import AppIntents
+
+/// Generates `typeDisplayRepresentation` and `displayRepresentation` for AppEntity.
+/// User must add `: AppEntity` conformance and provide `defaultQuery`.
+@attached(member)
+@attached(extension, names: arbitrary)
+public macro IntentEntity(
+    displayName: String? = nil
+) = #externalMacro(module: "ArcheryMacros", type: "IntentEntityMacro")
+
+/// Generates `typeDisplayRepresentation` and `caseDisplayRepresentations` for AppEnum.
+/// User must add `: AppEnum` conformance to their enum.
+@attached(member, names: named(caseDisplayRepresentations))
+@attached(extension, names: arbitrary)
+public macro IntentEnum(
+    displayName: String? = nil
+) = #externalMacro(module: "ArcheryMacros", type: "IntentEnumMacro")
+#endif
+
+// Minimal handle for tests - renamed to avoid shadowing the module name
+public struct ArcheryHandle { public init() {} }
 
 #if canImport(SwiftUI)
 import SwiftUI

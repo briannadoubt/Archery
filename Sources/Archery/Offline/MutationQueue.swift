@@ -12,9 +12,9 @@ public protocol Mutation: Codable, Identifiable, Sendable {
 }
 
 public enum MutationResult: Sendable {
-    case success(Any?)
+    case success(Data?)
     case failure(Error)
-    case conflict(Any?)
+    case conflict(Data?)
     case retry
 }
 
@@ -26,7 +26,7 @@ public enum MutationState: String, Codable, Sendable {
     case conflicted
 }
 
-public struct MutationRecord: Codable, Identifiable {
+public struct MutationRecord: Codable, Identifiable, Sendable {
     public let id: String
     public let mutationType: String
     public let payload: Data
@@ -56,7 +56,7 @@ public final class MutationQueue: ObservableObject {
     private let persistence: MutationPersistence
     private let connectivity: ConnectivityMonitor
     private var processingTask: Task<Void, Never>?
-    private let mutationHandlers: [String: (Data) async throws -> MutationResult]
+    private var mutationHandlers: [String: @Sendable (Data) async throws -> MutationResult]
     private let syncInterval: TimeInterval
     
     public init(
@@ -229,7 +229,7 @@ public final class MutationQueue: ObservableObject {
     
     public func registerHandler<M: Mutation>(
         for type: M.Type,
-        handler: @escaping (M) async throws -> MutationResult
+        handler: @escaping @Sendable (M) async throws -> MutationResult
     ) {
         let typeName = String(describing: type)
         mutationHandlers[typeName] = { data in
@@ -241,6 +241,15 @@ public final class MutationQueue: ObservableObject {
     deinit {
         processingTask?.cancel()
     }
+
+    // MARK: - Test Helpers
+
+    #if DEBUG
+    /// Test helper to directly add a record to failed mutations
+    public func _testAddFailed(_ record: MutationRecord) {
+        failedMutations.append(record)
+    }
+    #endif
 }
 
 public actor MutationPersistence {

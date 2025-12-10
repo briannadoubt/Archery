@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Form View
 
@@ -7,7 +10,7 @@ public struct FormView<Content: View>: View {
     @StateObject private var focusManager = FocusStateManager()
     let configuration: FormConfiguration
     let content: () -> Content
-    
+
     public init(
         container: FormContainer,
         configuration: FormConfiguration = .default,
@@ -17,7 +20,7 @@ public struct FormView<Content: View>: View {
         self.configuration = configuration
         self.content = content
     }
-    
+
     public var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -26,7 +29,9 @@ public struct FormView<Content: View>: View {
                 }
                 .padding()
             }
-            .scrollDismissesKeyboard(configuration.keyboardDismissMode)
+            #if canImport(UIKit)
+            .scrollDismissesKeyboard(configuration.keyboardDismissMode == .interactive ? .interactively : .immediately)
+            #endif
             .onChange(of: container.focusedFieldId) { _, newValue in
                 if let fieldId = newValue {
                     withAnimation {
@@ -48,15 +53,15 @@ public struct FormFieldView: View {
     @EnvironmentObject private var focusManager: FocusStateManager
     @Environment(\.formConfiguration) private var configuration
     @FocusState private var isFocused: Bool
-    
+
     public init(field: any FormFieldProtocol) {
         self.field = field
     }
-    
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             labelView
-            
+
             fieldContent
                 .id(field.id)
                 .focused($isFocused)
@@ -67,13 +72,13 @@ public struct FormFieldView: View {
                         container.focusField(id: nil)
                     }
                 }
-            
+
             if let helpText = field.helpText, field.errors.isEmpty {
                 Text(helpText)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             if let error = field.errors.first {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.circle.fill")
@@ -87,20 +92,20 @@ public struct FormFieldView: View {
         }
         .animation(.easeInOut(duration: configuration.animationDuration), value: field.errors.isEmpty)
     }
-    
+
     private var labelView: some View {
         HStack(spacing: 2) {
             Text(field.label)
                 .font(.subheadline)
                 .fontWeight(.medium)
-            
+
             if field.isRequired && configuration.showRequiredIndicator {
                 Text(configuration.requiredIndicator)
                     .foregroundColor(configuration.errorColor)
             }
         }
     }
-    
+
     @ViewBuilder
     private var fieldContent: some View {
         if let textField = field as? TextField {
@@ -130,7 +135,7 @@ struct TextFieldView: View {
     @ObservedObject var field: TextField
     @EnvironmentObject private var container: FormContainer
     @Environment(\.formConfiguration) private var configuration
-    
+
     var body: some View {
         SwiftUI.TextField(
             field.placeholder ?? field.label,
@@ -142,11 +147,13 @@ struct TextFieldView: View {
         .textFieldStyle(FormTextFieldStyle(
             hasError: !field.errors.isEmpty,
             isFocused: field.isFocused,
-            configuration: configuration
+            formConfig: configuration
         ))
+        #if canImport(UIKit)
         .keyboardType(field.keyboardType)
         .textContentType(field.textContentType)
-        .autocapitalization(field.autocapitalization)
+        .textInputAutocapitalization(field.autocapitalization)
+        #endif
         .autocorrectionDisabled(field.autocorrectionDisabled)
         .disabled(!field.isEnabled)
     }
@@ -157,7 +164,7 @@ struct SecureFieldView: View {
     @EnvironmentObject private var container: FormContainer
     @Environment(\.formConfiguration) private var configuration
     @State private var isSecure = true
-    
+
     var body: some View {
         HStack {
             if isSecure {
@@ -171,7 +178,7 @@ struct SecureFieldView: View {
                 .textFieldStyle(FormTextFieldStyle(
                     hasError: !field.errors.isEmpty,
                     isFocused: field.isFocused,
-                    configuration: configuration
+                    formConfig: configuration
                 ))
             } else {
                 SwiftUI.TextField(
@@ -184,10 +191,10 @@ struct SecureFieldView: View {
                 .textFieldStyle(FormTextFieldStyle(
                     hasError: !field.errors.isEmpty,
                     isFocused: field.isFocused,
-                    configuration: configuration
+                    formConfig: configuration
                 ))
             }
-            
+
             Button(action: { isSecure.toggle() }) {
                 Image(systemName: isSecure ? "eye.slash" : "eye")
                     .foregroundColor(.secondary)
@@ -203,7 +210,7 @@ struct NumberFieldView: View {
     @EnvironmentObject private var container: FormContainer
     @Environment(\.formConfiguration) private var configuration
     @State private var text = ""
-    
+
     var body: some View {
         SwiftUI.TextField(
             field.placeholder ?? field.label,
@@ -212,9 +219,11 @@ struct NumberFieldView: View {
         .textFieldStyle(FormTextFieldStyle(
             hasError: !field.errors.isEmpty,
             isFocused: field.isFocused,
-            configuration: configuration
+            formConfig: configuration
         ))
+        #if canImport(UIKit)
         .keyboardType(.decimalPad)
+        #endif
         .disabled(!field.isEnabled)
         .onAppear {
             if let value = field.value {
@@ -233,7 +242,7 @@ struct DateFieldView: View {
     @ObservedObject var field: DateField
     @EnvironmentObject private var container: FormContainer
     @Environment(\.formConfiguration) private var configuration
-    
+
     var body: some View {
         DatePicker(
             "",
@@ -252,7 +261,7 @@ struct DateFieldView: View {
 struct ToggleFieldView: View {
     @ObservedObject var field: BooleanField
     @EnvironmentObject private var container: FormContainer
-    
+
     var body: some View {
         Toggle(
             "",
@@ -270,7 +279,7 @@ struct TextAreaView: View {
     @ObservedObject var field: TextAreaField
     @EnvironmentObject private var container: FormContainer
     @Environment(\.formConfiguration) private var configuration
-    
+
     var body: some View {
         TextEditor(
             text: Binding(
@@ -281,7 +290,7 @@ struct TextAreaView: View {
         .frame(minHeight: CGFloat(field.minLines * 20))
         .frame(maxHeight: field.maxLines.map { CGFloat($0 * 20) })
         .padding(8)
-        .background(Color(.systemGray6))
+        .background(Color.gray.opacity(0.15))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -299,12 +308,12 @@ struct TextAreaView: View {
 struct FormTextFieldStyle: TextFieldStyle {
     let hasError: Bool
     let isFocused: Bool
-    let configuration: FormConfiguration
-    
-    func _body(configuration: TextField<Self._Label>) -> some View {
+    let formConfig: FormConfiguration
+
+    func _body(configuration: SwiftUI.TextField<Self._Label>) -> some View {
         configuration
             .padding(12)
-            .background(Color(.systemGray6))
+            .background(Color.gray.opacity(0.15))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -314,17 +323,17 @@ struct FormTextFieldStyle: TextFieldStyle {
                     )
             )
     }
-    
+
     private var strokeColor: Color {
         if hasError {
-            return configuration.errorColor
+            return formConfig.errorColor
         } else if isFocused {
-            return configuration.focusColor
+            return formConfig.focusColor
         } else {
             return Color.clear
         }
     }
-    
+
     private var strokeWidth: CGFloat {
         hasError || isFocused ? 2 : 0
     }
@@ -335,18 +344,15 @@ struct FormTextFieldStyle: TextFieldStyle {
 public struct FormSubmitButton: View {
     @ObservedObject var container: FormContainer
     let title: String
-    let style: ButtonStyle
-    
+
     public init(
         container: FormContainer,
-        title: String = "Submit",
-        style: ButtonStyle = .borderedProminent
+        title: String = "Submit"
     ) {
         self.container = container
         self.title = title
-        self.style = style
     }
-    
+
     public var body: some View {
         Button(action: {
             Task {

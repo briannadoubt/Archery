@@ -5,14 +5,13 @@ import Combine
 // MARK: - Form Container
 
 @MainActor
-@Observable
-public final class FormContainer {
-    public private(set) var fields: [any FormFieldProtocol] = []
-    public private(set) var isValid = false
-    public private(set) var isSubmitting = false
-    public private(set) var isDirty = false
-    public private(set) var errors: [ValidationError] = []
-    public var focusedFieldId: String?
+public final class FormContainer: ObservableObject {
+    @Published public private(set) var fields: [any FormFieldProtocol] = []
+    @Published public private(set) var isValid = false
+    @Published public private(set) var isSubmitting = false
+    @Published public private(set) var isDirty = false
+    @Published public private(set) var errors: [ValidationError] = []
+    @Published public var focusedFieldId: String?
     
     private var cancellables = Set<AnyCancellable>()
     private let onSubmit: () async throws -> Void

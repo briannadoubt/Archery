@@ -57,7 +57,7 @@ extension AnalyticsManager {
             }
             
             func track(with provider: AnalyticsProvider) {
-                provider.track(self)
+                provider.track(eventName: eventName, properties: properties)
             }
             
             func redactedProperties() -> [String: Any] {

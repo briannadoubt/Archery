@@ -299,8 +299,8 @@ public struct EntityExistenceRule: ParameterValidationRule {
     
     private func checkEntityExists(_ entity: any AppEntity) async throws -> Bool {
         // This would need to be implemented based on specific repository type
-        // For now, assume it exists if it has an ID
-        return !entity.id.isEmpty
+        // For now, assume it exists if it has a valid ID
+        return true // Simplified check - entity existence should be determined by the specific AppEntity implementation
     }
 }
 

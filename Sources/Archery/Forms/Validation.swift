@@ -218,16 +218,16 @@ public struct PasswordValidator: Validator {
 
 // MARK: - Number Validators
 
-public struct RangeValidator<T: Comparable>: Validator {
+public struct RangeValidator<T: Comparable & Sendable>: Validator {
     public let range: ClosedRange<T>
-    
+
     public init(range: ClosedRange<T>) {
         self.range = range
     }
-    
+
     public func validate(_ value: T?, field: String) -> [ValidationError] {
         guard let value = value else { return [] }
-        
+
         if !range.contains(value) {
             return [ValidationError(
                 field: field,
@@ -301,20 +301,20 @@ public struct PastDateValidator: Validator {
 
 // MARK: - Custom Validators
 
-public struct CustomValidator<T>: Validator {
-    private let validation: (T, String) -> [ValidationError]
-    
-    public init(validation: @escaping (T, String) -> [ValidationError]) {
+public struct CustomValidator<T: Sendable>: Validator {
+    private let validation: @Sendable (T, String) -> [ValidationError]
+
+    public init(validation: @escaping @Sendable (T, String) -> [ValidationError]) {
         self.validation = validation
     }
-    
+
     public func validate(_ value: T, field: String) -> [ValidationError] {
         validation(value, field)
     }
 }
 
-public struct ComparisonValidator<T: Comparable>: Validator {
-    public enum ComparisonType {
+public struct ComparisonValidator<T: Comparable & Sendable>: Validator {
+    public enum ComparisonType: Sendable {
         case equal
         case notEqual
         case greaterThan
@@ -322,13 +322,13 @@ public struct ComparisonValidator<T: Comparable>: Validator {
         case lessThan
         case lessThanOrEqual
     }
-    
-    private let otherValue: () -> T
+
+    private let otherValue: @Sendable () -> T
     private let comparison: ComparisonType
     private let message: String
-    
+
     public init(
-        otherValue: @escaping () -> T,
+        otherValue: @escaping @Sendable () -> T,
         comparison: ComparisonType,
         message: String
     ) {
@@ -381,18 +381,18 @@ public struct CompositeValidator<T>: Validator {
     }
 }
 
-public struct ConditionalValidator<T>: Validator {
-    private let condition: (T) -> Bool
+public struct ConditionalValidator<T: Sendable>: Validator {
+    private let condition: @Sendable (T) -> Bool
     private let validator: any Validator<T>
-    
+
     public init(
-        condition: @escaping (T) -> Bool,
+        condition: @escaping @Sendable (T) -> Bool,
         validator: any Validator<T>
     ) {
         self.condition = condition
         self.validator = validator
     }
-    
+
     public func validate(_ value: T, field: String) -> [ValidationError] {
         if condition(value) {
             return validator.validate(value, field: field)

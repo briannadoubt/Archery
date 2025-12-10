@@ -86,13 +86,13 @@ final class AppIntentTests: XCTestCase {
     }
     
     func testIntentParameter() throws {
-        let param = IntentParameter<String>(
+        let param = IntentParameterSpec<String>(
             title: "Input",
             description: "Enter text",
             defaultValue: "default",
             isRequired: false
         )
-        
+
         XCTAssertEqual(param.title, "Input")
         XCTAssertEqual(param.description, "Enter text")
         XCTAssertEqual(param.defaultValue, "default")
@@ -301,26 +301,27 @@ final class BackgroundTaskTests: XCTestCase {
     }
     
     #if DEBUG
+    @MainActor
     func testMockBackgroundTaskScheduler() async throws {
         let scheduler = MockBackgroundTaskScheduler()
-        
-        var executed = false
+
+        nonisolated(unsafe) var executed = false
         scheduler.register(identifier: "mock.task") {
             executed = true
         }
-        
+
         try await scheduler.schedule(identifier: "mock.task", at: Date())
         XCTAssertNotNil(scheduler.scheduledTasks["mock.task"])
-        
+
         let pending = await scheduler.getPendingTasks()
         XCTAssertEqual(pending, ["mock.task"])
-        
+
         try await scheduler.executeTask("mock.task")
         XCTAssertTrue(executed)
-        
+
         try scheduler.cancel(identifier: "mock.task")
         XCTAssertTrue(scheduler.cancelledTasks.contains("mock.task"))
-        
+
         scheduler.cancelAll()
         XCTAssertTrue(scheduler.scheduledTasks.isEmpty)
     }

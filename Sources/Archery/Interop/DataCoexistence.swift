@@ -104,14 +104,15 @@ public final class DataCoexistenceManager {
     /// Migrate data from Core Data to SwiftData
     public func migrateCoreDataToSwiftData<T: PersistentModel>(
         entityName: String,
-        transform: @escaping (NSManagedObject) throws -> T
+        transform: @escaping @Sendable (NSManagedObject) throws -> T
     ) async throws -> MigrationResult {
         guard let coreDataContext = coreDataContainer?.viewContext,
               let swiftDataContext = swiftDataContainer?.mainContext else {
             throw CoexistenceError.containersNotConfigured
         }
-        
-        return try await migrationManager.migrate(
+
+        let manager = migrationManager
+        return try await manager.migrate(
             from: coreDataContext,
             to: swiftDataContext,
             entityName: entityName,
@@ -123,14 +124,15 @@ public final class DataCoexistenceManager {
     public func migrateSwiftDataToCoreData<T: PersistentModel>(
         modelType: T.Type,
         entityName: String,
-        transform: @escaping (T, NSManagedObjectContext) throws -> NSManagedObject
+        transform: @escaping @Sendable (T, NSManagedObjectContext) throws -> NSManagedObject
     ) async throws -> MigrationResult {
         guard let swiftDataContext = swiftDataContainer?.mainContext,
               let coreDataContext = coreDataContainer?.viewContext else {
             throw CoexistenceError.containersNotConfigured
         }
-        
-        return try await migrationManager.migrate(
+
+        let manager = migrationManager
+        return try await manager.migrate(
             from: swiftDataContext,
             to: coreDataContext,
             modelType: modelType,
@@ -159,14 +161,14 @@ public final class DataCoexistenceManager {
 
 // MARK: - Migration Manager
 
-public final class DataMigrationManager {
+public final class DataMigrationManager: Sendable {
     
     /// Migrate from Core Data to SwiftData
     public func migrate<T: PersistentModel>(
         from coreDataContext: NSManagedObjectContext,
         to swiftDataContext: ModelContext,
         entityName: String,
-        transform: @escaping (NSManagedObject) throws -> T
+        transform: @escaping @Sendable (NSManagedObject) throws -> T
     ) async throws -> MigrationResult {
         let startTime = Date()
         var migrated = 0
@@ -213,7 +215,7 @@ public final class DataMigrationManager {
         to coreDataContext: NSManagedObjectContext,
         modelType: T.Type,
         entityName: String,
-        transform: @escaping (T, NSManagedObjectContext) throws -> NSManagedObject
+        transform: @escaping @Sendable (T, NSManagedObjectContext) throws -> NSManagedObject
     ) async throws -> MigrationResult {
         let startTime = Date()
         var migrated = 0
@@ -316,19 +318,19 @@ public struct DualPersistenceWrapper<Model: DualPersistable> {
 
 // MARK: - Configuration
 
-public struct CoexistenceConfiguration {
+public struct CoexistenceConfiguration: Sendable {
     public let inMemory: Bool
     public let readOnly: Bool
     public let enableBridge: Bool
     public let syncDirection: SyncDirection
-    public let conflictResolution: ConflictResolution
-    
+    public let conflictResolution: DataConflictResolution
+
     public init(
         inMemory: Bool = false,
         readOnly: Bool = false,
         enableBridge: Bool = false,
         syncDirection: SyncDirection = .bidirectional,
-        conflictResolution: ConflictResolution = .latestWins
+        conflictResolution: DataConflictResolution = .latestWins
     ) {
         self.inMemory = inMemory
         self.readOnly = readOnly
@@ -336,9 +338,9 @@ public struct CoexistenceConfiguration {
         self.syncDirection = syncDirection
         self.conflictResolution = conflictResolution
     }
-    
+
     public static let `default` = CoexistenceConfiguration()
-    
+
     public static let testing = CoexistenceConfiguration(
         inMemory: true,
         readOnly: false,
@@ -346,18 +348,18 @@ public struct CoexistenceConfiguration {
     )
 }
 
-public enum SyncDirection {
+public enum SyncDirection: Sendable {
     case coreDataToSwiftData
     case swiftDataToCoreData
     case bidirectional
     case none
 }
 
-public enum ConflictResolution {
+public enum DataConflictResolution: Sendable {
     case latestWins
     case coreDataWins
     case swiftDataWins
-    case manual((Any, Any) -> Any)
+    case manual(@Sendable (Any, Any) -> Any)
 }
 
 // MARK: - Migration Result
@@ -405,8 +407,8 @@ public enum CoexistenceError: LocalizedError {
 
 // MARK: - SwiftUI Environment
 
-public struct DataCoexistenceEnvironmentKey: EnvironmentKey {
-    public static let defaultValue = DataCoexistenceManager.shared
+public struct DataCoexistenceEnvironmentKey: @preconcurrency EnvironmentKey {
+    @MainActor public static let defaultValue = DataCoexistenceManager.shared
 }
 
 public extension EnvironmentValues {
@@ -419,42 +421,30 @@ public extension EnvironmentValues {
 // MARK: - Property Wrappers
 
 /// Property wrapper for accessing dual-persisted data in SwiftUI views
+/// Note: DynamicProperty is implicitly MainActor in SwiftUI's view update cycle
 @propertyWrapper
 public struct DualPersisted<Model: DualPersistable>: DynamicProperty {
     @Environment(\.dataCoexistence) private var coexistence
     @State private var data: [Model] = []
-    
+
     private let preferSwiftData: Bool
-    
-    public init(preferSwiftData: Bool = true) {
+
+    nonisolated public init(preferSwiftData: Bool = true) {
         self.preferSwiftData = preferSwiftData
     }
-    
+
+    @MainActor
     public var wrappedValue: [Model] {
         get { data }
         nonmutating set { data = newValue }
     }
-    
+
+    @MainActor
     public var projectedValue: Binding<[Model]> {
         Binding(
             get: { data },
             set: { data = $0 }
         )
-    }
-    
-    public func update() {
-        Task { @MainActor in
-            let wrapper = DualPersistenceWrapper<Model>(
-                swiftDataContext: coexistence.swiftDataContext,
-                coreDataContext: coexistence.coreDataContext
-            )
-            
-            do {
-                data = try wrapper.fetch(preferSwiftData: preferSwiftData)
-            } catch {
-                print("Failed to fetch dual-persisted data: \(error)")
-            }
-        }
     }
 }
 

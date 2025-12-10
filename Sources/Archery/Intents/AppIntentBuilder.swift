@@ -5,18 +5,18 @@ import Foundation
 
 #if canImport(AppIntents)
 @available(iOS 16.0, macOS 13.0, *)
-public protocol ArcheryAppIntent: AppIntent {
+public protocol BasicAppIntent: AppIntent {
     associatedtype Result
     func perform() async throws -> Result
 }
 
 @available(iOS 16.0, macOS 13.0, *)
-public struct IntentParameter<Value> {
+public struct IntentParameterSpec<Value> {
     public let title: String
     public let description: String?
     public let defaultValue: Value?
     public let isRequired: Bool
-    
+
     public init(
         title: String,
         description: String? = nil,
@@ -71,10 +71,10 @@ public enum IntentCategory {
 }
 
 @available(iOS 16.0, macOS 13.0, *)
-public struct IntentResult<Value> {
+public struct IntentResultValue<Value> {
     public let value: Value
     public let dialog: IntentDialog?
-    
+
     public init(
         value: Value,
         dialog: IntentDialog? = nil
@@ -84,18 +84,8 @@ public struct IntentResult<Value> {
     }
 }
 
-@available(iOS 16.0, macOS 13.0, *)
-public struct EntityQueryImpl<Entity: AppEntity>: EntityQuery {
-    public init() {}
-    
-    public func entities(for identifiers: [Entity.ID]) async throws -> [Entity] {
-        []
-    }
-    
-    public func suggestedEntities() async throws -> [Entity] {
-        []
-    }
-}
+// EntityQueryImpl has been removed because generic entity queries are not supported
+// by the App Intents metadata processor. Use concrete EntityQuery types instead.
 
 @available(iOS 16.0, macOS 13.0, *)
 public struct IntentFixture {

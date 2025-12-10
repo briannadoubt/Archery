@@ -5,50 +5,41 @@ import SwiftParser
 // MARK: - Module Boundary Linter
 
 /// Linter that enforces module boundaries and prevents illegal cross-module imports
-public final class ModuleBoundaryLinter {
+public actor ModuleBoundaryLinter {
     private let moduleRegistry: ModuleRegistry
     private var violations: [BoundaryViolation] = []
     private let configuration: LinterConfiguration
-    
+
     public init(
-        moduleRegistry: ModuleRegistry? = nil,
+        moduleRegistry: ModuleRegistry,
         configuration: LinterConfiguration = .default
     ) {
-        if let moduleRegistry {
-            self.moduleRegistry = moduleRegistry
-        } else {
-            @MainActor func getSharedRegistry() -> ModuleRegistry {
-                return ModuleRegistry.shared
-            }
-            self.moduleRegistry = MainActor.assumeIsolated {
-                ModuleRegistry.shared
-            }
-        }
+        self.moduleRegistry = moduleRegistry
         self.configuration = configuration
     }
-    
+
+    @MainActor
+    public init(configuration: LinterConfiguration = .default) {
+        self.moduleRegistry = ModuleRegistry.shared
+        self.configuration = configuration
+    }
+
     // MARK: - Public API
-    
+
     /// Lint a module for boundary violations
     public func lint(
         module: String,
         sourceFiles: [URL]
     ) async throws -> LintResult {
         violations.removeAll()
-        
-        // Process files in parallel
-        await withTaskGroup(of: [BoundaryViolation].self) { group in
-            for file in sourceFiles {
-                group.addTask { [self] in
-                    (try? self.lintFile(file, module: module)) ?? []
-                }
-            }
-            
-            for await fileViolations in group {
+
+        // Process files sequentially to avoid actor-isolation issues
+        for file in sourceFiles {
+            if let fileViolations = try? lintFile(file, module: module) {
                 violations.append(contentsOf: fileViolations)
             }
         }
-        
+
         return LintResult(
             module: module,
             violations: violations,
@@ -268,7 +259,7 @@ public struct LinterConfiguration: Codable, Sendable {
 
 // MARK: - Lint Results
 
-public struct LintResult {
+public struct LintResult: Sendable {
     public let module: String
     public let violations: [BoundaryViolation]
     public let passed: Bool

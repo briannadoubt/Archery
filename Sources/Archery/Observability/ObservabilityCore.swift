@@ -190,11 +190,13 @@ public final class Span: @unchecked Sendable {
     public func end(at time: Date = Date()) {
         lock.lock()
         defer { lock.unlock() }
-        
+
         guard endTime == nil else { return }
         endTime = time
-        
-        ObservabilityEngine.shared.recordSpan(self)
+
+        Task {
+            await ObservabilityEngine.shared.recordSpan(self)
+        }
     }
     
     public var duration: TimeInterval? {
@@ -209,10 +211,22 @@ public struct SpanEvent {
     public let attributes: [String: String]
 }
 
-public enum SpanStatus {
+public enum SpanStatus: Equatable {
     case unset
     case ok
     case error(Error?)
+
+    public static func == (lhs: SpanStatus, rhs: SpanStatus) -> Bool {
+        switch (lhs, rhs) {
+        case (.unset, .unset), (.ok, .ok):
+            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            // Compare by presence of error, not by specific error
+            return (lhsError == nil) == (rhsError == nil)
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Breadcrumb System
@@ -249,7 +263,23 @@ public struct Breadcrumb: Sendable, Identifiable {
         self.message = message
         self.level = level
         self.data = data
-        self.context = context ?? ContextPropagator.shared.currentContext
+        self.context = context ?? CorrelationContext()
+    }
+
+    @MainActor
+    public init(
+        category: Category,
+        message: String,
+        level: BreadcrumbLevel = .info,
+        data: [String: String] = [:],
+        useCurrentContext: Bool
+    ) {
+        self.timestamp = Date()
+        self.category = category
+        self.message = message
+        self.level = level
+        self.data = data
+        self.context = useCurrentContext ? ContextPropagator.shared.currentContext : CorrelationContext()
     }
 }
 
@@ -263,12 +293,12 @@ public enum BreadcrumbLevel: String, Sendable {
 
 public actor BreadcrumbRecorder {
     public static let shared = BreadcrumbRecorder()
-    
+
     private var breadcrumbs: [Breadcrumb] = []
     private let maxBreadcrumbs: Int
     private var hooks: [(Breadcrumb) -> Void] = []
-    
-    private init(maxBreadcrumbs: Int = 100) {
+
+    public init(maxBreadcrumbs: Int = 100) {
         self.maxBreadcrumbs = maxBreadcrumbs
     }
     
@@ -319,16 +349,12 @@ public actor BreadcrumbRecorder {
 
 public actor ObservabilityEngine {
     public static let shared = ObservabilityEngine()
-    
+
     private var exporters: [any TelemetryExporter] = []
     private var samplers: [any TelemetrySampler] = []
     private var enrichers: [any TelemetryEnricher] = []
-    
+
     private init() {
-        setupDefaultExporters()
-    }
-    
-    private func setupDefaultExporters() {
         #if DEBUG
         exporters.append(ConsoleExporter())
         #endif

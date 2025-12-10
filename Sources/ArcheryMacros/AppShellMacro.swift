@@ -31,6 +31,8 @@ public enum AppShellMacro: MemberMacro {
             throw DiagnosticsError(diagnostics: [diagnostic(for: declaration, kind: .mustBeStruct)])
         }
 
+        let structName = structDecl.name.text
+
         guard let tabEnum = structDecl.memberBlock.members.compactMap({ $0.decl.as(EnumDeclSyntax.self) }).first(where: { $0.name.text == "Tab" }) else {
             throw DiagnosticsError(diagnostics: [diagnostic(for: declaration, kind: .missingTabsEnum)])
         }
@@ -39,16 +41,21 @@ public enum AppShellMacro: MemberMacro {
             attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "DIManual"
         }
 
-        let tabCases: [String] = tabEnum.memberBlock.members.compactMap { member in
+        let tabCaseInfos: [TabCaseInfo] = tabEnum.memberBlock.members.compactMap { member in
             guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self), let element = caseDecl.elements.first else { return nil }
-            return element.name.text
+            let name = element.name.text
+            let requirement = extractTabEntitlement(from: caseDecl)
+            return TabCaseInfo(name: name, entitlement: requirement)
         }
+        let tabCases: [String] = tabCaseInfos.map(\.name)
         guard let firstCase = tabCases.first else {
             throw DiagnosticsError(diagnostics: [diagnostic(for: declaration, kind: .missingTabsEnum)])
         }
 
-        let sheetEnum = structDecl.memberBlock.members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.first(where: { $0.name.text == "Sheet" })
-        let fullEnum = structDecl.memberBlock.members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.first(where: { $0.name.text == "FullScreen" })
+        // Check if any tabs have entitlement requirements
+        let hasTabEntitlements = tabCaseInfos.contains { $0.entitlement != nil }
+
+        // Note: Sheet/FullScreen enums are no longer used - coordinator handles presentations
         let windowEnum = structDecl.memberBlock.members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.first(where: { $0.name.text == "Window" })
 
         let customRouteEnums: [String: String] = structDecl.memberBlock.members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.reduce(into: [:]) { acc, enumDecl in
@@ -68,21 +75,42 @@ public enum AppShellMacro: MemberMacro {
             return fn.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) }) && fn.name.text == "previewSeed"
         }
 
-        let sheetBuilderName = structDecl.memberBlock.members.compactMap { member -> String? in
-            guard let fn = member.decl.as(FunctionDeclSyntax.self) else { return nil }
-            guard fn.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) }) else { return nil }
-            let hasAttr = fn.attributes.contains { $0.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "ShellSheet" }
-            if hasAttr || fn.name.text == "buildSheet" { return fn.name.text }
-            return nil
-        }.first
+        // Check for static analyticsProviders property
+        let hasAnalyticsProviders = structDecl.memberBlock.members.contains { member in
+            guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { return false }
+            let isStatic = varDecl.modifiers.contains { $0.name.tokenKind == .keyword(.static) }
+            let hasName = varDecl.bindings.contains { $0.pattern.trimmedDescription == "analyticsProviders" }
+            return isStatic && hasName
+        }
 
-        let fullBuilderName = structDecl.memberBlock.members.compactMap { member -> String? in
-            guard let fn = member.decl.as(FunctionDeclSyntax.self) else { return nil }
-            guard fn.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) }) else { return nil }
-            let hasAttr = fn.attributes.contains { $0.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "ShellFullScreen" }
-            if hasAttr || fn.name.text == "buildFullScreen" { return fn.name.text }
-            return nil
-        }.first
+        // Check for static database property (for GRDB integration)
+        let hasDatabase = structDecl.memberBlock.members.contains { member in
+            guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { return false }
+            let isStatic = varDecl.modifiers.contains { $0.name.tokenKind == .keyword(.static) }
+            let hasName = varDecl.bindings.contains { $0.pattern.trimmedDescription == "database" }
+            return isStatic && hasName
+        }
+
+        // Check for static themeManager property
+        let hasThemeManager = structDecl.memberBlock.members.contains { member in
+            guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { return false }
+            let isStatic = varDecl.modifiers.contains { $0.name.tokenKind == .keyword(.static) }
+            let hasName = varDecl.bindings.contains { $0.pattern.trimmedDescription == "themeManager" }
+            return isStatic && hasName
+        }
+
+        // Check if user already defined body (don't override)
+        let hasBody = structDecl.memberBlock.members.contains { member in
+            guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { return false }
+            return varDecl.bindings.contains { $0.pattern.trimmedDescription == "body" }
+        }
+
+        // Check if user already defined init (don't override)
+        let hasInit = structDecl.memberBlock.members.contains { member in
+            member.decl.is(InitializerDeclSyntax.self)
+        }
+
+        // Note: sheetBuilderName and fullBuilderName removed - coordinator handles presentations via route resolution
 
         let windowBuilderName = structDecl.memberBlock.members.compactMap { member -> String? in
             guard let fn = member.decl.as(FunctionDeclSyntax.self) else { return nil }
@@ -97,8 +125,10 @@ public enum AppShellMacro: MemberMacro {
             guard fn.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) }) else { return nil }
             guard let firstParam = fn.signature.parameterClause.parameters.first else { return nil }
             let typeName = firstParam.type.trimmedDescription
-            guard tabCases.contains(where: { $0.capitalizedRouteName == typeName }) else { return nil }
-            return (typeName, fn.name.text)
+            // Match both "DashboardRoute" and "ShellView.DashboardRoute"
+            let normalizedType = typeName.hasPrefix("ShellView.") ? String(typeName.dropFirst("ShellView.".count)) : typeName
+            guard let matchedTab = tabCases.first(where: { $0.capitalizedRouteName == normalizedType }) else { return nil }
+            return (matchedTab.capitalizedRouteName, fn.name.text)
         }.reduce(into: [:]) { acc, pair in acc[pair.0] = pair.1 }
 
         let autoRegisterTypes: [String] = structDecl.memberBlock.members.compactMap { member in
@@ -114,130 +144,274 @@ public enum AppShellMacro: MemberMacro {
             return nil
         }
 
-        let sheetCases: [(String, [String])] = sheetEnum.map { enumDecl in
-            enumDecl.memberBlock.members.compactMap { member in
-                guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self), let element = caseDecl.elements.first else { return nil }
-                let params = element.parameterClause?.parameters.map { $0.firstName?.text ?? "_" } ?? []
-                return (element.name.text, params)
-            }
-        } ?? []
-
-        let fullCases: [(String, [String])] = fullEnum.map { enumDecl in
-            enumDecl.memberBlock.members.compactMap { member in
-                guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self), let element = caseDecl.elements.first else { return nil }
-                let params = element.parameterClause?.parameters.map { $0.firstName?.text ?? "_" } ?? []
-                return (element.name.text, params)
-            }
-        } ?? []
+        // Note: sheetCases and fullCases removed - coordinator handles presentations via route resolution
 
         let isPublic = structDecl.modifiers.contains { $0.name.tokenKind == .keyword(.public) }
         let access = isPublic ? "public " : ""
 
-        let routeEnums = tabCases.map { name in
-            if let custom = customRouteEnums[name.capitalizedRouteName] {
-                return "    typealias \(name.capitalizedRouteName) = \(custom)"
+        // For each tab, generate route types only when needed:
+        // - Custom enum inside app struct -> generate typealias
+        // - No builder -> generate simple enum
+        // - Has builder -> external @Route type exists, don't generate anything (use external type directly)
+        let routeEnums = tabCases.compactMap { name -> String? in
+            let routeName = name.capitalizedRouteName
+            if let custom = customRouteEnums[routeName] {
+                // Custom enum defined inside the app struct
+                return "    typealias \(routeName) = \(custom)"
             }
-            return "    enum \(name.capitalizedRouteName): NavigationRoute, Codable { case root }"
+            if tabBuilders[routeName] != nil {
+                // Has a builder, external @Route type exists at file scope
+                // Don't generate anything - use the external type directly
+                return nil
+            }
+            // No builder, generate simple enum without deep link support
+            return "    enum \(routeName): NavigationRoute, Codable { case root }"
         }.joined(separator: "\n")
 
-        let tabItems = tabCases.map { name -> String in
-            let route = name.capitalizedRouteName
-            let sheetLine = sheetEnum != nil ? ".sheet(item: sheetBinding(), content: buildSheet)" : ""
-            let fullLine = fullEnum != nil ? ".fullScreenCover(item: fullScreenBinding(), content: buildFullScreen)" : ""
-            let contentBuilder = tabBuilders[route] ?? "defaultTabContent"
-            let destinationBuilder = tabBuilders[route] ?? "defaultDestination"
-            return """
-            SwiftUI.NavigationStack(path: binding(for: .\(name), as: \(route).self)) {
-                Self.\(contentBuilder)(.root, container)
-            }
-            .navigationDestination(for: \(route).self) { route in
-                Self.\(destinationBuilder)(route, container)
-            }
-            \(sheetLine)
-            \(fullLine)
-            .tabItem {
-                SwiftUI.Label(\"\(name)\", systemImage: \"circle\")
-            }
-            .tag(Tab.\(name))
-            """
-        }.joined(separator: "\n")
-
-        let sheetState = sheetEnum != nil ? "    @SwiftUI.State private var activeSheet: Sheet?\n" : ""
-        let fullState = fullEnum != nil ? "    @SwiftUI.State private var activeFullScreen: FullScreen?\n" : ""
-
-        func makeSheetCases() -> String {
-            sheetCases.map { name, params in
-                let bindings = params.enumerated().map { "let p\($0.offset)" }.joined(separator: ", ")
-                let payload = params.enumerated().map { "p\($0.offset)" }.joined(separator: ", ")
-                let pattern = params.isEmpty ? "case .\(name):" : "case .\(name)(\(bindings)):" 
-                let payloadArgs = params.isEmpty ? "" : ", payload: (\(payload))"
-                if let builder = sheetBuilderName {
-                    let callPayload = params.isEmpty ? "sheet" : "Sheet.\(name)(\(payload))"
-                    return "\(pattern) return Self.\(builder)(\(callPayload), container)"
-                }
-                return "\(pattern) return Self.sheetView(\\\"\(name)\\\")\(payloadArgs) { activeSheet = nil }"
-            }.joined(separator: "\n        ")
-        }
-
-        func makeFullCases() -> String {
-            fullCases.map { name, params in
-                let bindings = params.enumerated().map { "let p\($0.offset)" }.joined(separator: ", ")
-                let payload = params.enumerated().map { "p\($0.offset)" }.joined(separator: ", ")
-                let pattern = params.isEmpty ? "case .\(name):" : "case .\(name)(\(bindings)):" 
-                let payloadArgs = params.isEmpty ? "" : ", payload: (\(payload))"
-                if let builder = fullBuilderName {
-                    let callPayload = params.isEmpty ? "cover" : "FullScreen.\(name)(\(payload))"
-                    return "\(pattern) return Self.\(builder)(\(callPayload), container)"
-                }
-                return "\(pattern) return Self.fullScreenView(\\\"\(name)\\\")\(payloadArgs) { activeFullScreen = nil }"
-            }.joined(separator: "\n        ")
-        }
-
-        let sheetHelpers: String = sheetEnum != nil ? """
-    private func sheetBinding() -> SwiftUI.Binding<Sheet?> {
-        SwiftUI.Binding(get: { activeSheet }, set: { activeSheet = $0 })
-    }
-
-    private func buildSheet(_ sheet: Sheet) -> some SwiftUI.View {
-        switch sheet {
-        \(makeSheetCases())
-        }
-    }
-""" : ""
-
-        let fullHelpers: String = fullEnum != nil ? """
-    private func fullScreenBinding() -> SwiftUI.Binding<FullScreen?> {
-        SwiftUI.Binding(get: { activeFullScreen }, set: { activeFullScreen = $0 })
-    }
-
-    private func buildFullScreen(_ cover: FullScreen) -> some SwiftUI.View {
-        switch cover {
-        \(makeFullCases())
-        }
-    }
-""" : ""
+        // Note: Old tabItems, sheetState, fullState, sheetHelpers, fullHelpers removed
+        // The new coordinator-driven shell handles all presentations via NavigationCoordinator
 
         let registerWorking = hasDIManual ? "" : "Self.register(into: &working)"
         let registerPreview = hasDIManual ? "" : "Self.register(into: &c)"
 
+        // Generate __autoRegister method inline if needed
+        let autoRegisterMethod: String
+        if !autoRegisterTypes.isEmpty {
+            let autoLines = autoRegisterTypes.map { "        container.registerFactory { \($0)() }" }.joined(separator: "\n")
+            autoRegisterMethod = """
+
+    private static func __autoRegister(into container: inout EnvContainer) {
+\(autoLines)
+    }
+"""
+        } else {
+            autoRegisterMethod = ""
+        }
+
+        // Generate tab entitlement methods inline if needed
+        let tabEntitlementMethods: String
+        if hasTabEntitlements {
+            let tabRequirementCases = tabCaseInfos.map { info in
+                let requirement = info.entitlement?.generateRequirementExpr() ?? ".none"
+                return "        case .\(info.name): return \(requirement)"
+            }.joined(separator: "\n")
+
+            let tabBehaviorCases = tabCaseInfos.map { info in
+                let behavior = info.entitlement?.behavior ?? "hidden"
+                return "        case .\(info.name): return .\(behavior)"
+            }.joined(separator: "\n")
+
+            let tabAutoPaywallCases = tabCaseInfos.map { info in
+                let autoPaywall = info.entitlement?.autoPaywall ?? true
+                return "        case .\(info.name): return \(autoPaywall)"
+            }.joined(separator: "\n")
+
+            tabEntitlementMethods = """
+
+    /// Returns the entitlement requirement for a specific tab
+    \(access)static func tabRequirement(for tab: Tab) -> Archery.EntitlementRequirement {
+        switch tab {
+\(tabRequirementCases)
+        }
+    }
+
+    /// Returns the behavior for a gated tab when user lacks entitlement
+    \(access)static func tabBehavior(for tab: Tab) -> Archery.GatedTabBehavior {
+        switch tab {
+\(tabBehaviorCases)
+        }
+    }
+
+    /// Returns whether to auto-present paywall when tab is blocked
+    \(access)static func shouldAutoPaywall(for tab: Tab) -> Bool {
+        switch tab {
+\(tabAutoPaywallCases)
+        }
+    }
+"""
+        } else {
+            tabEntitlementMethods = ""
+        }
+
+        // Generate route resolution switch for each tab
+        // When there's a builder, use external file-scope route type directly
+        // Otherwise use ShellView-local enum type
+        let routeResolutionCases = tabCases.map { name -> String in
+            let route = name.capitalizedRouteName
+            let hasBuilder = tabBuilders[route] != nil
+            let routeType = hasBuilder ? route : "ShellView.\(route)"
+            let builderCall: String
+            if let builder = tabBuilders[route] {
+                builderCall = "\(structName).\(builder)(route, container)"
+            } else {
+                builderCall = "SwiftUI.AnyView(SwiftUI.Text(String(describing: route)))"
+            }
+            return """
+                        if let route = anyRoute.as(\(routeType).self) {
+                            return SwiftUI.AnyView(\(builderCall))
+                        }
+            """
+        }.joined(separator: "\n")
+
+        // Generate tab root views
+        let tabRootViews = tabCases.map { name -> String in
+            let route = name.capitalizedRouteName
+            let hasBuilder = tabBuilders[route] != nil
+            let routeType = hasBuilder ? route : "ShellView.\(route)"
+            if let builder = tabBuilders[route] {
+                return "            case .\(name): return SwiftUI.AnyView(\(structName).\(builder)(\(routeType).root, container))"
+            } else {
+                return "            case .\(name): return SwiftUI.AnyView(SwiftUI.Text(\"\(name)\"))"
+            }
+        }.joined(separator: "\n")
+
+        // Generate tab visibility checks for entitlement-gated tabs
+        let tabVisibilityChecks = tabCaseInfos.filter { $0.entitlement != nil }.map { info -> String in
+            let behavior = info.entitlement?.behavior ?? "hidden"
+            if behavior == "hidden" {
+                return "            if tab == .\(info.name) { return store.hasEntitlement(\(info.entitlement!.entitlements.map { ".\($0)" }.first ?? ".none")) }"
+            }
+            return ""
+        }.filter { !$0.isEmpty }.joined(separator: "\n")
+
+        // Generate tab locked checks
+        let tabLockedChecks = tabCaseInfos.filter { $0.entitlement?.behavior == "locked" }.map { info -> String in
+            let entitlement = info.entitlement!.entitlements.first ?? "none"
+            return "            if tab == .\(info.name) { return !store.hasEntitlement(.\(entitlement)) }"
+        }.joined(separator: "\n")
+
+        // Generate entitlement checking for routes
+        let routeEntitlementChecks = tabCaseInfos.compactMap { info -> String? in
+            guard let ent = info.entitlement else { return nil }
+            let route = info.name.capitalizedRouteName
+            let requirement = ent.generateRequirementExpr()
+            return "            if route is \(route) { return \(requirement) }"
+        }.joined(separator: "\n")
+
+        // Generate deep link tab matching
+        // Note: We use the local route typealiases which point to external @Route-decorated types
+        // that have fromURL static method
+        let deepLinkTabMatching = tabCases.enumerated().map { (index, name) -> String in
+            let route = name.capitalizedRouteName
+            return """
+                        case "\(name)":
+                            var actions: [CoordinatorAction] = [.selectTab(index: \(index))]
+                            if remaining.count > 0, let route = \(route).fromURL(path: remaining, query: query) {
+                                actions.append(.push(AnyRoute(route)))
+                            }
+                            return .success(actions)
+            """
+        }.joined(separator: "\n")
+
         let shellView = """
+// MARK: - Generated Navigation Coordinator
+
+/// Generated NavigationCoordinator that powers the app shell.
+///
+/// Manages:
+/// - Tab selection with entitlement gating
+/// - Per-tab navigation stacks
+/// - Sheet and fullscreen presentations (recursive)
+/// - Flow management
+/// - Deep link handling
+@MainActor
+\(access)final class ShellNavigationCoordinator: NavigationCoordinator<Tab> {
+    private let container: EnvContainer
+    private let _store: StoreKitManager
+
+    \(access)init(container: EnvContainer = EnvContainer()) {
+        self.container = container
+        self._store = .shared
+        super.init(initialTab: .\(firstCase))
+        self.storeKitManager = _store
+    }
+
+    \(access)var store: StoreKitManager { _store }
+
+    // MARK: - Route Resolution
+
+    /// Resolve a type-erased route to its view
+    \(access)func resolveView(for anyRoute: AnyRoute) -> SwiftUI.AnyView {
+\(routeResolutionCases)
+        return SwiftUI.AnyView(SwiftUI.Text("Unknown route: \\(anyRoute.id)"))
+    }
+
+    /// Get the root view for a tab
+    \(access)func rootView(for tab: Tab) -> SwiftUI.AnyView {
+        switch tab {
+\(tabRootViews)
+        }
+    }
+
+    // MARK: - Tab Visibility
+
+    /// Returns visible tabs based on entitlements
+    \(access)var visibleTabs: [Tab] {
+        Tab.allCases.filter { tab in
+\(tabVisibilityChecks.isEmpty ? "            return true" : tabVisibilityChecks + "\n            return true")
+        }
+    }
+
+    /// Check if a tab is locked (visible but inaccessible)
+    \(access)func isTabLocked(_ tab: Tab) -> Bool {
+\(tabLockedChecks.isEmpty ? "        return false" : tabLockedChecks + "\n        return false")
+    }
+
+    // MARK: - Entitlement Checking
+
+    override func checkEntitlement<R: NavigationRoute>(for route: R) -> EntitlementRequirement? {
+\(routeEntitlementChecks.isEmpty ? "        return nil" : routeEntitlementChecks + "\n        return nil")
+    }
+
+    // MARK: - Deep Link Resolution
+
+    override func resolveDeepLink(_ url: URL) -> DeepLinkResolution? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+            return .invalidFormat("Could not parse URL")
+        }
+
+        let pathComponents = components.path.split(separator: "/").map(String.init)
+        guard let firstPath = pathComponents.first else { return .notFound }
+
+        // Handle flow deep links
+        if firstPath == "flow" {
+            guard pathComponents.count >= 2 else { return .notFound }
+            let flowId = pathComponents[1]
+            let step = pathComponents.count >= 4 && pathComponents[2] == "step" ? pathComponents[3] : nil
+            return .flow(id: flowId, step: step)
+        }
+
+        let remaining = Array(pathComponents.dropFirst())
+        let query = Dictionary(uniqueKeysWithValues:
+            (components.queryItems ?? []).compactMap { item -> (String, String)? in
+                guard let value = item.value else { return nil }
+                return (item.name, value)
+            }
+        )
+
+        switch firstPath {
+\(deepLinkTabMatching)
+        default:
+            return .notFound
+        }
+    }
+}
+
+// MARK: - Generated Shell View
+
+/// Generated shell view powered by NavigationCoordinator.
+///
+/// Features:
+/// - TabView with per-tab NavigationStacks
+/// - Entitlement-gated tabs (locked/hidden)
+/// - Recursive sheet presentations
+/// - Full-screen presentations
+/// - Deep link handling via onOpenURL
 \(access)struct ShellView: SwiftUI.View {
-    @SwiftUI.State private var selection: Tab
-    @SwiftUI.State private var paths: [Tab: [AnyHashable]]
-\(sheetState)\(fullState)    private var container: EnvContainer
-    private let restorer: NavigationRestorer<Tab>?
-    private let persistence: NavigationPersistence
+    @SwiftUI.StateObject private var coordinator: ShellNavigationCoordinator
+    private var container: EnvContainer
 
 \(routeEnums)
-
-    // Default builders; override with static funcs matching route types
-    private static func defaultTabContent<Route>(_ route: Route, _ container: EnvContainer) -> some SwiftUI.View {
-        SwiftUI.Text(String(describing: route))
-    }
-
-    private static func defaultDestination<Route>(_ route: Route, _ container: EnvContainer) -> some SwiftUI.View {
-        SwiftUI.Text(String(describing: route))
-    }
 
     \(access)init(
         selection: Tab = .\(firstCase),
@@ -246,104 +420,188 @@ public enum AppShellMacro: MemberMacro {
         patch: ((inout EnvContainer) -> Void)? = nil,
         persistence: NavigationPersistence = .enabled(key: "archery.navigation.\(Self.self)")
     ) {
-        self.persistence = persistence
-        let working = EnvContainer()
+        var working = EnvContainer()
         base.merge(into: working)
         parent?.merge(into: working)
         \(registerWorking)
         \(hasRegisterDeps ? "Self.registerDependencies(into: &working)" : "")
         patch?(&working)
         self.container = working
+        self._coordinator = SwiftUI.StateObject(wrappedValue: ShellNavigationCoordinator(container: working))
 
-        let initialPaths = Dictionary(uniqueKeysWithValues: Tab.allCases.map { ($0, [AnyHashable]()) })
-        let restorer = persistence.mode == .enabled ? NavigationRestorer<Tab>(persistence: persistence) : nil
-        let restored = restorer?.restore(tabDecoder: decodeTab, decoder: decodeRoute) ?? (nil, [:])
-        var seededPaths = initialPaths
-        restored.paths.forEach { seededPaths[$0.key] = $0.value }
+        // Configure analytics providers and framework-level auto-tracking
+        Self.__configureAnalytics()
+    }
 
-        let initialSelection = restored.selection ?? selection
-        self._selection = SwiftUI.State(initialValue: initialSelection)
-        self._paths = SwiftUI.State(initialValue: seededPaths)
-        self.restorer = restorer
+    private static func __configureAnalytics() {
+        // Configure providers (uses analyticsProviders if defined, otherwise DebugAnalyticsProvider)
+        \(hasAnalyticsProviders ? "let providers = \(structName).analyticsProviders" : "let providers: [any AnalyticsProvider] = [DebugAnalyticsProvider()]")
+        #if DEBUG
+        let debugMode = true
+        #else
+        let debugMode = false
+        #endif
+        AnalyticsManager.shared.configure(providers: providers, enabled: true, debugMode: debugMode)
+
+        // Bridge ArcheryEvent to AnalyticsManager automatically
+        if ArcheryAnalyticsConfiguration.shared.eventHandler == nil {
+            ArcheryAnalyticsConfiguration.shared.eventHandler = { event in
+                let name = event.name
+                let properties = event.properties
+                Task { @MainActor in
+                    AnalyticsManager.shared.track(name, properties: properties)
+                }
+            }
+        }
     }
 
     \(access)var body: some SwiftUI.View {
-        SwiftUI.TabView(selection: $selection) {
-\(tabItems)
+        SwiftUI.TabView(selection: $coordinator.selectedTab) {
+            SwiftUI.ForEach(coordinator.visibleTabs, id: \\.self) { tab in
+                tabContent(for: tab)
+                    .tabItem {
+                        tabLabel(for: tab)
+                    }
+                    .tag(tab)
+            }
         }
+        .sheet(item: coordinator.sheetBinding(depth: 0)) { route in
+            sheetContent(route: route, depth: 1)
+        }
+        #if !os(macOS)
+        .fullScreenCover(item: coordinator.fullScreenBinding) { route in
+            fullScreenContent(route: route)
+        }
+        #endif
+        .environment(\\.navigationHandle, coordinator.makeHandle(for: .tab(0)))
         .environment(\\.archeryContainer, container)
-        .onChange(of: selection) { _ in persistNavigation() }
-        .onChange(of: paths) { _ in persistNavigation() }
+        .environmentObject(coordinator)
+        .onOpenURL { url in
+            _ = coordinator.handle(url: url)
+        }
     }
 
-    private func binding<Route: Hashable>(for tab: Tab, as _: Route.Type) -> SwiftUI.Binding<[Route]> {
-        SwiftUI.Binding(
-            get: {
-                (paths[tab] as? [Route]) ?? []
-            },
-            set: { newValue in
-                paths[tab] = newValue.map { $0 as AnyHashable }
+    // MARK: - Tab Content
+
+    @SwiftUI.ViewBuilder
+    private func tabContent(for tab: Tab) -> some SwiftUI.View {
+        if coordinator.isTabLocked(tab) {
+            lockedTabContent(tab)
+        } else {
+            SwiftUI.NavigationStack(path: pathBinding(for: tab)) {
+                coordinator.rootView(for: tab)
+                    .navigationDestination(for: AnyRoute.self) { route in
+                        coordinator.resolveView(for: route)
+                    }
             }
+            .environment(\\.navigationHandle, coordinator.makeHandle(for: .tab(tabIndex(tab))))
+        }
+    }
+
+    @SwiftUI.ViewBuilder
+    private func tabLabel(for tab: Tab) -> some SwiftUI.View {
+        switch tab {
+\(tabCases.map { name in
+            "        case .\(name): SwiftUI.Label(\"\(name)\", systemImage: \"circle\")"
+        }.joined(separator: "\n"))
+        }
+    }
+
+    @SwiftUI.ViewBuilder
+    private func lockedTabContent(_ tab: Tab) -> some SwiftUI.View {
+        SwiftUI.ContentUnavailableView {
+            SwiftUI.Label(String(describing: tab), systemImage: "lock.fill")
+        } description: {
+            SwiftUI.Text("Upgrade to unlock this feature.")
+        } actions: {
+            SwiftUI.Button("View Plans") {
+                // Present paywall
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    // MARK: - Sheet Content (Recursive via limited depth)
+
+    /// Build sheet content with recursive presentation support
+    /// Uses explicit views at each depth level to satisfy type checker
+    private func sheetContent(route: AnyRoute, depth: Int) -> SwiftUI.AnyView {
+        let content = SwiftUI.NavigationStack {
+            coordinator.resolveView(for: route)
+                .toolbar {
+                    SwiftUI.ToolbarItem(placement: .cancellationAction) {
+                        SwiftUI.Button("Done") {
+                            coordinator.dismiss(levels: 1)
+                        }
+                    }
+                }
+        }
+        .presentationDetents(detentsForRoute(route))
+        .environment(\\.navigationHandle, coordinator.makeHandle(for: .sheet(depth: depth)))
+
+        // Limit recursive sheet depth to prevent infinite type recursion
+        if depth < 5 {
+            return SwiftUI.AnyView(
+                content.sheet(item: coordinator.sheetBinding(depth: depth)) { nextRoute in
+                    self.sheetContent(route: nextRoute, depth: depth + 1)
+                }
+            )
+        } else {
+            return SwiftUI.AnyView(content)
+        }
+    }
+
+    private func detentsForRoute(_ route: AnyRoute) -> Set<SwiftUI.PresentationDetent> {
+        if case .sheet(let detents) = route.presentationStyle {
+            return Set(detents.map(\\.presentationDetent))
+        }
+        return [.large]
+    }
+
+    // MARK: - Full Screen Content
+
+    private func fullScreenContent(route: AnyRoute) -> SwiftUI.AnyView {
+        let content = SwiftUI.NavigationStack {
+            coordinator.resolveView(for: route)
+                .toolbar {
+                    SwiftUI.ToolbarItem(placement: .cancellationAction) {
+                        SwiftUI.Button("Close") {
+                            coordinator.fullScreenRoute = nil
+                        }
+                    }
+                }
+        }
+        .sheet(item: coordinator.sheetBinding(depth: 0)) { sheetRoute in
+            self.sheetContent(route: sheetRoute, depth: 1)
+        }
+        .environment(\\.navigationHandle, coordinator.makeHandle(for: .fullScreen()))
+
+        return SwiftUI.AnyView(content)
+    }
+
+    // MARK: - Helpers
+
+    private func pathBinding(for tab: Tab) -> SwiftUI.Binding<[AnyRoute]> {
+        SwiftUI.Binding(
+            get: { (coordinator.tabPaths[tab] as? [AnyRoute]) ?? [] },
+            set: { coordinator.tabPaths[tab] = $0.map { $0 as AnyHashable } }
         )
     }
-\(sheetHelpers)\(fullHelpers)    private func encodePath(for tab: Tab) -> [String] {
-        switch tab {
-\(tabCases.map { name in
-            let route = name.capitalizedRouteName
-            return "        case .\(name): return (paths[.\(name)] as? [\(route)])?.map(\\.navigationIdentifier) ?? []"
-        }.joined(separator: "\n"))
-        }
+
+    private func tabIndex(_ tab: Tab) -> Int {
+        Tab.allCases.firstIndex(of: tab).map { Tab.allCases.distance(from: Tab.allCases.startIndex, to: $0) } ?? 0
     }
 
-    private func decodeRoute(for tab: Tab, identifier: String) -> AnyHashable? {
-        switch tab {
-\(tabCases.map { name in
-            let route = name.capitalizedRouteName
-            return "        case .\(name): return \(route).decodeNavigationIdentifier(identifier)"
-        }.joined(separator: "\n"))
-        }
-    }
-
-    private func encodeTab(_ tab: Tab) -> String? {
-        switch tab {
-\(tabCases.map { name in
-            "        case .\(name): return \"\(name)\""
-        }.joined(separator: "\n"))
-        }
-    }
-
-    private func decodeTab(_ identifier: String) -> Tab? {
-        switch identifier {
-\(tabCases.map { name in
-            "        case \"\(name)\": return .\(name)"
-        }.joined(separator: "\n"))
-        default: return nil
-        }
-    }
-
-    private func persistNavigation() {
-        guard let restorer else { return }
-        let encoder: NavigationRestorer<Tab>.Encoder = { tab, element in
-            switch tab {
-\(tabCases.map { name in
-            let route = name.capitalizedRouteName
-            return "            case .\(name): return (element as? \(route))?.navigationIdentifier"
-        }.joined(separator: "\n"))
-            }
-        }
-        restorer.persist(selection: selection, paths: paths, tabEncoder: encodeTab, encoder: encoder)
-    }
+    // MARK: - Static Registration
 
     \(access)static func register(into container: inout EnvContainer) {
         container.registerFactory { Self.init() }
         container.register(Tab.allCases)
-        \(sheetEnum != nil ? "container.registerFactory { Sheet?.none }; container.registerFactory { Sheet.self }" : "")
-        \(fullEnum != nil ? "container.registerFactory { FullScreen?.none }; container.registerFactory { FullScreen.self }" : "")
         \(!autoRegisterTypes.isEmpty ? "Self.__autoRegister(into: &container)" : "")
     }
 
     \(access)static func previewContainer(seed: ((inout EnvContainer) -> Void)? = nil, mergeFrom parent: EnvContainer? = nil) -> EnvContainer {
-        let c = EnvContainer()
+        var c = EnvContainer()
         parent?.merge(into: c)
         \(registerPreview)
         \(hasRegisterDeps ? "Self.registerDependencies(into: &c)" : "")
@@ -351,6 +609,7 @@ public enum AppShellMacro: MemberMacro {
         seed?(&c)
         return c
     }
+\(autoRegisterMethod)\(tabEntitlementMethods)
 }
 """
 
@@ -371,17 +630,137 @@ public enum AppShellMacro: MemberMacro {
 #endif
 """
 
-        var members: [DeclSyntax] = [DeclSyntax(stringLiteral: shellView), DeclSyntax(stringLiteral: previews)]
+        // Note: NavigationCoordinator subclass generation is available but not included here
+        // due to Swift macro limitations around generating extensions at file scope.
+        // Use the NavigationCoordinator base class directly for navigation coordination.
 
-        if sheetEnum != nil {
-            members.append(DeclSyntax(stringLiteral: "extension Sheet: Identifiable { public var id: String { String(describing: self) } }"))
+        // MARK: - Generated App Infrastructure
+
+        // Generate StateObjects if not defined by user
+        let stateObjects: String
+        if hasDatabase || hasThemeManager {
+            var objects: [String] = []
+            if hasDatabase {
+                objects.append("    @SwiftUI.StateObject private var __database = \(structName).database")
+            }
+            if hasThemeManager {
+                objects.append("    @SwiftUI.StateObject private var __themeManager = \(structName).themeManager")
+            }
+            objects.append("    @SwiftUI.StateObject private var __store = StoreKitManager.shared")
+            stateObjects = objects.joined(separator: "\n")
+        } else {
+            stateObjects = "    @SwiftUI.StateObject private var __store = StoreKitManager.shared"
         }
-        if fullEnum != nil {
-            members.append(DeclSyntax(stringLiteral: "extension FullScreen: Identifiable { public var id: String { String(describing: self) } }"))
+
+        // Generate init if not defined by user
+        let generatedInit: String
+        if !hasInit {
+            generatedInit = """
+
+    \(access)init() {
+        Self.__configureAppearance()
+    }
+
+    private static func __configureAppearance() {
+        #if os(iOS)
+        UINavigationBar.appearance().largeTitleTextAttributes = [
+            .font: UIFont.systemFont(ofSize: 34, weight: .bold)
+        ]
+        #endif
+    }
+"""
+        } else {
+            generatedInit = ""
         }
+
+        // Generate body if not defined by user
+        let generatedBody: String
+        if !hasBody {
+            let shellContent: String
+            if hasDatabase {
+                // Database loading/error handling
+                shellContent = """
+            SwiftUI.Group {
+                if __database.isReady, let container = __database.container {
+                    ShellView()
+                        .grdbContainer(container)
+                        .environment(\\.appDatabase, __database)
+                } else if let error = __database.error {
+                    SwiftUI.ContentUnavailableView {
+                        SwiftUI.Label("Database Error", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        SwiftUI.Text(error.localizedDescription)
+                    } actions: {
+                        SwiftUI.Button("Retry") {
+                            _Concurrency.Task { await __database.setup() }
+                        }
+                    }
+                } else {
+                    SwiftUI.ProgressView("Loading...")
+                        .task {
+                            await __database.setup()
+                        }
+                }
+            }
+"""
+            } else {
+                shellContent = "            ShellView()"
+            }
+
+            let environmentObjects: String
+            if hasThemeManager {
+                environmentObjects = """
+
+            .environmentObject(__themeManager)
+            .environmentObject(__store)
+            .preferredColorScheme(__themeManager.currentTheme.colorScheme)
+"""
+            } else {
+                environmentObjects = """
+
+            .environmentObject(__store)
+"""
+            }
+
+            generatedBody = """
+
+    \(access)var body: some SwiftUI.Scene {
+        SwiftUI.WindowGroup {
+\(shellContent)\(environmentObjects)
+        }
+        #if os(macOS)
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
+        #endif
+    }
+"""
+        } else {
+            generatedBody = ""
+        }
+
+        // Combine app infrastructure
+        let appInfrastructure = """
+// MARK: - Generated App Infrastructure
+
+\(stateObjects)\(generatedInit)\(generatedBody)
+"""
+
+        var members: [DeclSyntax] = [
+            DeclSyntax(stringLiteral: shellView),
+            DeclSyntax(stringLiteral: previews)
+        ]
+
+        // Add app infrastructure if we generated anything
+        if !hasBody || !hasInit {
+            members.append(DeclSyntax(stringLiteral: appInfrastructure))
+        }
+
+        // Note: Extensions for Sheet/FullScreen/Window Identifiable conformance
+        // must be added manually by the user since MemberMacro cannot generate extensions.
+        // Add: extension Sheet: Identifiable { var id: String { String(describing: self) } }
+
         if let windowEnum {
             let windowBuilderCall = windowBuilderName ?? ""
-            members.append(DeclSyntax(stringLiteral: "extension Window: Identifiable { public var id: String { String(describing: self) } }"))
 
             let windowScenes = """
 #if os(macOS) || os(iOS)
@@ -390,7 +769,7 @@ public enum AppShellMacro: MemberMacro {
     private let windowBuilder: ((Window, EnvContainer) -> any SwiftUI.Scene)?
 
     init(container: EnvContainer = EnvContainer(), mergeFrom parent: EnvContainer? = nil, builder: ((Window, EnvContainer) -> any SwiftUI.Scene)? = nil) {
-        let working = EnvContainer()
+        var working = EnvContainer()
         parent?.merge(into: working)
         container.merge(into: working)
         self.container = working
@@ -418,11 +797,6 @@ public enum AppShellMacro: MemberMacro {
             members.append(DeclSyntax(stringLiteral: windowScenes))
         }
 
-        if !autoRegisterTypes.isEmpty {
-            let autoLines = autoRegisterTypes.map { "container.registerFactory { \($0)() }" }.joined(separator: "\n        ")
-            members.append(DeclSyntax(stringLiteral: "extension ShellView { static func __autoRegister(into container: inout EnvContainer) {\n        \(autoLines)\n    } }"))
-        }
-
         return members
     }
 
@@ -440,4 +814,284 @@ private extension String {
 
 private extension SyntaxProtocol {
     var trimmedDescription: String { description.trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+// MARK: - Tab Entitlement Support
+
+private struct TabCaseInfo {
+    let name: String
+    let entitlement: TabEntitlementInfo?
+}
+
+private struct TabEntitlementInfo {
+    enum RequirementType {
+        case single
+        case anyOf
+        case allOf
+    }
+
+    let type: RequirementType
+    let entitlements: [String]
+    let behavior: String  // hidden, locked, disabled, limited
+    let autoPaywall: Bool
+
+    /// Generate the EntitlementRequirement expression
+    func generateRequirementExpr() -> String {
+        switch type {
+        case .single:
+            return ".required(.\(entitlements[0]))"
+        case .anyOf:
+            let list = entitlements.map { ".\($0)" }.joined(separator: ", ")
+            return ".anyOf([\(list)])"
+        case .allOf:
+            let list = entitlements.map { ".\($0)" }.joined(separator: ", ")
+            return ".allOf([\(list)])"
+        }
+    }
+}
+
+/// Extract entitlement requirement from @requires, @requiresAny, or @requiresAll attributes on Tab enum cases
+private func extractTabEntitlement(from caseDecl: EnumCaseDeclSyntax) -> TabEntitlementInfo? {
+    for attr in caseDecl.attributes {
+        guard let attrSyntax = attr.as(AttributeSyntax.self) else { continue }
+        let attrName = attrSyntax.attributeName.trimmedDescription
+
+        guard ["requires", "requiresAny", "requiresAll"].contains(attrName) else { continue }
+
+        var entitlements: [String] = []
+        var autoPaywall = true
+        var behavior = "locked"
+
+        if let args = attrSyntax.arguments?.as(LabeledExprListSyntax.self) {
+            for arg in args {
+                let label = arg.label?.text
+
+                if label == nil || label == "_" {
+                    // Unlabeled argument - entitlement
+                    if let memberAccess = arg.expression.as(MemberAccessExprSyntax.self) {
+                        entitlements.append(memberAccess.declName.baseName.text)
+                    }
+                } else if label == "autoPaywall" {
+                    if let boolLiteral = arg.expression.as(BooleanLiteralExprSyntax.self) {
+                        autoPaywall = boolLiteral.literal.tokenKind == .keyword(.true)
+                    }
+                } else if label == "behavior" {
+                    if let memberAccess = arg.expression.as(MemberAccessExprSyntax.self) {
+                        behavior = memberAccess.declName.baseName.text
+                    }
+                }
+            }
+        }
+
+        guard !entitlements.isEmpty else { continue }
+
+        let type: TabEntitlementInfo.RequirementType
+        switch attrName {
+        case "requires": type = .single
+        case "requiresAny": type = .anyOf
+        case "requiresAll": type = .allOf
+        default: continue
+        }
+
+        return TabEntitlementInfo(type: type, entitlements: entitlements, behavior: behavior, autoPaywall: autoPaywall)
+    }
+    return nil
+}
+
+// MARK: - Navigation Coordinator Generation
+
+/// Generates the NavigationCoordinator subclass for the app
+private func generateNavigationCoordinator(
+    structName: String,
+    tabCases: [String],
+    tabCaseInfos: [TabCaseInfo],
+    tabBuilders: [String: String],
+    customRouteEnums: [String: String],
+    access: String
+) -> String {
+    let firstTab = tabCases.first ?? "root"
+
+    // Generate route resolution switch cases for each tab
+    let routeResolutionCases = tabCases.map { name in
+        let route = name.capitalizedRouteName
+        let builderCall = tabBuilders[route].map { "\(structName).\($0)(route, container)" } ?? "AnyView(Text(String(describing: route)))"
+        return """
+                if let route = anyRoute.as(ShellView.\(route).self) {
+                    return AnyView(\(builderCall))
+                }
+        """
+    }.joined(separator: "\n")
+
+    // Generate entitlement checking if tabs have requirements
+    let hasEntitlements = tabCaseInfos.contains { $0.entitlement != nil }
+    let entitlementCheck = hasEntitlements ? """
+
+        open override func checkEntitlement<R: NavigationRoute>(for route: R) -> EntitlementRequirement? {
+            // Check if the route identifier maps to a gated tab
+            let identifier = route.navigationIdentifier
+            for tab in Tab.allCases {
+                let requirement = \(structName).tabRequirement(for: tab)
+                if requirement != .none {
+                    // Check if this route belongs to this tab's route enum
+                    // Generated code would have more specific checks based on route types
+                }
+            }
+            return nil
+        }
+    """ : ""
+
+    // Generate deep link path patterns for each tab
+    let deepLinkPatterns = tabCases.map { name in
+        """
+                case "\(name)":
+                    guard let tab = tabForIndex(\(tabCases.firstIndex(of: name) ?? 0)) else { return .notFound }
+                    var actions: [CoordinatorAction] = [.selectTab(index: \(tabCases.firstIndex(of: name) ?? 0))]
+                    // Parse remaining path components as route parameters
+                    if pathComponents.count > 1 {
+                        // Route-specific parsing would go here
+                    }
+                    return .success(actions)
+        """
+    }.joined(separator: "\n")
+
+    return """
+/// Generated NavigationCoordinator for \(structName)
+@MainActor
+\(access)final class ShellNavigationCoordinator: NavigationCoordinator<\(structName).Tab> {
+    private let container: EnvContainer
+
+    \(access)init(container: EnvContainer = EnvContainer()) {
+        self.container = container
+        super.init(initialTab: .\(firstTab))
+    }
+
+    // MARK: - Route Resolution
+
+    /// Resolve a type-erased route to its view
+    \(access)func resolveView(for anyRoute: AnyRoute) -> AnyView {
+\(routeResolutionCases)
+        return AnyView(Text("Unknown route: \\(anyRoute.id)"))
+    }
+
+    // MARK: - Handle Factory
+
+    open override func makeHandle(for context: PresentationContext) -> any NavigationHandle {
+        // Create a context-aware handle
+        ShellNavigationHandle(coordinator: self, context: context, container: container)
+    }\(entitlementCheck)
+
+    // MARK: - Deep Link Resolution
+
+    open override func resolveDeepLink(_ url: URL) -> DeepLinkResolution? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+            return .invalidFormat("Could not parse URL")
+        }
+
+        let pathComponents = components.path.split(separator: "/").map(String.init)
+        guard let firstPath = pathComponents.first else {
+            return .notFound
+        }
+
+        // Check for flow deep links
+        if firstPath == "flow" {
+            guard pathComponents.count >= 2 else { return .notFound }
+            let flowId = pathComponents[1]
+            let step = pathComponents.count >= 4 && pathComponents[2] == "step" ? pathComponents[3] : nil
+            return .flow(id: flowId, step: step)
+        }
+
+        // Route to tab
+        switch firstPath {
+\(deepLinkPatterns)
+        default:
+            return .notFound
+        }
+    }
+}
+
+/// Navigation handle used by the ShellNavigationCoordinator
+@MainActor
+\(access)final class ShellNavigationHandle: BaseNavigationHandle {
+    private let container: EnvContainer
+
+    init(coordinator: ShellNavigationCoordinator, context: PresentationContext, container: EnvContainer) {
+        self.container = container
+        super.init(coordinator: coordinator, context: context)
+    }
+}
+"""
+}
+
+/// Generates a typed navigation handle protocol for a specific tab/feature
+private func generateNavigationHandleProtocol(
+    tabName: String,
+    structName: String,
+    access: String
+) -> String {
+    let protocolName = tabName.capitalizedFirst + "Navigation"
+    let routeType = "ShellView.\(tabName.capitalizedRouteName)"
+
+    return """
+/// Typed navigation handle protocol for the \(tabName) feature.
+///
+/// Features inject this via environment and use its methods for navigation.
+/// The feature doesn't know how routes are presented - that's controlled by @presents annotations.
+///
+/// Usage:
+/// ```swift
+/// struct \(tabName.capitalizedFirst)View: View {
+///     @Environment(\\.\(tabName)Navigation) private var nav
+///
+///     var body: some View {
+///         Button("Navigate") { nav.showDetail(id: "123") }
+///     }
+/// }
+/// ```
+@MainActor
+\(access)protocol \(protocolName): NavigationHandle {
+    /// Navigate to a route in the \(tabName) feature
+    func navigate(to route: \(routeType))
+
+    /// Navigate to a route with explicit presentation style
+    func navigate(to route: \(routeType), style: PresentationStyle)
+
+    /// Check if navigation to a route is allowed (entitlements)
+    func canNavigate(to route: \(routeType)) -> Bool
+
+    /// Navigate if allowed, showing paywall if blocked. Returns true if navigation succeeded.
+    func navigateIfAllowed(to route: \(routeType)) async -> Bool
+}
+
+/// Default implementation for \(protocolName)
+@MainActor
+\(access)final class \(protocolName)Handle: BaseNavigationHandle, \(protocolName) {
+    \(access)func navigate(to route: \(routeType)) {
+        navigate(to: route)
+    }
+
+    \(access)func navigate(to route: \(routeType), style: PresentationStyle) {
+        navigate(to: route, style: style)
+    }
+
+    \(access)func canNavigate(to route: \(routeType)) -> Bool {
+        canNavigate(to: route.navigationIdentifier)
+    }
+
+    \(access)func navigateIfAllowed(to route: \(routeType)) async -> Bool {
+        await navigateIfAllowed(to: route)
+    }
+}
+
+/// Environment key for \(protocolName)
+\(access)struct \(protocolName)Key: @preconcurrency EnvironmentKey {
+    @MainActor \(access)static let defaultValue: (any \(protocolName))? = nil
+}
+
+\(access)extension EnvironmentValues {
+    var \(tabName)Navigation: (any \(protocolName))? {
+        get { self[\(protocolName)Key.self] }
+        set { self[\(protocolName)Key.self] = newValue }
+    }
+}
+"""
 }

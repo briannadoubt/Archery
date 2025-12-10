@@ -65,7 +65,7 @@ public enum RepositoryMacro: PeerMacro {
 
         let protocolDecl = """
 
-\(access)protocol \(protocolName) {
+\(access)protocol \(protocolName): Sendable {
 \(protocolFns)
 }
 """
@@ -138,14 +138,17 @@ public enum RepositoryMacro: PeerMacro {
         let value: \(className)
     }
     struct Box: @unchecked Sendable {
-        let value: Any
+        nonisolated(unsafe) let value: Any
+        nonisolated init(value: Any) {
+            self.value = value
+        }
     }
     private let state = State()
     private let clock = ContinuousClock()
 
     actor State {
         private var cache: [String: Box] = [:]
-        private var inflight: [String: Task<Box, Error>] = [:]
+        private var inflight: [String: _Concurrency.Task<Box, Error>] = [:]
 
         func cachedValue(for key: String) -> Box? {
             cache[key]
@@ -153,10 +156,10 @@ public enum RepositoryMacro: PeerMacro {
         func setCached(_ value: Box, for key: String) {
             cache[key] = value
         }
-        func inflightTask(for key: String) -> Task<Box, Error>? {
+        func inflightTask(for key: String) -> _Concurrency.Task<Box, Error>? {
             inflight[key]
         }
-        func inflightOrCreate(for key: String, make: () -> Task<Box, Error>) -> Task<Box, Error> {
+        func inflightOrCreate(for key: String, make: @Sendable () -> _Concurrency.Task<Box, Error>) -> _Concurrency.Task<Box, Error> {
             if let existing = inflight[key] { return existing }
             let task = make()
             inflight[key] = task
@@ -189,7 +192,7 @@ public enum RepositoryMacro: PeerMacro {
 
         let mockDecl = """
 
-\(access)final class \(mockName): \(protocolName) {
+\(access)final class \(mockName): \(protocolName), @unchecked Sendable {
 \(mockProps)
 
     \(access)init() {}
@@ -232,11 +235,11 @@ public enum RepositoryMacro: PeerMacro {
             return cached
         }
         let start = enableTracing ? clock.now : nil
-        let task: Task<Box, Error>
+        let __task: _Concurrency.Task<Box, Error>
 
         if enableCoalescing {
-            task = await state.inflightOrCreate(for: key) {
-                Task<Box, Error> {
+            __task = await state.inflightOrCreate(for: key) {
+                _Concurrency.Task<Box, Error> {
                     do {
                         let result = try await \(baseCall)
                         if enableCaching {
@@ -277,7 +280,7 @@ public enum RepositoryMacro: PeerMacro {
                 }
             }
         } else {
-            task = Task<Box, Error> {
+            __task = _Concurrency.Task<Box, Error> {
                 do {
                     let result = try await \(baseCall)
                     if enableCaching {
@@ -318,7 +321,7 @@ public enum RepositoryMacro: PeerMacro {
             }
         }
 
-        let value = try await task.result.get()
+        let value = try await __task.result.get()
 
         if enableCoalescing {
             await state.clearInflight(for: key)

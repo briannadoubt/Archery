@@ -3,46 +3,44 @@ import WidgetKit
 import SwiftUI
 import AppIntents
 
-public typealias Intent = WidgetConfigurationIntent
+public typealias ArcheryIntent = WidgetConfigurationIntent
 
 #if canImport(WidgetKit)
 
 // MARK: - Enhanced Widget Timeline Provider
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public final class ArcheryWidgetTimelineProvider<Entry: ArcheryTimelineEntry>: ArcheryWidgetProvider {
-    
+open class ArcheryWidgetTimelineProvider<Entry: ArcheryTimelineEntry>: ArcheryWidgetProviderProtocol {
+
     public let container: EnvContainer
-    private let dataLoader: WidgetDataLoader
     private let cacheManager: WidgetCacheManager
-    
+
     public init(container: EnvContainer = .shared) {
         self.container = container
-        self.dataLoader = WidgetDataLoader(store: WidgetStore(container: container))
         self.cacheManager = WidgetCacheManager()
     }
-    
+
     // MARK: - Timeline Creation
-    
-    public func createEntry(for configuration: Intent?, at date: Date) async -> Entry {
+
+    open func createEntry(for configuration: WidgetConfigurationIntent?, at date: Date) async -> Entry {
         // This is implemented by subclasses
         fatalError("Subclasses must implement createEntry(for:at:)")
     }
-    
-    public func createPlaceholderEntry(in context: Context) -> Entry {
+
+    open func createPlaceholderEntry(in context: TimelineProviderContext) -> Entry {
         // Create a basic placeholder
         fatalError("Subclasses must implement createPlaceholderEntry(in:)")
     }
-    
+
     // MARK: - Advanced Timeline Management
-    
+
     /// Create a smart timeline that adapts based on user behavior
     public func createAdaptiveTimeline(
-        for configuration: Intent?,
+        for configuration: WidgetConfigurationIntent?,
         starting date: Date,
-        in context: Context
+        in context: TimelineProviderContext
     ) async -> Timeline<Entry> {
-        
+
         let userPatterns = await getUserUsagePatterns()
         let entries = await createAdaptiveEntries(
             for: configuration,
@@ -50,52 +48,52 @@ public final class ArcheryWidgetTimelineProvider<Entry: ArcheryTimelineEntry>: A
             patterns: userPatterns,
             context: context
         )
-        
+
         let nextUpdate = calculateOptimalUpdateTime(
             from: date,
             patterns: userPatterns,
             context: context
         )
-        
+
         return Timeline(entries: entries, policy: .after(nextUpdate))
     }
-    
+
     private func createAdaptiveEntries(
-        for configuration: Intent?,
+        for configuration: WidgetConfigurationIntent?,
         starting date: Date,
         patterns: UserUsagePatterns,
-        context: Context
+        context: TimelineProviderContext
     ) async -> [Entry] {
-        
+
         var entries: [Entry] = []
         let calendar = Calendar.current
-        
+
         // Current entry
         let currentEntry = await createEntry(for: configuration, at: date)
         entries.append(currentEntry)
-        
+
         // Create entries based on usage patterns
         let intervals = calculateUpdateIntervals(patterns: patterns, context: context)
-        
+
         for interval in intervals {
             guard let entryDate = calendar.date(byAdding: .minute, value: interval, to: date) else {
                 continue
             }
-            
+
             let entry = await createEntry(for: configuration, at: entryDate)
             entries.append(entry)
         }
-        
+
         return entries
     }
-    
+
     private func calculateUpdateIntervals(
         patterns: UserUsagePatterns,
-        context: Context
+        context: TimelineProviderContext
     ) -> [Int] {
-        
+
         let currentHour = Calendar.current.component(.hour, from: Date())
-        
+
         // More frequent updates during active hours
         if patterns.activeHours.contains(currentHour) {
             return [5, 15, 30, 60] // Every 5, 15, 30 min, 1 hour
@@ -103,11 +101,11 @@ public final class ArcheryWidgetTimelineProvider<Entry: ArcheryTimelineEntry>: A
             return [30, 60, 120, 240] // Every 30 min, 1, 2, 4 hours
         }
     }
-    
+
     private func calculateOptimalUpdateTime(
         from date: Date,
         patterns: UserUsagePatterns,
-        context: Context
+        context: TimelineProviderContext
     ) -> Date {
         
         let calendar = Calendar.current
@@ -156,11 +154,11 @@ public struct UserUsagePatterns {
 // MARK: - Widget Cache Manager
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public final class WidgetCacheManager {
-    
+public final class WidgetCacheManager: @unchecked Sendable {
+
     private let userDefaults: UserDefaults
     private let cacheTimeout: TimeInterval = 15 * 60 // 15 minutes
-    
+
     public init(suiteName: String = "group.archery.widgets") {
         self.userDefaults = UserDefaults(suiteName: suiteName) ?? .standard
     }
@@ -250,10 +248,10 @@ public final class WidgetContentManager<T: Codable> {
     
     /// Load content according to strategy
     public func loadContent(
-        fresh: () async throws -> T,
+        fresh: @escaping @Sendable () async throws -> T,
         placeholder: () -> T
     ) async -> T {
-        
+
         switch strategy {
         case .realTime:
             do {
@@ -261,12 +259,12 @@ public final class WidgetContentManager<T: Codable> {
             } catch {
                 return placeholder()
             }
-            
+
         case .cached:
             if let cached = cacheManager.retrieve(T.self, forKey: cacheKey) {
                 return cached
             }
-            
+
             do {
                 let data = try await fresh()
                 cacheManager.cache(data, forKey: cacheKey)
@@ -274,19 +272,21 @@ public final class WidgetContentManager<T: Codable> {
             } catch {
                 return placeholder()
             }
-            
+
         case .hybrid:
             // Return cached data immediately if available
             if let cached = cacheManager.retrieve(T.self, forKey: cacheKey) {
-                // Refresh in background
+                // Refresh in background - capture what we need
+                let cache = cacheManager
+                let key = cacheKey
                 Task {
-                    if let fresh = try? await fresh() {
-                        cacheManager.cache(fresh, forKey: cacheKey)
+                    if let freshData = try? await fresh() {
+                        cache.cache(freshData, forKey: key)
                     }
                 }
                 return cached
             }
-            
+
             // No cache, fetch fresh
             do {
                 let data = try await fresh()
@@ -295,7 +295,7 @@ public final class WidgetContentManager<T: Codable> {
             } catch {
                 return placeholder()
             }
-            
+
         case .placeholder:
             return placeholder()
         }
@@ -305,16 +305,17 @@ public final class WidgetContentManager<T: Codable> {
 // MARK: - Widget Analytics
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
+@MainActor
 public final class WidgetAnalytics {
-    
+
     public static let shared = WidgetAnalytics()
-    
+
     private init() {}
-    
+
     /// Track widget view
     public func trackWidgetView(kind: String, family: WidgetFamily, hasData: Bool) {
         let familyString = familyString(for: family)
-        
+
         AnalyticsManager.shared.trackEvent(
             "widget_viewed",
             properties: [
@@ -325,31 +326,31 @@ public final class WidgetAnalytics {
             ]
         )
     }
-    
+
     /// Track widget interaction
     public func trackWidgetTap(kind: String, family: WidgetFamily, action: String? = nil) {
         let familyString = familyString(for: family)
-        
+
         var properties: [String: Any] = [
             "widget_kind": kind,
             "widget_family": familyString,
             "timestamp": Date().timeIntervalSince1970
         ]
-        
+
         if let action = action {
             properties["action"] = action
         }
-        
+
         AnalyticsManager.shared.trackEvent(
             "widget_tapped",
             properties: properties
         )
     }
-    
+
     /// Track widget configuration
     public func trackWidgetConfigured(kind: String, family: WidgetFamily) {
         let familyString = familyString(for: family)
-        
+
         AnalyticsManager.shared.trackEvent(
             "widget_configured",
             properties: [

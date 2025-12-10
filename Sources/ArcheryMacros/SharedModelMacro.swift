@@ -73,15 +73,37 @@ public struct SharedModelMacro: MemberMacro, ExtensionMacro {
         
         // Generate App Intent parameter conformance
         if config.supportsIntent {
+            // First generate the EntityQuery struct
+            let queryStruct = try ExtensionDeclSyntax(
+                """
+                extension \(structDecl.name) {
+                    public struct Query: EntityQuery {
+                        public init() {}
+
+                        public func entities(for identifiers: [String]) async throws -> [\(structDecl.name)] {
+                            // Override this in your implementation
+                            return []
+                        }
+
+                        public func suggestedEntities() async throws -> [\(structDecl.name)] {
+                            // Override this in your implementation
+                            return []
+                        }
+                    }
+                }
+                """
+            )
+            extensions.append(queryStruct)
+
             let intentExtension = try ExtensionDeclSyntax(
                 """
                 extension \(structDecl.name): AppEntity {
                     public static var typeDisplayRepresentation: TypeDisplayRepresentation {
                         TypeDisplayRepresentation(name: "\(structDecl.name)")
                     }
-                    
-                    public static var defaultQuery = \(structDecl.name)EntityQuery()
-                    
+
+                    public static var defaultQuery: Query { Query() }
+
                     public var displayRepresentation: DisplayRepresentation {
                         DisplayRepresentation(title: "\\(self.title ?? "Untitled")")
                     }

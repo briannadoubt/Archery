@@ -9,16 +9,16 @@ public struct AuthenticatedMacro: PeerMacro {
         providingPeersOf declaration: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
+        // PeerMacro at global scope can't introduce new names, so we only
+        // handle function expansion here. Class/struct members are handled
+        // by the MemberMacro conformance.
         let scope = extractScope(from: node)
-        
-        if let classDecl = declaration.as(ClassDeclSyntax.self) {
-            return try expandForClass(classDecl, scope: scope, in: context)
-        } else if let funcDecl = declaration.as(FunctionDeclSyntax.self) {
+
+        if let funcDecl = declaration.as(FunctionDeclSyntax.self) {
             return try expandForFunction(funcDecl, scope: scope, in: context)
-        } else if let structDecl = declaration.as(StructDeclSyntax.self) {
-            return try expandForStruct(structDecl, scope: scope, in: context)
         }
-        
+
+        // For classes and structs, return empty - MemberMacro handles them
         return []
     }
     
@@ -161,29 +161,30 @@ extension AuthenticatedMacro: MemberMacro {
     ) throws -> [DeclSyntax] {
         let scope = extractScope(from: node)
         let authRequirement: String
-        
+
         if let scope = scope {
             authRequirement = ".requiredWithScope(\"\(scope)\")"
         } else {
             authRequirement = ".required"
         }
-        
+
+        // Generate auth members for both classes and structs
+        let authRequirementDecl = """
+static let authRequirement: Archery.AuthRequirement = \(authRequirement)
+"""
+
+        let checkAuthDecl = """
+@MainActor
+func checkAuthentication(with manager: Archery.AuthenticationManager) throws {
+    guard Self.authRequirement.isSatisfied(by: manager.state) else {
+        throw Archery.AuthError.notAuthenticated
+    }
+}
+"""
+
         return [
-            DeclSyntax(stringLiteral: """
-            private let _authManager: AuthenticationManager?
-            
-            init(authManager: AuthenticationManager? = nil) {
-                self._authManager = authManager
-                super.init()
-                
-                if let authManager = authManager ?? ProcessInfo.processInfo.environment["AUTH_MANAGER"] as? AuthenticationManager {
-                    let requirement: AuthRequirement = \(authRequirement)
-                    if !requirement.isSatisfied(by: authManager.state) {
-                        fatalError("Authentication required with requirement: \\(requirement)")
-                    }
-                }
-            }
-            """)
+            DeclSyntax(stringLiteral: authRequirementDecl),
+            DeclSyntax(stringLiteral: checkAuthDecl)
         ]
     }
 }

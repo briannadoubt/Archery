@@ -190,6 +190,74 @@ public extension DeepLinkRouter {
     }
 }
 
+// MARK: - Entitlement-Gated Routes
+
+/// Protocol for routes that declare entitlement requirements.
+/// Implemented automatically by @Route macro when using @requires attributes.
+public protocol EntitlementGatedRoute: NavigationRoute {
+    /// Returns the entitlement requirement for a specific route case
+    static func entitlementRequirement(for route: Self) -> EntitlementRequirement
+
+    /// Returns whether the route should automatically present a paywall when blocked
+    static func shouldAutoPaywall(for route: Self) -> Bool
+}
+
+public extension EntitlementGatedRoute {
+    /// Default auto-paywall behavior: show paywall
+    static func shouldAutoPaywall(for route: Self) -> Bool { true }
+}
+
+public extension DeepLinkRouter where Route: EntitlementGatedRoute {
+    /// Resolve a deep link with automatic entitlement checking
+    /// - Parameters:
+    ///   - input: The deep link input to resolve
+    ///   - store: The StoreKitManager to check entitlements against
+    ///   - onBlocked: Called when a route is blocked due to missing entitlement. Provides the route, requirement, and whether to auto-show paywall.
+    /// - Returns: The resolved route match or an error
+    @MainActor
+    func resolve(
+        _ input: DeepLinkInput,
+        store: StoreKitManager,
+        onBlocked: ((Route, EntitlementRequirement, Bool) -> Void)? = nil
+    ) async -> Result<DeepLinkMatch<Route>, AppError> {
+        guard let match = route(from: input) else {
+            return .failure(AppError(title: "Route Not Found", message: "No handler matched the deep link."))
+        }
+
+        let requirement = Route.entitlementRequirement(for: match.route)
+        if requirement.isSatisfied(by: store.entitlements) {
+            return .success(match)
+        } else {
+            let autoPaywall = Route.shouldAutoPaywall(for: match.route)
+            onBlocked?(match.route, requirement, autoPaywall)
+            return .failure(AppError(
+                title: requirement.displayDescription,
+                message: "Upgrade to access this feature",
+                category: .validation
+            ))
+        }
+    }
+
+    /// Create a RouteGuard that checks entitlements for this route type
+    @MainActor
+    static func entitlementGuard(store: StoreKitManager) -> RouteGuard<Route> {
+        // Capture current entitlements to use in Sendable closure
+        let currentEntitlements = store.entitlements
+        return RouteGuard { route in
+            let requirement = Route.entitlementRequirement(for: route)
+            if requirement.isSatisfied(by: currentEntitlements) {
+                return .allowed
+            } else {
+                return .blocked(AppError(
+                    title: requirement.displayDescription,
+                    message: "Upgrade to access this feature",
+                    category: .validation
+                ))
+            }
+        }
+    }
+}
+
 // MARK: - Navigation Persistence
 
 public struct NavigationSnapshot: Codable, Equatable {

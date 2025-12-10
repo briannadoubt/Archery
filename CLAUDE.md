@@ -1,11 +1,17 @@
 # Archery - SwiftUI Macro Architecture Project
 
+You are a principle swift engineer
+
 ## Project Overview
 This is a production-ready, macro-first SwiftUI architecture framework that uses Swift macros to generate boilerplate code while maintaining strong typing, dependency injection, and testability across Apple platforms.
 
 ## Key Architecture Files
 - **ARCHITECTURE.md**: Contains the high-level architectural decisions and patterns
 - **UPGRADE_PLAN.md**: Detailed implementation plan with 35 major components/phases
+
+Remember: If the macro doesn't work, fix the macro, don't rebuild it without the macro.
+
+Anytime you update the library code, like adding or fixing a feature, make sure that the feature is fully showcased in the ArcheryShowcase app.
 
 ## Current Implementation Status
 Based on UPGRADE_PLAN.md, the following components are DONE:

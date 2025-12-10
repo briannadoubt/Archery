@@ -26,10 +26,16 @@ public struct CompatibilityShims {
                     content
                 }
             } else {
+                #if os(iOS) || os(tvOS)
                 NavigationView {
                     content
                 }
                 .navigationViewStyle(.stack)
+                #else
+                NavigationView {
+                    content
+                }
+                #endif
             }
         }
     }
@@ -108,15 +114,15 @@ public struct CompatibilityShims {
     // MARK: - Sheet Presentation Compatibility
     
     /// Sheet presentation detents compatibility
-    public struct SheetCompat<Content: View>: ViewModifier {
+    public struct SheetCompat<SheetContent: View>: ViewModifier {
         @Binding var isPresented: Bool
         let detents: [SheetDetent]
-        let content: Content
+        let content: SheetContent
         
         public init(
             isPresented: Binding<Bool>,
             detents: [SheetDetent] = [.large],
-            @ViewBuilder content: () -> Content
+            @ViewBuilder content: () -> SheetContent
         ) {
             self._isPresented = isPresented
             self.detents = detents
@@ -124,13 +130,11 @@ public struct CompatibilityShims {
         }
         
         public func body(content: Content) -> some View {
-            if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
-                content.sheet(isPresented: $isPresented) {
+            content.sheet(isPresented: $isPresented) {
+                if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
                     self.content
                         .presentationDetents(Set(detents.map { $0.modernDetent }))
-                }
-            } else {
-                content.sheet(isPresented: $isPresented) {
+                } else {
                     self.content
                 }
             }
@@ -236,8 +240,9 @@ public struct CompatibilityShims {
         }
         
         public var body: some View {
+            #if os(iOS) || os(macOS) || os(watchOS)
             if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
-                Gauge(value: value, in: range) {
+                SwiftUI.Gauge(value: value, in: range) {
                     Text(label)
                 }
             } else {
@@ -249,17 +254,26 @@ public struct CompatibilityShims {
                     ProgressView(value: value, total: range.upperBound)
                 }
             }
+            #else
+            // Fallback for tvOS and other platforms
+            VStack(alignment: .leading) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                ProgressView(value: value, total: range.upperBound)
+            }
+            #endif
         }
     }
     
     // MARK: - Table Compatibility
-    
+
     /// Table view compatibility for macOS
     #if os(macOS)
-    public struct TableCompat<Data, Content>: View where Data: RandomAccessCollection, Content: View {
+    public struct TableCompat<Data, Content>: View where Data: RandomAccessCollection, Data.Element: Identifiable, Content: View {
         let data: Data
         let content: (Data.Element) -> Content
-        
+
         public init(
             _ data: Data,
             @ViewBuilder content: @escaping (Data.Element) -> Content
@@ -267,18 +281,10 @@ public struct CompatibilityShims {
             self.data = data
             self.content = content
         }
-        
+
         public var body: some View {
-            if #available(macOS 12.0, *) {
-                Table(data) { item in
-                    TableRow(item) {
-                        content(item)
-                    }
-                }
-            } else {
-                List(data, id: \.self) { item in
-                    content(item)
-                }
+            List(data) { item in
+                content(item)
             }
         }
     }
@@ -302,7 +308,7 @@ public struct CompatibilityShims {
         
         public var body: some View {
             if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
-                ShareLink(item: item) {
+                ShareLink(items: [item]) {
                     label
                 }
             } else {
@@ -482,7 +488,7 @@ public extension View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
-                    TextField(prompt ?? "Search", text: text)
+                    SwiftUI.TextField(prompt ?? "Search", text: text)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                 }
                 .padding()
@@ -533,9 +539,15 @@ public extension View {
                 actions: actions
             )
         } else {
+            #if os(iOS) || os(tvOS)
             return self.actionSheet(isPresented: isPresented) {
                 ActionSheet(title: Text(title))
             }
+            #else
+            return self.alert(isPresented: isPresented) {
+                Alert(title: Text(title))
+            }
+            #endif
         }
     }
 }

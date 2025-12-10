@@ -16,7 +16,7 @@ public struct PerformanceBudget {
     // MARK: - Validation
     
     /// Validate benchmark results against budget
-    public func validate(_ result: BenchmarkResult) -> ValidationResult {
+    public func validate(_ result: BenchmarkResult) -> BudgetValidationResult {
         var violations: [BudgetViolation] = []
         var warnings: [BudgetWarning] = []
         
@@ -43,7 +43,7 @@ public struct PerformanceBudget {
             }
         }
         
-        return ValidationResult(
+        return BudgetValidationResult(
             benchmark: result.name,
             violations: violations,
             warnings: warnings
@@ -52,7 +52,7 @@ public struct PerformanceBudget {
     
     /// Validate suite results against budget
     public func validate(_ suite: BenchmarkSuiteResult) -> SuiteValidationResult {
-        var results: [ValidationResult] = []
+        var results: [BudgetValidationResult] = []
         
         for result in suite.results {
             results.append(validate(result))
@@ -195,15 +195,15 @@ public struct RegressionConstraint: PerformanceConstraint {
 
 // MARK: - Validation Results
 
-public struct ValidationResult {
+public struct BudgetValidationResult {
     public let benchmark: String
     public let violations: [BudgetViolation]
     public let warnings: [BudgetWarning]
-    
+
     public var passed: Bool {
         violations.isEmpty
     }
-    
+
     public var summary: String {
         if passed {
             if warnings.isEmpty {
@@ -215,18 +215,18 @@ public struct ValidationResult {
             return "❌ \(benchmark): \(violations.count) budget violation(s)"
         }
     }
-    
+
     public var details: String {
         var lines: [String] = [summary]
-        
+
         for violation in violations {
             lines.append("  ❌ \(violation.constraint): \(violation.message)")
         }
-        
+
         for warning in warnings {
             lines.append("  ⚠️ \(warning.constraint): \(warning.message)")
         }
-        
+
         return lines.joined(separator: "\n")
     }
 }
@@ -248,7 +248,7 @@ public struct BudgetWarning {
 public struct SuiteValidationResult {
     public let suite: String
     public let timestamp: Date
-    public let results: [ValidationResult]
+    public let results: [BudgetValidationResult]
     
     public var passed: Bool {
         results.allSatisfy { $0.passed }
@@ -319,9 +319,9 @@ public struct ConstraintBuilder {
 // MARK: - Default Budgets
 
 public struct DefaultBudgets {
-    
+
     /// Budget for app startup
-    public static let startup = PerformanceBudget(name: "App Startup") {
+    nonisolated(unsafe) public static let startup = PerformanceBudget(name: "App Startup") {
         MaximumTimeConstraint(
             name: "Cold Start",
             threshold: 0.3, // 300ms
@@ -335,7 +335,7 @@ public struct DefaultBudgets {
     }
     
     /// Budget for view rendering
-    public static let viewRendering = PerformanceBudget(name: "View Rendering") {
+    nonisolated(unsafe) public static let viewRendering = PerformanceBudget(name: "View Rendering") {
         MaximumTimeConstraint(
             name: "Frame Time",
             threshold: 0.016, // 16ms for 60fps
@@ -350,7 +350,7 @@ public struct DefaultBudgets {
     }
     
     /// Budget for data operations
-    public static let dataOperations = PerformanceBudget(name: "Data Operations") {
+    nonisolated(unsafe) public static let dataOperations = PerformanceBudget(name: "Data Operations") {
         MaximumTimeConstraint(
             name: "Fetch Time",
             threshold: 0.1, // 100ms
@@ -370,7 +370,7 @@ public struct DefaultBudgets {
     }
     
     /// Budget for network operations
-    public static let networkOperations = PerformanceBudget(name: "Network Operations") {
+    nonisolated(unsafe) public static let networkOperations = PerformanceBudget(name: "Network Operations") {
         MaximumTimeConstraint(
             name: "API Response",
             threshold: 1.0, // 1 second

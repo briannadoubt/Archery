@@ -4,7 +4,7 @@ import os.log
 
 // MARK: - Performance Tracing
 
-public final class PerformanceTracer {
+public final class PerformanceTracer: @unchecked Sendable {
     public static let shared = PerformanceTracer()
     
     private let signposter = OSSignposter()
@@ -35,7 +35,7 @@ public final class PerformanceTracer {
         guard isEnabled else { return nil }
         
         let state = signposter.beginInterval(name, id: id, "\(metadata ?? [:])")
-        activeIntervals[String(name)] = state
+        activeIntervals[String(describing: name)] = state
         return state
     }
     
@@ -45,9 +45,9 @@ public final class PerformanceTracer {
     ) {
         guard isEnabled else { return }
         
-        if let state = state ?? activeIntervals[String(name)] {
+        if let state = state ?? activeIntervals[String(describing: name)] {
             signposter.endInterval(name, state)
-            activeIntervals[String(name)] = nil
+            activeIntervals[String(describing: name)] = nil
         }
     }
     
@@ -172,7 +172,7 @@ public final class TraceContext {
     }
 }
 
-public struct TraceExport: Codable {
+public struct TraceExport: Codable, Sendable {
     public let traceId: String
     public let spanId: String
     public let parentSpanId: String?
@@ -181,7 +181,7 @@ public struct TraceExport: Codable {
     public let markers: [MarkerExport]
     public let metadata: [String: String]
     
-    public struct MarkerExport: Codable {
+    public struct MarkerExport: Codable, Sendable {
         public let name: String
         public let timestamp: CFAbsoluteTime
         public let metadata: [String: String]
@@ -214,7 +214,7 @@ public struct TraceExport: Codable {
 
 // MARK: - Trace Aggregator
 
-public final class TraceAggregator {
+public final class TraceAggregator: @unchecked Sendable {
     private var traces: [TraceExport] = []
     private let maxTraces: Int
     private let queue = DispatchQueue(label: "com.archery.traces", attributes: .concurrent)
@@ -224,7 +224,8 @@ public final class TraceAggregator {
     }
     
     public func record(_ trace: TraceExport) {
-        queue.async(flags: .barrier) {
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self else { return }
             self.traces.append(trace)
             if self.traces.count > self.maxTraces {
                 self.traces.removeFirst(self.traces.count - self.maxTraces)
@@ -237,8 +238,8 @@ public final class TraceAggregator {
     }
     
     public func clear() {
-        queue.async(flags: .barrier) {
-            self.traces.removeAll()
+        queue.async(flags: .barrier) { [weak self] in
+            self?.traces.removeAll()
         }
     }
     

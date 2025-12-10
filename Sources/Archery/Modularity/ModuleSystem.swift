@@ -27,7 +27,7 @@ public protocol ModuleContract {
 }
 
 /// Module dependency specification
-public struct ModuleDependency: Hashable, Codable {
+public struct ModuleDependency: Hashable, Codable, Sendable {
     public let identifier: String
     public let version: VersionRequirement
     public let isOptional: Bool
@@ -44,7 +44,7 @@ public struct ModuleDependency: Hashable, Codable {
 }
 
 /// Version requirement for dependencies
-public enum VersionRequirement: Hashable, Codable {
+public enum VersionRequirement: Hashable, Codable, Sendable {
     case any
     case exact(String)
     case minimum(String)
@@ -72,7 +72,7 @@ public enum VersionRequirement: Hashable, Codable {
 }
 
 /// Module version with semantic versioning
-public struct ModuleVersion: Comparable, Hashable, Codable, CustomStringConvertible {
+public struct ModuleVersion: Comparable, Hashable, Codable, CustomStringConvertible, Sendable {
     public let major: Int
     public let minor: Int
     public let patch: Int
@@ -145,7 +145,7 @@ public struct ModuleVersion: Comparable, Hashable, Codable, CustomStringConverti
 }
 
 /// Module configuration
-public struct ModuleConfiguration: Codable {
+public struct ModuleConfiguration: Codable, Sendable {
     public let name: String
     public let bundleIdentifier: String
     public let platforms: [Platform]
@@ -193,7 +193,7 @@ public struct Platform: Codable, Hashable, Sendable {
 }
 
 /// Build flags for conditional compilation
-public struct BuildFlags: Codable {
+public struct BuildFlags: Codable, @unchecked Sendable {
     public var debug: [String: Any]
     public var release: [String: Any]
     public var custom: [String: [String: Any]]
@@ -245,7 +245,7 @@ public struct BuildFlags: Codable {
 }
 
 /// Resource bundle specification
-public struct ResourceBundle: Codable {
+public struct ResourceBundle: Codable, Sendable {
     public let name: String
     public let path: String
     public let resources: [String]

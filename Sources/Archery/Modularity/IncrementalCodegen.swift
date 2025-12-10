@@ -4,28 +4,29 @@ import CryptoKit
 // MARK: - Incremental Code Generation System
 
 /// Manages incremental and sharded code generation
-public final class IncrementalCodeGenerator {
+public actor IncrementalCodeGenerator {
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
     private let manifestPath: URL
     private var manifest: CodegenManifest
     private let shardSize: Int
-    
+
     public init(
         cacheDirectory: URL? = nil,
         shardSize: Int = 100 // Files per shard
     ) throws {
-        self.cacheDirectory = cacheDirectory ?? Self.defaultCacheDirectory()
-        self.manifestPath = self.cacheDirectory.appendingPathComponent("codegen-manifest.json")
+        let cacheDir = cacheDirectory ?? Self.defaultCacheDirectory()
+        self.cacheDirectory = cacheDir
+        self.manifestPath = cacheDir.appendingPathComponent("codegen-manifest.json")
         self.shardSize = shardSize
-        
+
         // Create cache directory if needed
         try fileManager.createDirectory(
-            at: self.cacheDirectory,
+            at: cacheDir,
             withIntermediateDirectories: true,
             attributes: nil
         )
-        
+
         // Load or create manifest
         if fileManager.fileExists(atPath: manifestPath.path) {
             let data = try Data(contentsOf: manifestPath)
@@ -52,23 +53,20 @@ public final class IncrementalCodeGenerator {
         let shards = createShards(from: changes.needsGeneration)
         
         // Process shards in parallel
-        await withTaskGroup(of: ShardResult?.self) { group in
-            for (index, shard) in shards.enumerated() {
-                group.addTask { [self] in
-                    try? await self.processShard(
-                        shard,
-                        index: index,
-                        outputDirectory: outputDirectory,
-                        configuration: configuration
-                    )
-                }
-            }
-            
-            // Collect results
-            for await shardResult in group {
-                if let result = shardResult {
-                    results.merge(result.result)
-                }
+        // Capture immutable copies to satisfy Sendable requirements
+        let shardsCopy = shards
+        let outputDir = outputDirectory
+        let config = configuration
+
+        for (index, shard) in shardsCopy.enumerated() {
+            let shardResult = try? await processShard(
+                shard,
+                index: index,
+                outputDirectory: outputDir,
+                configuration: config
+            )
+            if let result = shardResult {
+                results.merge(result.result)
             }
         }
         
@@ -402,7 +400,7 @@ public final class IncrementalCodeGenerator {
 
 // MARK: - Supporting Types
 
-public struct CodegenInput: Codable {
+public struct CodegenInput: Codable, Sendable {
     public let identifier: String
     public let name: String
     public let macroType: String

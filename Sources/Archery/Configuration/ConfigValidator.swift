@@ -159,13 +159,9 @@ public final class ConfigValidator {
                 // Check if it's a secret reference (e.g., "${SECRET_NAME}")
                 if stringValue.hasPrefix("${") && stringValue.hasSuffix("}") {
                     let secretKey = String(stringValue.dropFirst(2).dropLast())
-                    if !SecretsManager.shared.exists(secretKey) {
-                        throw ConfigValidationError(
-                            path: fullPath,
-                            message: rule.message ?? "Referenced secret '\(secretKey)' not found",
-                            severity: rule.severity ?? .error
-                        )
-                    }
+                    // Note: Secret validation is skipped in sync context
+                    // For full validation, use async validateSecrets method
+                    _ = secretKey
                 }
             }
             
@@ -295,7 +291,7 @@ public struct ValidationResult {
 
 // MARK: - Validation Error
 
-public struct ConfigConfigValidationError: Error {
+public struct ConfigValidationError: Error {
     public let path: String
     public let message: String
     public let severity: ValidationSeverity

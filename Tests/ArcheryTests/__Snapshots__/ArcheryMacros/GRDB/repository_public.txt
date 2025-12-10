@@ -1,0 +1,122 @@
+public class PlayerStore {
+}
+
+public protocol PlayerStoreProtocol: Sendable {
+    // CRUD operations
+    func fetchAll() async throws -> [Player]
+    func fetch(id: Player.ID) async throws -> Player?
+    func insert(_ record: Player) async throws -> Player
+    func update(_ record: Player) async throws
+    func upsert(_ record: Player) async throws -> Player
+    func delete(id: Player.ID) async throws -> Bool
+    func deleteAll() async throws -> Int
+    func count() async throws -> Int
+}
+
+public final class PlayerStoreLive: PlayerStoreProtocol, @unchecked Sendable {
+    private let db: any GRDB.DatabaseWriter
+    private let base: PlayerStore
+
+    public init(db: any GRDB.DatabaseWriter) {
+        self.db = db
+        self.base = PlayerStore()
+    }
+
+    public init(container: EnvContainer) {
+        guard let grdb = container.grdb else {
+            fatalError("GRDBContainer not registered in EnvContainer")
+        }
+        self.db = grdb.writer
+        self.base = PlayerStore()
+    }
+
+    // CRUD operations
+
+    public func fetchAll() async throws -> [Player] {
+        try await db.read { db in try Player.fetchAll(db) }
+    }
+
+    public func fetch(id: Player.ID) async throws -> Player? {
+        try await db.read { db in try Player.fetchOne(db, id: id) }
+    }
+
+    public func insert(_ record: Player) async throws -> Player {
+        try await db.write { db in
+            var record = record
+            try record.insert(db)
+            return record
+        }
+    }
+
+    public func update(_ record: Player) async throws {
+        try await db.write { db in try record.update(db) }
+    }
+
+    public func upsert(_ record: Player) async throws -> Player {
+        try await db.write { db in
+            var record = record
+            try record.save(db)
+            return record
+        }
+    }
+
+    public func delete(id: Player.ID) async throws -> Bool {
+        try await db.write { db in try Player.deleteOne(db, id: id) }
+    }
+
+    public func deleteAll() async throws -> Int {
+        try await db.write { db in try Player.deleteAll(db) }
+    }
+
+    public func count() async throws -> Int {
+        try await db.read { db in try Player.fetchCount(db) }
+    }
+}
+
+public final class MockPlayerStore: PlayerStoreProtocol, @unchecked Sendable {
+    // CRUD handlers
+    public var fetchAllHandler: () async throws -> [Player] = { [] }
+    public var fetchHandler: (Player.ID) async throws -> Player? = { _ in nil }
+    public var insertHandler: (Player) async throws -> Player = { $0 }
+    public var updateHandler: (Player) async throws -> Void = { _ in }
+    public var upsertHandler: (Player) async throws -> Player = { $0 }
+    public var deleteHandler: (Player.ID) async throws -> Bool = { _ in true }
+    public var deleteAllHandler: () async throws -> Int = { 0 }
+    public var countHandler: () async throws -> Int = { 0 }
+
+    public init() {}
+
+    // CRUD operations
+
+    public func fetchAll() async throws -> [Player] {
+        try await fetchAllHandler()
+    }
+
+    public func fetch(id: Player.ID) async throws -> Player? {
+        try await fetchHandler(id)
+    }
+
+    public func insert(_ record: Player) async throws -> Player {
+        try await insertHandler(record)
+    }
+
+    public func update(_ record: Player) async throws {
+        try await updateHandler(record)
+    }
+
+    public func upsert(_ record: Player) async throws -> Player {
+        try await upsertHandler(record)
+    }
+
+    public func delete(id: Player.ID) async throws -> Bool {
+        try await deleteHandler(id)
+    }
+
+    public func deleteAll() async throws -> Int {
+        try await deleteAllHandler()
+    }
+
+    public func count() async throws -> Int {
+        try await countHandler()
+    }
+}

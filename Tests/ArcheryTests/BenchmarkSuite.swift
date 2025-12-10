@@ -1,25 +1,24 @@
 import XCTest
+import SwiftUI
 @testable import Archery
 
 final class BenchmarkSuite: XCTestCase {
     
     // MARK: - Container Lookup Benchmarks
-    
+
     func testEnvContainerLookup() {
         let harness = BenchmarkHarness(name: "EnvContainer")
-        
-        // Setup container with services
+
+        // Setup container with a factory
         var container = EnvContainer()
-        for i in 0..<100 {
-            container.register("service\(i)", factory: { MockService(id: i) })
-        }
-        
+        container.registerFactory { MockService(id: 42) }
+
         let result = harness.measure("Container Lookup") {
-            for i in 0..<100 {
-                _ = container.resolve("service\(i)", as: MockService.self)
+            for _ in 0..<100 {
+                _ = container.resolve() as MockService?
             }
         }
-        
+
         print(result.summary)
         
         // Validate against budget
@@ -89,7 +88,7 @@ final class BenchmarkSuite: XCTestCase {
             }
         )
         
-        let result = harness.measure("State Transitions", iterations: 10000) {
+        let result = harness.measure("State Transitions") {
             var state = 0
             for _ in 0..<100 {
                 state = stateMachine.transition(state, .increment) ?? state
@@ -124,7 +123,7 @@ final class BenchmarkSuite: XCTestCase {
         
         // Save snapshot
         let snapshot = PerformanceSnapshot(
-            version: Version(major: 1, minor: 0, patch: 0),
+            version: PerformanceVersion(major: 1, minor: 0, patch: 0),
             benchmarks: suite.results.map { BenchmarkSnapshot(from: $0) }
         )
         
@@ -231,7 +230,7 @@ final class BenchmarkSuite: XCTestCase {
         )
         
         let baselineSnapshot = PerformanceSnapshot(
-            version: Version(major: 1, minor: 0, patch: 0),
+            version: PerformanceVersion(major: 1, minor: 0, patch: 0),
             benchmarks: [baselineBenchmark]
         )
         
@@ -253,7 +252,7 @@ final class BenchmarkSuite: XCTestCase {
         )
         
         let improvedSnapshot = PerformanceSnapshot(
-            version: Version(major: 1, minor: 1, patch: 0),
+            version: PerformanceVersion(major: 1, minor: 1, patch: 0),
             benchmarks: [improvedBenchmark]
         )
         

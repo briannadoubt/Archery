@@ -232,14 +232,14 @@ final class ObservabilityTests: XCTestCase {
     
     func testBreadcrumbRecorderMaxLimit() async {
         let recorder = BreadcrumbRecorder(maxBreadcrumbs: 5)
-        
+
         for i in 0..<10 {
             await recorder.record(
-                category: .debug,
+                category: Breadcrumb.Category.debug,
                 message: "Message \(i)"
             )
         }
-        
+
         let breadcrumbs = await recorder.getBreadcrumbs()
         XCTAssertEqual(breadcrumbs.count, 5)
         XCTAssertEqual(breadcrumbs[0].message, "Message 5")
@@ -348,28 +348,28 @@ final class ObservabilityTests: XCTestCase {
     // MARK: - Cardinality Tests
     
     func testCardinalityGuard() async {
-        let guard = CardinalityGuard(maxCardinality: 3)
-        
-        let result1 = await guard.checkCardinality(
+        let cardinalityGuard = CardinalityGuard(maxCardinality: 3)
+
+        let result1 = await cardinalityGuard.checkCardinality(
             metricName: "test.metric",
             attributes: ["key": "value1"]
         )
         XCTAssertEqual(result1, .accepted)
-        
-        let result2 = await guard.checkCardinality(
+
+        let result2 = await cardinalityGuard.checkCardinality(
             metricName: "test.metric",
             attributes: ["key": "value2"]
         )
         XCTAssertEqual(result2, .accepted)
-        
-        let result3 = await guard.checkCardinality(
+
+        let result3 = await cardinalityGuard.checkCardinality(
             metricName: "test.metric",
             attributes: ["key": "value3"]
         )
         XCTAssertEqual(result3, .accepted)
-        
+
         // Fourth unique combination should be rejected
-        let result4 = await guard.checkCardinality(
+        let result4 = await cardinalityGuard.checkCardinality(
             metricName: "test.metric",
             attributes: ["key": "value4"]
         )
@@ -378,15 +378,15 @@ final class ObservabilityTests: XCTestCase {
         } else {
             XCTFail("Expected rejection")
         }
-        
+
         // Existing combination should be accepted
-        let result5 = await guard.checkCardinality(
+        let result5 = await cardinalityGuard.checkCardinality(
             metricName: "test.metric",
             attributes: ["key": "value1"]
         )
         XCTAssertEqual(result5, .accepted)
-        
-        let cardinality = await guard.getCardinality(for: "test.metric")
+
+        let cardinality = await cardinalityGuard.getCardinality(for: "test.metric")
         XCTAssertEqual(cardinality, 3)
     }
     
@@ -396,13 +396,13 @@ final class ObservabilityTests: XCTestCase {
             maxDimensionValues: ["status": 5]
         )
         
-        let attributes: [String: Any] = [
+        let attributes: [String: String] = [
             "endpoint": "/users",
             "status": "200",
             "forbidden": "value",
             "user_id": "12345"
         ]
-        
+
         let limited = limiter.limitAttributes(attributes)
         
         XCTAssertEqual(limited.count, 2)
@@ -414,16 +414,16 @@ final class ObservabilityTests: XCTestCase {
     
     func testDimensionReducer() {
         let reducer = DimensionReducer(strategy: .keepSpecific(["important", "critical"]))
-        
-        let attributes: [String: Any] = [
+
+        let attributes: [String: String] = [
             "important": "value1",
             "unimportant": "value2",
             "critical": "value3",
             "optional": "value4"
         ]
-        
+
         let reduced = reducer.reduce(attributes)
-        
+
         XCTAssertEqual(reduced.count, 2)
         XCTAssertNotNil(reduced["important"])
         XCTAssertNotNil(reduced["critical"])

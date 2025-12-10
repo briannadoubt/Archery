@@ -4,7 +4,7 @@ import StoreKit
 // MARK: - Sandbox Testing Support
 
 /// Manages sandbox testing and TestFlight preview features
-public struct SandboxTestingManager {
+public struct SandboxTestingManager: Sendable {
     public static let shared = SandboxTestingManager()
     
     private init() {}
@@ -47,11 +47,11 @@ public struct SandboxTestingManager {
     public func configureForTesting() {
         if isSandbox {
             // Enable StoreKit testing features
-            SKPaymentQueue.default().delegate = TestTransactionObserver.shared
-            
+            SKPaymentQueue.default().add(TestTransactionObserver.shared)
+
             // Log sandbox mode
             print("🧪 StoreKit: Running in Sandbox Mode")
-            
+
             // Configure test products if needed
             if isXcodeBuild {
                 configureLocalTestProducts()
@@ -146,8 +146,8 @@ public struct SandboxTestingManager {
 
 // MARK: - Test Transaction Observer
 
-class TestTransactionObserver: NSObject, SKPaymentTransactionObserver {
-    static let shared = TestTransactionObserver()
+class TestTransactionObserver: NSObject, SKPaymentTransactionObserver, @unchecked Sendable {
+    nonisolated(unsafe) static let shared = TestTransactionObserver()
     
     private override init() {
         super.init()
@@ -192,7 +192,7 @@ public struct PreviewSeeds {
     
     // MARK: - Products
     
-    public static let products: [MockProduct] = [
+    nonisolated(unsafe) public static let products: [MockProduct] = [
         MockProduct(
             id: "com.app.premium.monthly",
             displayName: "Premium Monthly",
@@ -226,7 +226,7 @@ public struct PreviewSeeds {
     
     // MARK: - Subscription States
     
-    public static let subscriptionStates: [MockSubscriptionState] = [
+    nonisolated(unsafe) public static let subscriptionStates: [MockSubscriptionState] = [
         MockSubscriptionState(
             status: .active,
             productId: "com.app.premium.monthly",
@@ -259,7 +259,7 @@ public struct PreviewSeeds {
     
     // MARK: - Entitlements
     
-    public static let entitlementSets: [Set<Entitlement>] = [
+    nonisolated(unsafe) public static let entitlementSets: [Set<Entitlement>] = [
         [], // No entitlements
         [.basic], // Basic only
         [.premium, .removeAds], // Premium user
@@ -269,20 +269,20 @@ public struct PreviewSeeds {
 
 // MARK: - Mock Types for Previews
 
-public struct MockProduct {
+public struct MockProduct: Sendable {
     public let id: String
     public let displayName: String
     public let description: String?
     public let price: Decimal
     public let type: ProductType
     public let badge: String?
-    
-    public enum ProductType {
+
+    public enum ProductType: Sendable {
         case consumable
         case nonConsumable
         case subscription(Period)
-        
-        public enum Period {
+
+        public enum Period: Sendable {
             case weekly
             case monthly
             case yearly
@@ -313,14 +313,14 @@ public struct MockProduct {
     }
 }
 
-public struct MockSubscriptionState {
+public struct MockSubscriptionState: Sendable {
     public let status: Status
     public let productId: String
     public let expirationDate: Date?
     public let isInTrialPeriod: Bool
     public let willRenew: Bool
-    
-    public enum Status {
+
+    public enum Status: Sendable {
         case none
         case active
         case expired

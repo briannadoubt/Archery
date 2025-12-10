@@ -186,7 +186,9 @@ struct TraceDetailView: View {
             .padding()
         }
         .navigationTitle(trace.rootSpan.name)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
 
@@ -476,9 +478,11 @@ struct MetricDetailView: View {
             .padding()
         }
         .navigationTitle(metricName)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
-    
+
     private func average(_ points: [MetricDataPoint]) -> Double {
         guard !points.isEmpty else { return 0 }
         return points.map(\.value).reduce(0, +) / Double(points.count)
@@ -714,7 +718,11 @@ struct FilterChip: View {
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.blue : Color(UIColor.secondarySystemBackground))
+                #if os(iOS)
+                .background(isSelected ? Color.blue : Color(uiColor: .secondarySystemBackground))
+                #else
+                .background(isSelected ? Color.blue : Color(nsColor: .controlBackgroundColor))
+                #endif
                 .foregroundColor(isSelected ? .white : .primary)
                 .cornerRadius(15)
         }

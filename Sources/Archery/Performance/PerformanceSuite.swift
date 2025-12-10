@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(XCTest)
 import XCTest
+#endif
 import os.signpost
 import SwiftUI
 
@@ -20,7 +22,7 @@ public final class PerformanceSuiteRunner {
         public let outputDirectory: URL
         public let baselineURL: URL?
         
-        public static let `default` = Configuration(
+        nonisolated(unsafe) public static let `default` = Configuration(
             iterations: 10,
             warmupIterations: 2,
             enableSignposts: true,
@@ -81,7 +83,7 @@ public final class PerformanceSuiteRunner {
         let state = signposter.beginInterval("PerformanceSuite", id: signpostID, "suite: \(suite.name)")
         defer { signposter.endInterval("PerformanceSuite", state) }
         
-        var measurements: [Measurement] = []
+        var measurements: [SuiteResult.Measurement] = []
         
         // Warmup
         for _ in 0..<configuration.warmupIterations {
@@ -92,17 +94,17 @@ public final class PerformanceSuiteRunner {
         for iteration in 0..<configuration.iterations {
             signposter.emitEvent("Iteration", id: signpostID, "iteration: \(iteration)")
             
-            let memoryBefore = MemoryWarningManager.shared.memoryUsage
-            let renderStatsBefore = ViewDiffTracker.shared.renderStats
-            
+            let memoryBefore = await MemoryWarningManager.shared.memoryUsage
+            let renderStatsBefore = await ViewDiffTracker.shared.renderStats
+
             let start = CFAbsoluteTimeGetCurrent()
             let metrics = try await suite.run()
             let duration = CFAbsoluteTimeGetCurrent() - start
+
+            let memoryAfter = await MemoryWarningManager.shared.memoryUsage
+            let renderStatsAfter = await ViewDiffTracker.shared.renderStats
             
-            let memoryAfter = MemoryWarningManager.shared.memoryUsage
-            let renderStatsAfter = ViewDiffTracker.shared.renderStats
-            
-            let measurement = Measurement(
+            let measurement = SuiteResult.Measurement(
                 iteration: iteration,
                 duration: duration,
                 metrics: metrics,
@@ -121,11 +123,11 @@ public final class PerformanceSuiteRunner {
         )
     }
     
-    private func calculateStatistics(_ measurements: [Measurement]) -> Statistics {
+    private func calculateStatistics(_ measurements: [SuiteResult.Measurement]) -> SuiteResult.Statistics {
         let durations = measurements.map { $0.duration }
         let sorted = durations.sorted()
-        
-        return Statistics(
+
+        return SuiteResult.Statistics(
             mean: durations.reduce(0, +) / Double(durations.count),
             median: sorted[sorted.count / 2],
             min: sorted.first ?? 0,
@@ -258,24 +260,27 @@ public struct DataLoadingSuite: PerformanceSuite {
     
     public func run() async throws -> [String: Double] {
         var metrics: [String: Double] = [:]
-        
+
         // Measure JSON decoding
         let jsonData = generateJSON()
         let decodeStart = CFAbsoluteTimeGetCurrent()
         _ = try JSONDecoder().decode([TestItem].self, from: jsonData)
         metrics["json_decode"] = CFAbsoluteTimeGetCurrent() - decodeStart
-        
-        // Measure cache performance
-        let cache = CacheManager()
-        let cacheStart = CFAbsoluteTimeGetCurrent()
-        for i in 0..<100 {
-            cache.set(TestItem(id: i, name: "Item \(i)"), for: "item_\(i)")
+
+        // Measure cache performance (run on MainActor since CacheManager is MainActor-isolated)
+        let cacheTime = await MainActor.run {
+            let cache = CacheManager()
+            let cacheStart = CFAbsoluteTimeGetCurrent()
+            for i in 0..<100 {
+                cache.set(TestItem(id: i, name: "Item \(i)"), for: "item_\(i)")
+            }
+            for i in 0..<100 {
+                _ = cache.get("item_\(i)", as: TestItem.self)
+            }
+            return CFAbsoluteTimeGetCurrent() - cacheStart
         }
-        for i in 0..<100 {
-            _ = cache.get("item_\(i)", as: TestItem.self)
-        }
-        metrics["cache_operations"] = CFAbsoluteTimeGetCurrent() - cacheStart
-        
+        metrics["cache_operations"] = cacheTime
+
         return metrics
     }
     
@@ -314,6 +319,17 @@ public struct SuiteResult: Codable {
         public let standardDeviation: Double
         public let p95: Double
         public let p99: Double
+        
+        public init(mean: Double, median: Double, min: Double, max: Double, 
+                    standardDeviation: Double, p95: Double, p99: Double) {
+            self.mean = mean
+            self.median = median
+            self.min = min
+            self.max = max
+            self.standardDeviation = standardDeviation
+            self.p95 = p95
+            self.p99 = p99
+        }
     }
 }
 
@@ -356,13 +372,13 @@ public struct PerformanceReport: Codable {
     }
     
     public func compare(with baseline: PerformanceReport) -> PerformanceComparison {
-        var regressions: [Regression] = []
+        var regressions: [PerformanceComparison.Regression] = []
         
         for result in results {
             if let baselineResult = baseline.results.first(where: { $0.name == result.name }) {
                 let meanDiff = (result.statistics.mean - baselineResult.statistics.mean) / baselineResult.statistics.mean * 100
                 if meanDiff > 5 { // 5% regression threshold
-                    regressions.append(Regression(
+                    regressions.append(PerformanceComparison.Regression(
                         suite: result.name,
                         baseline: baselineResult.statistics.mean,
                         current: result.statistics.mean,
@@ -414,27 +430,28 @@ public struct PerformanceComparison: Codable {
 
 // MARK: - XCTest Integration
 
+#if canImport(XCTest)
 open class PerformanceXCTestCase: XCTestCase {
     public var suiteRunner: PerformanceSuiteRunner!
-    
+
     open override func setUp() {
         super.setUp()
-        
+
         let suites: [PerformanceSuite] = [
             ViewRenderingSuite(),
             NavigationSuite(),
             DataLoadingSuite()
         ]
-        
+
         suiteRunner = PerformanceSuiteRunner(
             suites: suites,
             configuration: .default
         )
     }
-    
+
     public func testPerformanceSuite() async throws {
         let report = try await suiteRunner.run()
-        
+
         // Check for regressions
         for result in report.results {
             XCTAssertLessThan(
@@ -443,7 +460,7 @@ open class PerformanceXCTestCase: XCTestCase {
                 "\(result.name) P95 exceeds threshold"
             )
         }
-        
+
         // Export for CI
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("perf-report-\(Date().timeIntervalSince1970).json")
@@ -451,3 +468,4 @@ open class PerformanceXCTestCase: XCTestCase {
         print("Performance report saved to: \(url.path)")
     }
 }
+#endif

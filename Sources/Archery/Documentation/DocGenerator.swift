@@ -3,50 +3,53 @@ import Foundation
 // MARK: - Documentation Generator
 
 /// Generates documentation from macro schemas and code annotations
-public final class DocGenerator {
-    
+public final class DocGenerator: Sendable {
+
     private let outputDirectory: URL
     private let templateDirectory: URL
-    
+
     public init(outputDirectory: URL, templateDirectory: URL? = nil) {
         self.outputDirectory = outputDirectory
-        self.templateDirectory = templateDirectory ?? Bundle.module.resourceURL?.appendingPathComponent("Templates") ?? outputDirectory
+        self.templateDirectory = templateDirectory ?? outputDirectory.appendingPathComponent("Templates")
     }
-    
+
     /// Generate complete documentation site
     public func generateDocumentation() async throws {
+        // Capture self references for Sendable closures
+        let generator = self
+
         try await withThrowingTaskGroup(of: Void.self) { group in
             // Generate macro documentation
             group.addTask {
-                try await self.generateMacroDocumentation()
+                try await generator.generateMacroDocumentation()
             }
-            
+
             // Generate API documentation
             group.addTask {
-                try await self.generateAPIDocumentation()
+                try await generator.generateAPIDocumentation()
             }
-            
+
             // Generate guides and recipes
             group.addTask {
-                try await self.generateGuidesAndRecipes()
+                try await generator.generateGuidesAndRecipes()
             }
-            
+
             // Generate examples documentation
             group.addTask {
-                try await self.generateExamplesDocumentation()
+                try await generator.generateExamplesDocumentation()
             }
-            
+
             // Copy static assets
             group.addTask {
-                try await self.copyStaticAssets()
+                try await generator.copyStaticAssets()
             }
-            
+
             // Wait for all tasks to complete
             for try await _ in group {
                 // Tasks completed
             }
         }
-        
+
         // Generate index and navigation
         try await generateSiteIndex()
     }
@@ -76,13 +79,13 @@ public final class DocGenerator {
             let content = try generateMacroPage(for: macro)
             let filename = "\(macro.name.lowercased().replacingOccurrences(of: " ", with: "-")).md"
             let fileURL = macrosDirectory.appendingPathComponent(filename)
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            try content.write(to: fileURL, atomically: true, encoding: String.Encoding.utf8)
         }
         
         // Generate macros index
         let indexContent = try generateMacrosIndex(macros: macros)
         let indexURL = macrosDirectory.appendingPathComponent("index.md")
-        try indexContent.write(to: indexURL, atomically: true, encoding: .utf8)
+        try indexContent.write(to: indexURL, atomically: true, encoding: String.Encoding.utf8)
     }
     
     private func generateMacroPage(for macro: MacroDocumentation) throws -> String {
@@ -187,13 +190,13 @@ public final class DocGenerator {
             let content = try generateAPIPage(for: apiType)
             let filename = "\(apiType.name.lowercased().replacingOccurrences(of: " ", with: "-")).md"
             let fileURL = apiDirectory.appendingPathComponent(filename)
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            try content.write(to: fileURL, atomically: true, encoding: String.Encoding.utf8)
         }
         
         // Generate API index
         let indexContent = try generateAPIIndex(types: apiTypes)
         let indexURL = apiDirectory.appendingPathComponent("index.md")
-        try indexContent.write(to: indexURL, atomically: true, encoding: .utf8)
+        try indexContent.write(to: indexURL, atomically: true, encoding: String.Encoding.utf8)
     }
     
     private func generateAPIPage(for apiType: APIDocumentation) throws -> String {
@@ -327,13 +330,13 @@ public final class DocGenerator {
             let content = try generateRecipePage(for: recipe)
             let filename = "\(recipe.title.lowercased().replacingOccurrences(of: " ", with: "-")).md"
             let fileURL = guidesDirectory.appendingPathComponent(filename)
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            try content.write(to: fileURL, atomically: true, encoding: String.Encoding.utf8)
         }
         
         // Generate guides index
         let indexContent = try generateGuidesIndex(recipes: recipes)
         let indexURL = guidesDirectory.appendingPathComponent("index.md")
-        try indexContent.write(to: indexURL, atomically: true, encoding: .utf8)
+        try indexContent.write(to: indexURL, atomically: true, encoding: String.Encoding.utf8)
     }
     
     private func generateRecipePage(for recipe: Recipe) throws -> String {
@@ -442,13 +445,13 @@ public final class DocGenerator {
             let content = try generateExamplePage(for: example)
             let filename = "\(example.name.lowercased().replacingOccurrences(of: " ", with: "-")).md"
             let fileURL = examplesDirectory.appendingPathComponent(filename)
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            try content.write(to: fileURL, atomically: true, encoding: String.Encoding.utf8)
         }
         
         // Generate examples index
         let indexContent = try generateExamplesIndex(examples: examples)
         let indexURL = examplesDirectory.appendingPathComponent("index.md")
-        try indexContent.write(to: indexURL, atomically: true, encoding: .utf8)
+        try indexContent.write(to: indexURL, atomically: true, encoding: String.Encoding.utf8)
     }
     
     private func generateExamplePage(for example: ExampleProject) throws -> String {
@@ -635,7 +638,7 @@ public final class DocGenerator {
         """
         
         let indexURL = outputDirectory.appendingPathComponent("index.md")
-        try indexContent.write(to: indexURL, atomically: true, encoding: .utf8)
+        try indexContent.write(to: indexURL, atomically: true, encoding: String.Encoding.utf8)
     }
     
     private func generateCSS() -> String {
@@ -725,7 +728,7 @@ public final class DocGenerator {
 
 // MARK: - Documentation Data Models
 
-public struct MacroDocumentation {
+public struct MacroDocumentation: Sendable {
     let name: String
     let description: String
     let shortDescription: String
@@ -739,30 +742,30 @@ public struct MacroDocumentation {
     let relatedMacros: [String]
     let category: MacroCategory
     
-    public struct Parameter {
+    public struct Parameter: Sendable {
         let name: String
         let type: String
         let description: String
         let defaultValue: String?
     }
     
-    public struct Example {
+    public struct Example: Sendable {
         let title: String
         let code: String
         let explanation: String
     }
     
-    public struct Issue {
+    public struct Issue: Sendable {
         let issue: String
         let solution: String
     }
     
-    public enum MacroCategory {
+    public enum MacroCategory: Sendable {
         case data, ui, system, validation, design
     }
 }
 
-public struct APIDocumentation {
+public struct APIDocumentation: Sendable {
     let name: String
     let description: String
     let shortDescription: String
@@ -771,8 +774,8 @@ public struct APIDocumentation {
     let methods: [Method]
     let properties: [Property]
     let relatedTypes: [String]
-    
-    public struct Method {
+
+    public struct Method: Sendable {
         let name: String
         let signature: String
         let description: String
@@ -781,20 +784,20 @@ public struct APIDocumentation {
         let throwsDescription: String?
         let example: String
     }
-    
-    public struct Property {
+
+    public struct Property: Sendable {
         let name: String
         let type: String
         let description: String
     }
-    
-    public struct Parameter {
+
+    public struct Parameter: Sendable {
         let name: String
         let description: String
     }
 }
 
-public struct Recipe {
+public struct Recipe: Sendable {
     let title: String
     let description: String
     let shortDescription: String
@@ -807,25 +810,25 @@ public struct Recipe {
     let commonPitfalls: [Issue]
     let relatedRecipes: [String]
     let category: RecipeCategory
-    
-    public struct Step {
+
+    public struct Step: Sendable {
         let title: String
         let description: String
         let code: String
         let explanation: String
     }
-    
-    public struct Issue {
+
+    public struct Issue: Sendable {
         let issue: String
         let solution: String
     }
-    
-    public enum RecipeCategory {
-        case gettingStarted, data, ui, system, testing
+
+    public enum RecipeCategory: Sendable {
+        case gettingStarted, data, ui, system, testing, design
     }
 }
 
-public struct ExampleProject {
+public struct ExampleProject: Sendable {
     let name: String
     let description: String
     let shortDescription: String
@@ -837,16 +840,16 @@ public struct ExampleProject {
     let learningObjectives: [String]
     let nextSteps: [String]
     let complexity: Complexity
-    
-    public struct KeyFile {
+
+    public struct KeyFile: Sendable {
         let path: String
         let description: String
         let snippet: String
     }
-    
-    public enum Complexity {
+
+    public enum Complexity: Sendable {
         case beginner, intermediate, advanced
-        
+
         var displayName: String {
             switch self {
             case .beginner: return "Beginner"

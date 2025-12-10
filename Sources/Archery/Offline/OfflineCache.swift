@@ -1,33 +1,33 @@
 import Foundation
 import Combine
 
-public protocol CacheKey: Hashable, Codable {
+public protocol CacheKey: Hashable, Codable, Sendable {
     var identifier: String { get }
 }
 
-public protocol Cacheable: Codable {
+public protocol Cacheable: Codable, Sendable {
     associatedtype Key: CacheKey
     var key: Key { get }
     var lastModified: Date { get }
     var version: Int { get }
 }
 
-public enum ConflictResolution {
+public enum ConflictResolution: Sendable {
     case lastWriteWins
     case serverWins
     case clientWins
     case merge(MergeStrategy)
-    case custom((any Cacheable, any Cacheable) -> any Cacheable)
+    case custom(@Sendable (any Cacheable, any Cacheable) -> any Cacheable)
 }
 
-public struct MergeStrategy {
+public struct MergeStrategy: Sendable {
     public let name: String
-    public let merge: (any Cacheable, any Cacheable) -> any Cacheable
-    
-    public static let append = MergeStrategy(name: "append") { local, remote in
+    public let merge: @Sendable (any Cacheable, any Cacheable) -> any Cacheable
+
+    public static let append = MergeStrategy(name: "append") { _, remote in
         remote
     }
-    
+
     public static let preferNewer = MergeStrategy(name: "preferNewer") { local, remote in
         local.lastModified > remote.lastModified ? local : remote
     }

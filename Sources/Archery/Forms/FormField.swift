@@ -24,17 +24,16 @@ public protocol FormFieldProtocol: Identifiable {
 // MARK: - Form Field Implementation
 
 @MainActor
-@Observable
-public class FormField<T>: FormFieldProtocol, Identifiable {
+public class FormField<T>: @preconcurrency FormFieldProtocol, Identifiable, ObservableObject {
     public let id: String
     public let label: String
-    public var value: T
+    @Published public var value: T
     public let placeholder: String?
     public let helpText: String?
     public let isRequired: Bool
-    public var isEnabled: Bool = true
-    public var isFocused: Bool = false
-    public var errors: [ValidationError] = []
+    @Published public var isEnabled: Bool = true
+    @Published public var isFocused: Bool = false
+    @Published public var errors: [ValidationError] = []
     public let validators: [any Validator<T>]
     
     private let defaultValue: T
@@ -100,12 +99,19 @@ public class FormField<T>: FormFieldProtocol, Identifiable {
 
 // MARK: - Specialized Field Types
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 public class TextField: FormField<String> {
+    #if canImport(UIKit)
     public let keyboardType: UIKeyboardType
     public let textContentType: UITextContentType?
     public let autocapitalization: TextInputAutocapitalization
+    #endif
     public let autocorrectionDisabled: Bool
-    
+
+    #if canImport(UIKit)
     public init(
         id: String,
         label: String,
@@ -123,7 +129,7 @@ public class TextField: FormField<String> {
         self.textContentType = textContentType
         self.autocapitalization = autocapitalization
         self.autocorrectionDisabled = autocorrectionDisabled
-        
+
         super.init(
             id: id,
             label: label,
@@ -134,6 +140,30 @@ public class TextField: FormField<String> {
             validators: validators
         )
     }
+    #else
+    public init(
+        id: String,
+        label: String,
+        value: String = "",
+        placeholder: String? = nil,
+        helpText: String? = nil,
+        isRequired: Bool = false,
+        autocorrectionDisabled: Bool = false,
+        validators: [any Validator<String>] = []
+    ) {
+        self.autocorrectionDisabled = autocorrectionDisabled
+
+        super.init(
+            id: id,
+            label: label,
+            value: value,
+            placeholder: placeholder,
+            helpText: helpText,
+            isRequired: isRequired,
+            validators: validators
+        )
+    }
+    #endif
 }
 
 public final class EmailField: TextField {
@@ -144,6 +174,7 @@ public final class EmailField: TextField {
         placeholder: String? = "Enter your email",
         isRequired: Bool = true
     ) {
+        #if canImport(UIKit)
         super.init(
             id: id,
             label: label,
@@ -156,6 +187,17 @@ public final class EmailField: TextField {
             autocorrectionDisabled: true,
             validators: [EmailValidator()]
         )
+        #else
+        super.init(
+            id: id,
+            label: label,
+            value: value,
+            placeholder: placeholder,
+            isRequired: isRequired,
+            autocorrectionDisabled: true,
+            validators: [EmailValidator()]
+        )
+        #endif
     }
 }
 
@@ -165,7 +207,7 @@ public final class PasswordField: TextField {
     public let requireLowercase: Bool
     public let requireNumbers: Bool
     public let requireSpecialChars: Bool
-    
+
     public init(
         id: String = "password",
         label: String = "Password",
@@ -183,11 +225,11 @@ public final class PasswordField: TextField {
         self.requireLowercase = requireLowercase
         self.requireNumbers = requireNumbers
         self.requireSpecialChars = requireSpecialChars
-        
+
         var validators: [any Validator<String>] = [
             MinLengthValidator(minLength: minLength)
         ]
-        
+
         if requireUppercase || requireLowercase || requireNumbers || requireSpecialChars {
             validators.append(PasswordValidator(
                 requireUppercase: requireUppercase,
@@ -196,7 +238,8 @@ public final class PasswordField: TextField {
                 requireSpecialChars: requireSpecialChars
             ))
         }
-        
+
+        #if canImport(UIKit)
         super.init(
             id: id,
             label: label,
@@ -209,6 +252,17 @@ public final class PasswordField: TextField {
             autocorrectionDisabled: true,
             validators: validators
         )
+        #else
+        super.init(
+            id: id,
+            label: label,
+            value: value,
+            placeholder: placeholder,
+            isRequired: isRequired,
+            autocorrectionDisabled: true,
+            validators: validators
+        )
+        #endif
     }
 }
 

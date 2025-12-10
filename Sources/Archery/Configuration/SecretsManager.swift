@@ -25,21 +25,21 @@ public final class SecretsManager {
     private func loadOrCreateEncryptionKey() -> SymmetricKey {
         let keyIdentifier = "com.archery.secrets.encryption.key"
         
-        if let keyData = try? keychain.retrieve(keyIdentifier),
+        if let keyData = try? keychain.data(for: keyIdentifier),
            !keyData.isEmpty {
             return SymmetricKey(data: keyData)
         }
-        
+
         // Generate new key
         let key = SymmetricKey(size: .bits256)
         let keyData = key.withUnsafeBytes { Data($0) }
-        
+
         do {
-            try keychain.store(keyData, for: keyIdentifier)
+            try keychain.set(keyData, for: keyIdentifier)
         } catch {
             secureLogger.error("Failed to store encryption key: \(error)")
         }
-        
+
         return key
     }
     
@@ -62,7 +62,7 @@ public final class SecretsManager {
         // Store in keychain
         let keychainKey = secretKey(for: secret.key, environment: secret.environment)
         let data = finalValue.data(using: .utf8) ?? Data()
-        try keychain.store(data, for: keychainKey)
+        try keychain.set(data, for: keychainKey)
         
         // Update cache
         var cachedSecret = secret
@@ -84,7 +84,7 @@ public final class SecretsManager {
         }
         
         // Retrieve from keychain
-        guard let data = try keychain.retrieve(keychainKey),
+        guard let data = try keychain.data(for: keychainKey),
               let value = String(data: data, encoding: .utf8) else {
             return nil
         }
@@ -107,18 +107,18 @@ public final class SecretsManager {
     public func delete(_ key: String, environment: ConfigurationEnvironment? = nil) throws {
         let env = environment ?? ConfigurationEnvironment.current
         let keychainKey = secretKey(for: key, environment: env)
-        
-        try keychain.delete(keychainKey)
+
+        try keychain.remove(keychainKey)
         cachedSecrets.removeValue(forKey: keychainKey)
-        
+
         secureLogger.info("Secret deleted: \(key)")
     }
     
     public func exists(_ key: String, environment: ConfigurationEnvironment? = nil) -> Bool {
         let env = environment ?? ConfigurationEnvironment.current
         let keychainKey = secretKey(for: key, environment: env)
-        
-        return (try? keychain.retrieve(keychainKey)) != nil
+
+        return (try? keychain.data(for: keychainKey)) != nil
     }
     
     // MARK: - Batch Operations
@@ -151,7 +151,7 @@ public final class SecretsManager {
         let keysToDelete = cachedSecrets.keys.filter { $0.contains(".\(env.rawValue).") }
         for key in keysToDelete {
             cachedSecrets.removeValue(forKey: key)
-            try keychain.delete(key)
+            try keychain.remove(key)
         }
     }
     
@@ -223,7 +223,7 @@ public final class SecretsManager {
             guard let key = secretDict["key"] as? String,
                   let value = secretDict["value"] as? String,
                   let envString = secretDict["environment"] as? String,
-                  let environment = Environment(rawValue: envString) else {
+                  let environment = ConfigurationEnvironment(rawValue: envString) else {
                 continue
             }
             

@@ -1,0 +1,13 @@
+struct Player: Codable, Identifiable {
+    var id: Int64
+    var name: String
+    var score: Int
+
+    enum Columns {
+        static let id = GRDB.Column(CodingKeys.id)
+        static let name = GRDB.Column(CodingKeys.name)
+        static let score = GRDB.Column(CodingKeys.score)
+    }
+
+    static let databaseTableName = "players"
+}

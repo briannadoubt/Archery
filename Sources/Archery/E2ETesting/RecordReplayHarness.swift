@@ -4,19 +4,19 @@ import Combine
 // MARK: - Record/Replay Harness
 
 /// Records and replays network requests for deterministic testing
-public final class RecordReplayHarness {
-    
-    public enum Mode {
+public actor RecordReplayHarness {
+
+    public enum Mode: Sendable {
         case record
         case replay
         case passthrough
     }
-    
+
     private let mode: Mode
     private let storage: RecordingStorage
     private var recordings: [String: Recording] = [:]
     private let session: URLSession
-    
+
     public init(
         mode: Mode,
         storage: RecordingStorage = FileRecordingStorage(),
@@ -177,7 +177,7 @@ public final class RecordReplayHarness {
 
 // MARK: - Recording Model
 
-public struct Recording: Codable {
+public struct Recording: Codable, Sendable {
     public let request: URLRequest
     public let response: URLResponse
     public let data: Data
@@ -204,11 +204,15 @@ public struct Recording: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        request = try container.decode(URLRequest.self, forKey: .request)
+
+        // Decode URLRequest manually
+        let requestData = try container.decode(Data.self, forKey: .request)
+        request = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSURLRequest.self, from: requestData)! as URLRequest
+
         data = try container.decode(Data.self, forKey: .data)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
         simulatedDelay = try container.decodeIfPresent(TimeInterval.self, forKey: .simulatedDelay)
-        
+
         // Decode URLResponse
         let responseData = try container.decode(Data.self, forKey: .response)
         response = try NSKeyedUnarchiver.unarchivedObject(
@@ -216,14 +220,21 @@ public struct Recording: Codable {
             from: responseData
         )!
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(request, forKey: .request)
+
+        // Encode URLRequest manually
+        let requestData = try NSKeyedArchiver.archivedData(
+            withRootObject: request,
+            requiringSecureCoding: true
+        )
+        try container.encode(requestData, forKey: .request)
+
         try container.encode(data, forKey: .data)
         try container.encode(timestamp, forKey: .timestamp)
         try container.encodeIfPresent(simulatedDelay, forKey: .simulatedDelay)
-        
+
         // Encode URLResponse
         let responseData = try NSKeyedArchiver.archivedData(
             withRootObject: response,
@@ -235,57 +246,59 @@ public struct Recording: Codable {
 
 // MARK: - Storage
 
-public protocol RecordingStorage {
+public protocol RecordingStorage: Sendable {
     func load() async throws -> [String: Recording]
     func save(_ recordings: [String: Recording]) async throws
 }
 
 /// File-based recording storage
-public final class FileRecordingStorage: RecordingStorage {
+public final class FileRecordingStorage: RecordingStorage, Sendable {
     private let directoryURL: URL
-    
+
     public init(directoryURL: URL? = nil) {
         self.directoryURL = directoryURL ?? FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NetworkRecordings")
     }
-    
+
     public func load() async throws -> [String: Recording] {
         let fileURL = directoryURL.appendingPathComponent("recordings.json")
-        
+
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return [:]
         }
-        
+
         let data = try Data(contentsOf: fileURL)
         return try JSONDecoder().decode([String: Recording].self, from: data)
     }
-    
+
     public func save(_ recordings: [String: Recording]) async throws {
         // Create directory if needed
         try FileManager.default.createDirectory(
             at: directoryURL,
             withIntermediateDirectories: true
         )
-        
+
         let fileURL = directoryURL.appendingPathComponent("recordings.json")
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         encoder.dateEncodingStrategy = .iso8601
-        
+
         let data = try encoder.encode(recordings)
         try data.write(to: fileURL)
     }
 }
 
 /// In-memory recording storage
-public final class MemoryRecordingStorage: RecordingStorage {
+public actor MemoryRecordingStorage: RecordingStorage {
     private var recordings: [String: Recording] = [:]
-    
+
+    public init() {}
+
     public func load() async throws -> [String: Recording] {
         recordings
     }
-    
+
     public func save(_ recordings: [String: Recording]) async throws {
         self.recordings = recordings
     }
@@ -382,35 +395,46 @@ public extension URLSession {
 }
 
 /// URLProtocol for intercepting requests
+/// Note: Uses @preconcurrency to bridge with pre-Swift-concurrency URLProtocol APIs
+@preconcurrency
 class RecordReplayURLProtocol: URLProtocol {
-    static var harness: RecordReplayHarness?
-    
+    nonisolated(unsafe) static var harness: RecordReplayHarness?
+
     override class func canInit(with request: URLRequest) -> Bool {
         harness != nil
     }
-    
+
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
         request
     }
-    
+
     override func startLoading() {
-        Task {
+        let currentRequest = request
+        let currentClient = client
+        let protocolSelf = self
+
+        Task { @Sendable in
             do {
                 guard let harness = Self.harness else {
                     throw RecordReplayError.storageError(NSError(domain: "No harness", code: -1))
                 }
-                
-                let (data, response) = try await harness.execute(request)
-                
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-                client?.urlProtocol(self, didLoad: data)
-                client?.urlProtocolDidFinishLoading(self)
+
+                let (data, response) = try await harness.execute(currentRequest)
+
+                // URLProtocolClient methods - dispatch back to main queue
+                DispatchQueue.main.async {
+                    currentClient?.urlProtocol(protocolSelf, didReceive: response, cacheStoragePolicy: .notAllowed)
+                    currentClient?.urlProtocol(protocolSelf, didLoad: data)
+                    currentClient?.urlProtocolDidFinishLoading(protocolSelf)
+                }
             } catch {
-                client?.urlProtocol(self, didFailWithError: error)
+                DispatchQueue.main.async {
+                    currentClient?.urlProtocol(protocolSelf, didFailWithError: error)
+                }
             }
         }
     }
-    
+
     override func stopLoading() {
         // No-op
     }

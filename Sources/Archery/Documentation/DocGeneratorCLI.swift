@@ -5,7 +5,7 @@ import ArgumentParser
 
 @main
 struct DocGeneratorCLI: AsyncParsableCommand {
-    static var configuration = CommandConfiguration(
+    static let configuration = CommandConfiguration(
         commandName: "archery-docs",
         abstract: "Generate comprehensive documentation for the Archery framework",
         version: "1.0.0"
@@ -141,30 +141,30 @@ struct DocGeneratorCLI: AsyncParsableCommand {
         htmlContent = htmlContent.replacingOccurrences(
             of: #"^# (.+)$"#,
             with: "<h1>$1</h1>",
-            options: [.regularExpression, .anchorsMatchLines]
+            options: [.regularExpression]
         )
         htmlContent = htmlContent.replacingOccurrences(
             of: #"^## (.+)$"#,
             with: "<h2>$1</h2>",
-            options: [.regularExpression, .anchorsMatchLines]
+            options: [.regularExpression]
         )
         htmlContent = htmlContent.replacingOccurrences(
             of: #"^### (.+)$"#,
             with: "<h3>$1</h3>",
-            options: [.regularExpression, .anchorsMatchLines]
+            options: [.regularExpression]
         )
         
         // Convert code blocks
         htmlContent = htmlContent.replacingOccurrences(
             of: #"```swift\n(.*?)\n```"#,
             with: "<pre><code class=\"language-swift\">$1</code></pre>",
-            options: [.regularExpression, .dotMatchesLineSeparators]
+            options: [.regularExpression]
         )
         
         htmlContent = htmlContent.replacingOccurrences(
             of: #"```\n(.*?)\n```"#,
             with: "<pre><code>$1</code></pre>",
-            options: [.regularExpression, .dotMatchesLineSeparators]
+            options: [.regularExpression]
         )
         
         // Convert inline code

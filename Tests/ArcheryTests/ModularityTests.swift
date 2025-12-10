@@ -287,7 +287,8 @@ final class ModularityTests: XCTestCase {
     }
     
     // MARK: - Module Linter Tests
-    
+
+    @MainActor
     func testModuleBoundaryLinter() async throws {
         let linter = ModuleBoundaryLinter()
         
@@ -385,6 +386,7 @@ final class ModularityTests: XCTestCase {
     
     // MARK: - Integration Tests
     
+    @MainActor
     func testFullModuleWorkflow() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer {
@@ -437,3 +439,4 @@ extension ModularityTests {
     struct EmptyContract: ModuleContract {
         let version = "1.0.0"
     }
+}

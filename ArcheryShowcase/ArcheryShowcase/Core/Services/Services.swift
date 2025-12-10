@@ -101,44 +101,11 @@ class PersistenceService: ObservableObject {
 }
 
 // MARK: - Analytics Service
-
-class AnalyticsService: ObservableObject {
-    static let shared = AnalyticsService()
-    
-    private var providers: [AnalyticsProvider] = []
-    
-    func configure(providers: [AnalyticsProvider]) {
-        self.providers = providers
-    }
-    
-    func track(_ event: AnalyticsEvent) {
-        for provider in providers {
-            provider.track(event)
-        }
-    }
-    
-    func setUser(_ userId: String, properties: [String: Any] = [:]) {
-        for provider in providers {
-            provider.setUser(userId, properties: properties)
-        }
-    }
-}
-
-enum AnalyticsProvider {
-    case amplitude(apiKey: String)
-    case segment(writeKey: String)
-    case firebase
-    case mixpanel(token: String)
-    
-    func track(_ event: AnalyticsEvent) {
-        // Implementation would call actual SDK methods
-        print("[Analytics] Tracking event: \(event)")
-    }
-    
-    func setUser(_ userId: String, properties: [String: Any]) {
-        print("[Analytics] Setting user: \(userId)")
-    }
-}
+//
+// NOTE: Analytics is now provided by Archery framework:
+// - AnalyticsManager.shared (from Archery)
+// - AnalyticsProvider protocol (from Archery)
+// - Auto-configured by @AppShell via `analyticsProviders` property
 
 // MARK: - Notification Service
 
@@ -175,31 +142,7 @@ class NotificationService: ObservableObject {
     }
 }
 
-// MARK: - Theme Manager
-
-class ThemeManager: ObservableObject {
-    static let shared = ThemeManager()
-    
-    @Published var currentTheme: AppTheme = .system
-    @Published var currentTokens: DesignTokens = .default
-    
-    func applyTheme(_ theme: AppTheme) {
-        currentTheme = theme
-        updateTokens()
-    }
-    
-    private func updateTokens() {
-        // Update design tokens based on theme
-        switch currentTheme {
-        case .system:
-            currentTokens = .default
-        case .light:
-            currentTokens = .light
-        case .dark:
-            currentTokens = .dark
-        }
-    }
-}
+// ThemeManager is defined in DesignTokens.swift
 
 // MARK: - Feature Flags
 
@@ -211,7 +154,7 @@ class FeatureFlags: ObservableObject {
     
     func configure(provider: FeatureFlagProvider) {
         self.provider = provider
-        Task {
+        _Concurrency.Task {
             await refreshFlags()
         }
     }

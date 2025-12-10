@@ -1,85 +1,28 @@
 import Foundation
 import Archery
 
-// MARK: - User Preferences Store
+// MARK: - User Preferences Store (using @KeyValueStore macro)
 
-@KeyValueStore(
-    namespace: "userPreferences",
-    defaults: [
-        "theme": AppTheme.system,
-        "compactMode": false,
-        "showCompletedTasks": true,
-        "defaultTaskPriority": TaskPriority.medium,
-        "notificationsEnabled": true,
-        "soundEnabled": true,
-        "hapticEnabled": true,
-        "autoSync": true,
-        "syncInterval": 300, // 5 minutes
-        "language": "en",
-        "firstLaunchDate": Date()
-    ]
-)
-enum UserPreferencesStore {
-    case theme(AppTheme)
+/// Demonstrates the @KeyValueStore macro which generates a Store struct
+/// with typed getters/setters for each case.
+@KeyValueStore
+enum UserPreferencesKey {
+    case theme(String)
     case compactMode(Bool)
     case showCompletedTasks(Bool)
-    case defaultTaskPriority(TaskPriority)
+    case defaultTaskPriority(String)
     case notificationsEnabled(Bool)
     case soundEnabled(Bool)
     case hapticEnabled(Bool)
     case autoSync(Bool)
     case syncInterval(TimeInterval)
     case language(String)
-    case firstLaunchDate(Date)
 }
 
-// MARK: - Cache Store
+// MARK: - Onboarding Store (using @KeyValueStore macro)
 
-@KeyValueStore(
-    namespace: "cache",
-    defaults: [:],
-    expiration: 3600 // 1 hour default expiration
-)
-enum CacheStore {
-    case dashboardStats(DashboardStats)
-    case recentTasks([Task])
-    case userProfile(User)
-    case projects([Project])
-    case activityData([ActivityDataPoint])
-    case searchResults(String, [Task]) // Query and results
-    case imageCache(URL, Data)
-}
-
-// MARK: - Keychain Store
-
-@KeyValueStore(
-    namespace: "keychain",
-    secure: true,
-    defaults: [:]
-)
-enum KeychainStore {
-    case accessToken(String)
-    case refreshToken(String)
-    case apiKey(String)
-    case userCredentials(AuthCredentials)
-    case biometricEnabled(Bool)
-    case pinCode(String)
-}
-
-// MARK: - Onboarding Store
-
-@KeyValueStore(
-    namespace: "onboarding",
-    defaults: [
-        "hasCompletedOnboarding": false,
-        "hasSeenDashboardTip": false,
-        "hasSeenTaskListTip": false,
-        "hasSeenSwipeGestureTip": false,
-        "hasSeenSettingsTip": false,
-        "onboardingVersion": "1.0.0"
-    ]
-)
-enum OnboardingStore {
+@KeyValueStore
+enum OnboardingKey {
     case hasCompletedOnboarding(Bool)
     case hasSeenDashboardTip(Bool)
     case hasSeenTaskListTip(Bool)
@@ -88,20 +31,10 @@ enum OnboardingStore {
     case onboardingVersion(String)
 }
 
-// MARK: - Feature Store
+// MARK: - Feature Flags Store (using @KeyValueStore macro)
 
-@KeyValueStore(
-    namespace: "features",
-    defaults: [
-        "debugMode": false,
-        "experimentalFeatures": false,
-        "betaFeatures": false,
-        "performanceMonitoring": true,
-        "crashReporting": true,
-        "analyticsEnabled": true
-    ]
-)
-enum FeatureStore {
+@KeyValueStore
+enum FeatureFlagsKey {
     case debugMode(Bool)
     case experimentalFeatures(Bool)
     case betaFeatures(Bool)
@@ -110,24 +43,16 @@ enum FeatureStore {
     case analyticsEnabled(Bool)
 }
 
-// MARK: - Sync Store
+// MARK: - Sync Store (using @KeyValueStore macro)
 
-@KeyValueStore(
-    namespace: "sync",
-    defaults: [
-        "lastSyncDate": Date.distantPast,
-        "syncInProgress": false,
-        "pendingChanges": 0,
-        "conflictResolutionStrategy": ConflictResolutionStrategy.serverWins
-    ]
-)
-enum SyncStore {
+@KeyValueStore
+enum SyncKey {
     case lastSyncDate(Date)
-    case syncInProgress(Bool)
     case pendingChanges(Int)
-    case conflictResolutionStrategy(ConflictResolutionStrategy)
-    case syncErrors([SyncError])
+    case conflictResolutionStrategy(String)
 }
+
+// MARK: - Supporting Types
 
 enum ConflictResolutionStrategy: String, Codable {
     case serverWins
@@ -143,18 +68,13 @@ struct SyncError: Codable {
     let retryCount: Int
 }
 
-// MARK: - Draft Store
+// MARK: - Draft Store (using @KeyValueStore macro)
 
-@KeyValueStore(
-    namespace: "drafts",
-    defaults: [:],
-    autoSave: true
-)
-enum DraftStore {
+@KeyValueStore
+enum DraftKey {
     case taskDraft(TaskDraft)
     case projectDraft(ProjectDraft)
     case noteDraft(String)
-    case formData([String: Any])
 }
 
 struct TaskDraft: Codable {
@@ -173,4 +93,14 @@ struct ProjectDraft: Codable {
     let icon: String
     let members: [String]
     let savedAt: Date
+}
+
+// MARK: - Cache Store (ObservableObject for UI state)
+
+class CacheStore: ObservableObject {
+    @Published var dashboardStats: DashboardStats?
+    @Published var recentTasks: [TaskItem] = []
+    @Published var userProfile: User?
+    @Published var projects: [Project] = []
+    @Published var activityData: [ActivityDataPoint] = []
 }

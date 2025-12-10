@@ -126,14 +126,36 @@ public final class AuthenticationManager {
     
     public func authenticate() async throws {
         state = .authenticating
-        
+
+        // Auto-track auth started
+        let providerName = String(describing: type(of: provider))
+        ArcheryAnalyticsConfiguration.shared.track(
+            .authStarted(method: providerName)
+        )
+
         do {
             let token = try await provider.authenticate()
             try await tokenStorage.store(token)
             state = .authenticated(token)
             scheduleTokenRefresh(for: token)
+
+            // Auto-track auth completed
+            ArcheryAnalyticsConfiguration.shared.track(
+                .authCompleted(method: providerName, hasRefreshToken: token.refreshToken != nil)
+            )
         } catch {
             state = .failed(error)
+
+            // Auto-track auth failed
+            let nsError = error as NSError
+            ArcheryAnalyticsConfiguration.shared.track(
+                .authFailed(
+                    method: providerName,
+                    errorCode: String(nsError.code),
+                    errorMessage: error.localizedDescription
+                )
+            )
+
             throw error
         }
     }
@@ -142,33 +164,49 @@ public final class AuthenticationManager {
         guard case .authenticated(let currentToken) = state else {
             throw AuthError.notAuthenticated
         }
-        
+
         guard let refreshToken = currentToken.refreshToken else {
             throw AuthError.noRefreshToken
         }
-        
+
         state = .refreshing(currentToken)
-        
+
         do {
             let newToken = try await provider.refresh(using: refreshToken)
             try await tokenStorage.store(newToken)
             state = .authenticated(newToken)
             scheduleTokenRefresh(for: newToken)
+
+            // Auto-track token refreshed
+            ArcheryAnalyticsConfiguration.shared.track(.authTokenRefreshed)
         } catch {
             state = .failed(error)
+
+            // Auto-track refresh failed
+            let nsError = error as NSError
+            ArcheryAnalyticsConfiguration.shared.track(
+                .authRefreshFailed(
+                    errorCode: String(nsError.code),
+                    errorMessage: error.localizedDescription
+                )
+            )
+
             throw error
         }
     }
-    
+
     public func signOut() async {
         refreshTimer?.invalidate()
         refreshTimer = nil
         refreshTask?.cancel()
         refreshTask = nil
-        
+
         await tokenStorage.clear()
         await provider.signOut()
         state = .unauthenticated
+
+        // Auto-track sign out
+        ArcheryAnalyticsConfiguration.shared.track(.authSignedOut)
     }
     
     private func loadStoredToken() async {

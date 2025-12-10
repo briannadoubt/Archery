@@ -5,11 +5,11 @@ import Combine
 
 /// Property-based testing framework for state machines and load states
 public struct PropertyBasedTester<State: Equatable, Action> {
-    
+
     private let stateMachine: StateMachine<State, Action>
     private let properties: [Property<State, Action>]
     private let generators: [Generator<Action>]
-    
+
     public init(
         stateMachine: StateMachine<State, Action>,
         properties: [Property<State, Action>],
@@ -19,79 +19,77 @@ public struct PropertyBasedTester<State: Equatable, Action> {
         self.properties = properties
         self.generators = generators
     }
-    
+
     // MARK: - Testing
-    
+
     /// Run property-based tests
     public func test(iterations: Int = 100, seed: UInt64? = nil) -> PropertyTestReport {
         var results: [PropertyTestResult] = []
-        var generator = seed.map { SeededRandom(seed: $0) } ?? SystemRandomNumberGenerator()
-        
+        var rng: any RandomNumberGenerator = seed.map { SeededRandom(seed: $0) as any RandomNumberGenerator } ?? SystemRandomNumberGenerator()
+
         for property in properties {
             let result = testProperty(
                 property,
                 iterations: iterations,
-                generator: &generator
+                generator: &rng
             )
             results.append(result)
         }
-        
+
         return PropertyTestReport(
             timestamp: Date(),
             results: results,
             passed: results.allSatisfy { $0.passed }
         )
     }
-    
+
     private func testProperty(
         _ property: Property<State, Action>,
         iterations: Int,
-        generator: inout some RandomNumberGenerator
+        generator: inout any RandomNumberGenerator
     ) -> PropertyTestResult {
-        var failures: [PropertyFailure<State, Action>] = []
+        var failures: [PropertyFailure] = []
         var successCount = 0
-        
+
         for i in 0..<iterations {
             // Generate random action sequence
             let actions = generateActionSequence(
                 count: Int.random(in: 1...20, using: &generator),
                 generator: &generator
             )
-            
+
             // Apply actions to state machine
             var currentState = stateMachine.initialState
             var states: [State] = [currentState]
-            
+
             for action in actions {
-                if let nextState = stateMachine.transition(from: currentState, action: action) {
+                if let nextState = stateMachine.transition(currentState, action) {
                     currentState = nextState
                     states.append(currentState)
                 }
             }
-            
+
             // Check property
-            if property.check(states: states, actions: actions) {
+            if property.check(states, actions) {
                 successCount += 1
             } else {
                 failures.append(PropertyFailure(
                     iteration: i,
-                    states: states,
-                    actions: actions,
+                    description: "Failed at iteration \(i) with \(states.count) states and \(actions.count) actions",
                     property: property.name
                 ))
-                
+
                 // Try to shrink the failure
                 if let shrunk = shrink(actions: actions, property: property) {
                     failures.append(PropertyFailure(
                         iteration: i,
-                        states: shrunk.states,
-                        actions: shrunk.actions,
+                        description: "Shrunk to \(shrunk.states.count) states and \(shrunk.actions.count) actions",
                         property: property.name + " (shrunk)"
                     ))
                 }
             }
         }
-        
+
         return PropertyTestResult(
             property: property.name,
             iterations: iterations,
@@ -100,21 +98,21 @@ public struct PropertyBasedTester<State: Equatable, Action> {
             successRate: Double(successCount) / Double(iterations)
         )
     }
-    
+
     private func generateActionSequence(
         count: Int,
-        generator: inout some RandomNumberGenerator
+        generator: inout any RandomNumberGenerator
     ) -> [Action] {
         guard !generators.isEmpty else { return [] }
-        
+
         return (0..<count).map { _ in
             let gen = generators.randomElement(using: &generator)!
-            return gen.generate(using: &generator)
+            return gen.generate(&generator)
         }
     }
-    
+
     // MARK: - Shrinking
-    
+
     private func shrink(
         actions: [Action],
         property: Property<State, Action>
@@ -123,24 +121,24 @@ public struct PropertyBasedTester<State: Equatable, Action> {
         for size in stride(from: actions.count - 1, to: 0, by: -1) {
             for start in 0...(actions.count - size) {
                 let subActions = Array(actions[start..<(start + size)])
-                
+
                 var currentState = stateMachine.initialState
                 var states: [State] = [currentState]
-                
+
                 for action in subActions {
-                    if let nextState = stateMachine.transition(from: currentState, action: action) {
+                    if let nextState = stateMachine.transition(currentState, action) {
                         currentState = nextState
                         states.append(currentState)
                     }
                 }
-                
-                if !property.check(states: states, actions: subActions) {
+
+                if !property.check(states, subActions) {
                     // Found smaller failing case
                     return (states: states, actions: subActions)
                 }
             }
         }
-        
+
         return nil
     }
 }
@@ -150,7 +148,7 @@ public struct PropertyBasedTester<State: Equatable, Action> {
 public struct StateMachine<State: Equatable, Action> {
     public let initialState: State
     public let transition: (State, Action) -> State?
-    
+
     public init(
         initialState: State,
         transition: @escaping (State, Action) -> State?
@@ -165,7 +163,7 @@ public struct StateMachine<State: Equatable, Action> {
 public struct Property<State, Action> {
     public let name: String
     public let check: ([State], [Action]) -> Bool
-    
+
     public init(
         name: String,
         check: @escaping ([State], [Action]) -> Bool
@@ -178,9 +176,9 @@ public struct Property<State, Action> {
 // MARK: - Generators
 
 public struct Generator<T> {
-    public let generate: (inout RandomNumberGenerator) -> T
-    
-    public init(generate: @escaping (inout RandomNumberGenerator) -> T) {
+    public let generate: (inout any RandomNumberGenerator) -> T
+
+    public init(generate: @escaping (inout any RandomNumberGenerator) -> T) {
         self.generate = generate
     }
 }
@@ -188,7 +186,7 @@ public struct Generator<T> {
 // MARK: - Common Properties
 
 public extension Property {
-    
+
     /// Property: State machine never enters invalid state
     static func noInvalidStates<S: Equatable, A>(
         isValid: @escaping (S) -> Bool
@@ -197,7 +195,7 @@ public extension Property {
             states.allSatisfy(isValid)
         }
     }
-    
+
     /// Property: State machine is deterministic
     static func isDeterministic<S: Equatable, A: Equatable>() -> Property<S, A> {
         Property<S, A>(name: "Deterministic") { states, actions in
@@ -205,7 +203,7 @@ public extension Property {
             true // Simplified - would need state machine reference
         }
     }
-    
+
     /// Property: State machine eventually reaches terminal state
     static func eventuallyTerminates<S: Equatable, A>(
         isTerminal: @escaping (S) -> Bool
@@ -214,7 +212,7 @@ public extension Property {
             states.contains(where: isTerminal)
         }
     }
-    
+
     /// Property: No duplicate states in sequence (no cycles)
     static func noCycles<S: Hashable, A>() -> Property<S, A> {
         Property<S, A>(name: "No Cycles") { states, _ in
@@ -225,45 +223,50 @@ public extension Property {
 
 // MARK: - Common Generators
 
-public extension Generator {
-    
+public extension Generator where T == Int {
     /// Generate random integer
     static func randomInt(in range: ClosedRange<Int>) -> Generator<Int> {
-        Generator { generator in
+        Generator<Int> { generator in
             Int.random(in: range, using: &generator)
         }
     }
-    
+}
+
+public extension Generator where T == Bool {
     /// Generate random bool
     static var randomBool: Generator<Bool> {
-        Generator { generator in
+        Generator<Bool> { generator in
             Bool.random(using: &generator)
         }
     }
-    
+}
+
+public extension Generator where T == String {
     /// Generate random string
     static func randomString(length: Int) -> Generator<String> {
-        Generator { generator in
+        Generator<String> { generator in
             let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
             return String((0..<length).map { _ in
                 characters.randomElement(using: &generator)!
             })
         }
     }
-    
+}
+
+public extension Generator {
     /// Choose from array
-    static func oneOf<T>(_ values: [T]) -> Generator<T> {
-        Generator { generator in
+    static func oneOf(_ values: [T]) -> Generator<T> {
+        Generator<T> { generator in
             values.randomElement(using: &generator)!
         }
     }
-    
+
     /// Weighted choice
-    static func weighted<T>(_ choices: [(T, Int)]) -> Generator<T> {
-        Generator { generator in
+    static func weighted(_ choices: [(T, Int)]) -> Generator<T> {
+        Generator<T> { generator in
             let total = choices.reduce(0) { $0 + $1.1 }
             let random = Int.random(in: 0..<total, using: &generator)
-            
+
             var sum = 0
             for (value, weight) in choices {
                 sum += weight
@@ -271,7 +274,7 @@ public extension Generator {
                     return value
                 }
             }
-            
+
             return choices.last!.0
         }
     }
@@ -311,13 +314,13 @@ public func loadStateMachine<T: Equatable>() -> StateMachine<LoadState<T>, LoadA
 
 /// Common properties for load state machines
 public struct LoadStateProperties {
-    
+
     public static func validTransitions<T: Equatable>() -> Property<LoadState<T>, LoadAction> {
         Property(name: "Valid Load State Transitions") { states, _ in
             for i in 0..<(states.count - 1) {
                 let current = states[i]
                 let next = states[i + 1]
-                
+
                 // Check valid transitions
                 switch (current, next) {
                 case (.idle, .loading),
@@ -332,7 +335,7 @@ public struct LoadStateProperties {
             return true
         }
     }
-    
+
     public static func noDoubleLoading<T: Equatable>() -> Property<LoadState<T>, LoadAction> {
         Property(name: "No Double Loading") { states, _ in
             for i in 0..<(states.count - 1) {
@@ -351,14 +354,13 @@ public struct PropertyTestResult {
     public let property: String
     public let iterations: Int
     public let passed: Bool
-    public let failures: [PropertyFailure<Any, Any>]
+    public let failures: [PropertyFailure]
     public let successRate: Double
 }
 
-public struct PropertyFailure<State, Action> {
+public struct PropertyFailure {
     public let iteration: Int
-    public let states: [State]
-    public let actions: [Action]
+    public let description: String
     public let property: String
 }
 
@@ -366,7 +368,7 @@ public struct PropertyTestReport {
     public let timestamp: Date
     public let results: [PropertyTestResult]
     public let passed: Bool
-    
+
     public var summary: String {
         """
         Property-Based Test Report
@@ -375,7 +377,7 @@ public struct PropertyTestReport {
         Total Properties: \(results.count)
         Passed: \(results.filter { $0.passed }.count)
         Failed: \(results.filter { !$0.passed }.count)
-        
+
         Results:
         \(results.map { result in
             "- \(result.property): \(result.passed ? "✅" : "❌") (\(String(format: "%.1f%%", result.successRate * 100)) success rate)"
@@ -388,11 +390,11 @@ public struct PropertyTestReport {
 
 struct SeededRandom: RandomNumberGenerator {
     private var state: UInt64
-    
+
     init(seed: UInt64) {
         self.state = seed
     }
-    
+
     mutating func next() -> UInt64 {
         state = state &* 6364136223846793005 &+ 1442695040888963407
         return state

@@ -4,7 +4,7 @@ import os.log
 
 // MARK: - View Diff Tracker
 
-public final class ViewDiffTracker: ObservableObject {
+public final class ViewDiffTracker: ObservableObject, @unchecked Sendable {
     public static let shared = ViewDiffTracker()
     
     @Published public private(set) var renderStats: RenderStatistics = .init()

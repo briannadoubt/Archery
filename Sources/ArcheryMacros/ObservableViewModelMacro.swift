@@ -53,40 +53,9 @@ func reset() {
 }
 """
 
-        let observationRegistrarDecl = """
-#if canImport(Observation)
-@ObservationIgnored
-private let _$observationRegistrar = Observation.ObservationRegistrar()
-#endif
-"""
-
-        let observationHelpersDecl = """
-#if canImport(Observation)
-func access<Member>(keyPath: KeyPath<\(className), Member>) {
-    _$observationRegistrar.access(self, keyPath: keyPath)
-}
-
-func withMutation<Member, MutationResult>(
-    keyPath: KeyPath<\(className), Member>,
-    _ mutation: () throws -> MutationResult
-) rethrows -> MutationResult {
-    try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
-}
-
-func willSet<Member>(_ keyPath: KeyPath<\(className), Member>) {
-    _$observationRegistrar.willSet(self, keyPath: keyPath)
-}
-
-func didSet<Member>(_ keyPath: KeyPath<\(className), Member>) {
-    _$observationRegistrar.didSet(self, keyPath: keyPath)
-}
-
-private func shouldNotifyObservers<Member>(_ lhs: Member, _ rhs: Member) -> Bool { true }
-private func shouldNotifyObservers<Member: Equatable>(_ lhs: Member, _ rhs: Member) -> Bool { lhs != rhs }
-private func shouldNotifyObservers<Member: AnyObject>(_ lhs: Member, _ rhs: Member) -> Bool { lhs !== rhs }
-private func shouldNotifyObservers<Member: Equatable & AnyObject>(_ lhs: Member, _ rhs: Member) -> Bool { lhs != rhs }
-#endif
-"""
+        // Note: We no longer generate custom observation code.
+        // The class should use @Observable macro from Swift's Observation framework.
+        // This macro focuses on lifecycle management, debounce/throttle, and load state helpers.
 
         let hasAsyncLoad = classDecl.hasAsyncLoadMethod
         let willGenerateLoadStub = !hasAsyncLoad
@@ -95,7 +64,7 @@ private func shouldNotifyObservers<Member: Equatable & AnyObject>(_ lhs: Member,
 @MainActor
 func onAppear() {
     cancelTrackedTasks()
-    let task = Task { @MainActor in
+    let task = _Concurrency.Task { @MainActor in
         await load()
     }
     track(CancelableTask { task.cancel() })
@@ -126,12 +95,12 @@ func cancelTrackedTasks() {
 
         let debounceStorageDecl = """
 @MainActor
-private var __archeryDebounceTasks: [AnyHashable: Task<Void, Never>] = [:]
+private var __archeryDebounceTasks: [AnyHashable: _Concurrency.Task<Void, Never>] = [:]
 """
 
         let throttleStorageDecl = """
 @MainActor
-private var __archeryThrottleTasks: [AnyHashable: Task<Void, Never>] = [:]
+private var __archeryThrottleTasks: [AnyHashable: _Concurrency.Task<Void, Never>] = [:]
 """
 
         let debounceDecl = """
@@ -142,9 +111,9 @@ func debounce(
     action: @escaping @Sendable () async -> Void
 ) {
     __archeryDebounceTasks[id]?.cancel()
-    let task = Task { @MainActor in
-        try? await Task.sleep(for: dueTime)
-        guard !Task.isCancelled else { return }
+    let task = _Concurrency.Task { @MainActor in
+        try? await _Concurrency.Task.sleep(for: dueTime)
+        guard !_Concurrency.Task.isCancelled else { return }
         await action()
     }
     __archeryDebounceTasks[id] = task
@@ -163,10 +132,10 @@ func throttle(
         return
     }
 
-    let task = Task { @MainActor in
+    let task = _Concurrency.Task { @MainActor in
         defer { __archeryThrottleTasks[id] = nil }
         await action()
-        try? await Task.sleep(for: interval)
+        try? await _Concurrency.Task.sleep(for: interval)
     }
 
     __archeryThrottleTasks[id] = task
@@ -213,8 +182,6 @@ func load() async {}
 """
 
         var members: [DeclSyntax] = [
-            DeclSyntax(stringLiteral: observationRegistrarDecl),
-            DeclSyntax(stringLiteral: observationHelpersDecl),
             DeclSyntax(stringLiteral: storageDecl),
             DeclSyntax(stringLiteral: debounceStorageDecl),
             DeclSyntax(stringLiteral: throttleStorageDecl),
@@ -285,20 +252,8 @@ extension ObservableViewModelMacro {
         providingAttributesFor member: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [AttributeSyntax] {
-        guard let varDecl = member.as(VariableDeclSyntax.self) else { return [] }
-        guard varDecl.bindingSpecifier.tokenKind == .keyword(.var) else { return [] }
-        if varDecl.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) }) { return [] }
-        if varDecl.attributes.contains(where: { attr in
-            guard let attribute = attr.as(AttributeSyntax.self) else { return false }
-            let name = attribute.attributeName.trimmedDescription
-            return name.contains("ObservationTracked") || name.contains("ObservationIgnored")
-        }) {
-            return []
-        }
-        let hasAccessor = varDecl.bindings.contains { $0.accessorBlock != nil }
-        if hasAccessor { return [] }
-
-        return [AttributeSyntax(stringLiteral: "@ObservationTracked")]
+        // No longer adding @ObservationTracked - use @Observable macro on class instead
+        return []
     }
 }
 
@@ -312,8 +267,9 @@ extension ObservableViewModelMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
-        let observability = DeclSyntax(stringLiteral: "extension \(type.trimmedDescription): Observation.Observable {}")
+        // Only add ArcheryLoadable conformance
+        // User should add @Observable to the class for observation support
         let loadable = DeclSyntax(stringLiteral: "extension \(type.trimmedDescription): ArcheryLoadable {}")
-        return [observability, loadable].compactMap { $0.as(ExtensionDeclSyntax.self) }
+        return [loadable].compactMap { $0.as(ExtensionDeclSyntax.self) }
     }
 }

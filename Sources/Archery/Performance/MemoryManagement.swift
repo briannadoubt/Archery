@@ -8,6 +8,7 @@ import AppKit
 
 // MARK: - Memory Warning Manager
 
+@MainActor
 public final class MemoryWarningManager: ObservableObject {
     public static let shared = MemoryWarningManager()
     
@@ -18,17 +19,17 @@ public final class MemoryWarningManager: ObservableObject {
     private let loadShedders: NSHashTable<AnyObject> = .weakObjects()
     private let queue = DispatchQueue(label: "com.archery.memory")
     
-    public enum MemoryPressure: Int, Comparable {
+    public enum MemoryPressure: Int, Comparable, Sendable {
         case normal = 0
         case warning = 1
         case critical = 2
-        
+
         public static func < (lhs: MemoryPressure, rhs: MemoryPressure) -> Bool {
             lhs.rawValue < rhs.rawValue
         }
     }
     
-    public struct MemoryUsage {
+    public struct MemoryUsage: Sendable {
         public let used: Int64 // bytes
         public let available: Int64
         public let total: Int64
@@ -132,16 +133,9 @@ public final class MemoryWarningManager: ObservableObject {
     }
     
     private func triggerLoadShedding(level: MemoryPressure) {
-        queue.async { [weak self] in
-            guard let self = self else { return }
-            
-            for object in self.loadShedders.allObjects {
-                if let shedder = object as? LoadShedding {
-                    DispatchQueue.main.async {
-                        shedder.shed(level: level)
-                    }
-                }
-            }
+        let shedders = loadShedders.allObjects.compactMap { $0 as? LoadShedding }
+        for shedder in shedders {
+            shedder.shed(level: level)
         }
     }
     
@@ -152,49 +146,41 @@ public final class MemoryWarningManager: ObservableObject {
 
 // MARK: - Load Shedding Protocol
 
+@MainActor
 public protocol LoadShedding: AnyObject {
     func shed(level: MemoryWarningManager.MemoryPressure)
 }
 
 // MARK: - Cache Manager with Load Shedding
 
+@MainActor
 public final class CacheManager: LoadShedding {
     private var caches: [String: Any] = [:]
-    private let lock = NSLock()
     private let maxSize: Int
     private var currentSize: Int = 0
-    
+
     public init(maxSizeMB: Int = 50) {
         self.maxSize = maxSizeMB * 1024 * 1024
         MemoryWarningManager.shared.register(self)
     }
     
     public func set<T>(_ value: T, for key: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        
         let size = MemoryLayout<T>.size
         if currentSize + size > maxSize {
             evictLRU()
         }
-        
+
         caches[key] = CacheEntry(value: value, size: size)
         currentSize += size
     }
-    
+
     public func get<T>(_ key: String, as type: T.Type) -> T? {
-        lock.lock()
-        defer { lock.unlock() }
-        
         guard let entry = caches[key] as? CacheEntry<T> else { return nil }
         entry.lastAccessed = Date()
         return entry.value
     }
-    
+
     public func shed(level: MemoryWarningManager.MemoryPressure) {
-        lock.lock()
-        defer { lock.unlock() }
-        
         switch level {
         case .normal:
             return
@@ -248,10 +234,11 @@ public final class CacheManager: LoadShedding {
 // MARK: - Image Cache with Load Shedding
 
 #if canImport(UIKit)
+@MainActor
 public final class ImageCache: LoadShedding {
     private let cache = NSCache<NSString, UIImage>()
     private let decoder = ImageDecoder()
-    
+
     public init(countLimit: Int = 100, totalCostLimit: Int = 50 * 1024 * 1024) {
         cache.countLimit = countLimit
         cache.totalCostLimit = totalCostLimit
@@ -306,80 +293,85 @@ extension UIImage {
 
 // MARK: - Repository with Load Shedding
 
+@MainActor
 public class LoadSheddingRepository: LoadShedding {
-    private var inflightRequests: [String: Task<Any, Error>] = [:]
-    private let lock = NSLock()
-    
+    private var inflightRequestKeys: Set<String> = []
+    private var cancellationHandlers: [String: () -> Void] = [:]
+
     public init() {
         MemoryWarningManager.shared.register(self)
     }
-    
+
     public func shed(level: MemoryWarningManager.MemoryPressure) {
-        lock.lock()
-        defer { lock.unlock() }
-        
         switch level {
         case .normal:
             return
         case .warning:
-            // Cancel non-critical requests
+            // Cancel non-critical requests (half of them)
             cancelNonCriticalRequests()
         case .critical:
             // Cancel all requests
             cancelAllRequests()
         }
     }
-    
+
     private func cancelNonCriticalRequests() {
         // Implementation would identify and cancel non-critical requests
-        let toCancelCount = inflightRequests.count / 2
-        for (index, (key, task)) in inflightRequests.enumerated() {
-            if index < toCancelCount {
-                task.cancel()
-                inflightRequests.removeValue(forKey: key)
-            }
+        let toCancelCount = cancellationHandlers.count / 2
+        var cancelled = 0
+        for (key, handler) in cancellationHandlers {
+            if cancelled >= toCancelCount { break }
+            handler()
+            cancellationHandlers.removeValue(forKey: key)
+            inflightRequestKeys.remove(key)
+            cancelled += 1
         }
     }
-    
+
     private func cancelAllRequests() {
-        for (_, task) in inflightRequests {
-            task.cancel()
+        for (_, handler) in cancellationHandlers {
+            handler()
         }
-        inflightRequests.removeAll()
+        cancellationHandlers.removeAll()
+        inflightRequestKeys.removeAll()
     }
-    
-    internal func trackRequest<T>(
+
+    internal func trackRequest<T: Sendable>(
         key: String,
         critical: Bool = false,
-        operation: () async throws -> T
+        operation: @Sendable () async throws -> T
     ) async throws -> T {
-        lock.lock()
-        let task = Task<Any, Error> {
-            try await operation()
+        registerKey(key)
+
+        return try await withTaskCancellationHandler {
+            defer { unregisterKey(key) }
+            return try await operation()
+        } onCancel: {
+            // Cancellation is handled by Swift concurrency
         }
-        inflightRequests[key] = task
-        lock.unlock()
-        
-        defer {
-            lock.lock()
-            inflightRequests.removeValue(forKey: key)
-            lock.unlock()
-        }
-        
-        return try await task.value as! T
+    }
+
+    private func registerKey(_ key: String) {
+        inflightRequestKeys.insert(key)
+    }
+
+    private func unregisterKey(_ key: String) {
+        inflightRequestKeys.remove(key)
+        cancellationHandlers.removeValue(forKey: key)
     }
 }
 
 // MARK: - ViewModel with Load Shedding
 
+@MainActor
 open class LoadSheddingViewModel: ObservableObject, LoadShedding {
     private var loadTask: Task<Void, Never>?
     private var debounceTimers: [String: Timer] = [:]
-    
+
     public init() {
         MemoryWarningManager.shared.register(self)
     }
-    
+
     public func shed(level: MemoryWarningManager.MemoryPressure) {
         switch level {
         case .normal:
@@ -392,21 +384,21 @@ open class LoadSheddingViewModel: ObservableObject, LoadShedding {
             cancelAllOperations()
         }
     }
-    
+
     private func cancelDebouncedOperations() {
         for (_, timer) in debounceTimers {
             timer.invalidate()
         }
         debounceTimers.removeAll()
     }
-    
+
     private func cancelAllOperations() {
         loadTask?.cancel()
         loadTask = nil
         cancelDebouncedOperations()
     }
-    
-    internal func trackLoad(_ operation: @escaping () async -> Void) {
+
+    internal func trackLoad(_ operation: @escaping @Sendable () async -> Void) {
         loadTask?.cancel()
         loadTask = Task {
             await operation()

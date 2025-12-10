@@ -236,8 +236,8 @@ public struct SnapshotComparison {
         """
     }
     
-    public func generateReport() -> PerformanceReport {
-        PerformanceReport(
+    public func generateReport() -> SnapshotPerformanceReport {
+        SnapshotPerformanceReport(
             comparison: self,
             timestamp: Date()
         )
@@ -280,9 +280,9 @@ public struct BenchmarkSnapshotComparison {
     }
 }
 
-// MARK: - Performance Report
+// MARK: - Snapshot Performance Report
 
-public struct PerformanceReport {
+public struct SnapshotPerformanceReport {
     public let comparison: SnapshotComparison
     public let timestamp: Date
     

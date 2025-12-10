@@ -140,9 +140,11 @@ public struct SignpostMarkers {
     }
     
     // MARK: - Custom Markers
-    
+
     public static func custom(_ name: String, metadata: [String: String] = [:]) -> SignpostInterval {
-        SignpostInterval(log: log, name: name, metadata: metadata)
+        var allMetadata = metadata
+        allMetadata["custom_name"] = name
+        return SignpostInterval(log: log, name: "Custom", metadata: allMetadata)
     }
 }
 
@@ -201,9 +203,9 @@ public class SignpostInterval {
 // MARK: - Default Templates
 
 public struct DefaultInstrumentsTemplates {
-    
+
     /// Template for app startup profiling
-    public static let startup = InstrumentsConfig(name: "App Startup") {
+    nonisolated(unsafe) public static let startup = InstrumentsConfig(name: "App Startup") {
         InstrumentsTemplate(
             type: .timeProfiler,
             configuration: [
@@ -230,7 +232,7 @@ public struct DefaultInstrumentsTemplates {
     }
     
     /// Template for UI performance profiling
-    public static let uiPerformance = InstrumentsConfig(name: "UI Performance") {
+    nonisolated(unsafe) public static let uiPerformance = InstrumentsConfig(name: "UI Performance") {
         InstrumentsTemplate(
             type: .swiftUIProfiler,
             configuration: [:]
@@ -260,7 +262,7 @@ public struct DefaultInstrumentsTemplates {
     }
     
     /// Template for memory profiling
-    public static let memory = InstrumentsConfig(name: "Memory") {
+    nonisolated(unsafe) public static let memory = InstrumentsConfig(name: "Memory") {
         InstrumentsTemplate(
             type: .allocations,
             configuration: [
@@ -279,7 +281,7 @@ public struct DefaultInstrumentsTemplates {
     }
     
     /// Template for network profiling
-    public static let network = InstrumentsConfig(name: "Network") {
+    nonisolated(unsafe) public static let network = InstrumentsConfig(name: "Network") {
         InstrumentsTemplate(
             type: .networkActivity,
             configuration: [
@@ -298,11 +300,12 @@ public struct DefaultInstrumentsTemplates {
     }
 }
 
+#if os(macOS)
 // MARK: - Instruments Runner
 
 /// Helper for running Instruments from command line
 public struct InstrumentsRunner {
-    
+
     /// Run Instruments with a specific template
     public static func profile(
         app: String,
@@ -312,13 +315,13 @@ public struct InstrumentsRunner {
     ) async throws {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("template.tracetemplate")
-        
+
         let config = InstrumentsConfig(name: "Benchmark") {
             template
         }
-        
+
         try config.exportTemplate(to: tempURL)
-        
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = [
@@ -328,17 +331,17 @@ public struct InstrumentsRunner {
             "-l", "\(Int(duration * 1000))",
             app
         ]
-        
+
         try process.run()
-        await process.waitUntilExit()
-        
+        process.waitUntilExit()
+
         if process.terminationStatus != 0 {
             throw InstrumentsError.profilingFailed(
                 exitCode: process.terminationStatus
             )
         }
     }
-    
+
     /// Parse trace file for metrics
     public static func parseTrace(at path: String) throws -> TraceMetrics {
         // This would use Instruments' export functionality
@@ -351,6 +354,7 @@ public struct InstrumentsRunner {
         )
     }
 }
+#endif
 
 public struct TraceMetrics {
     public let cpuUsage: Double // percentage

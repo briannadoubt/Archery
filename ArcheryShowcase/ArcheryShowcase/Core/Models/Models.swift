@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import AppIntents
+import Archery
 
 // MARK: - User Models
 
@@ -43,36 +45,70 @@ enum SubscriptionTier: String, Codable {
     case enterprise
 }
 
-enum AppTheme: String, Codable, CaseIterable {
-    case system
-    case light
-    case dark
-    
-    var title: String {
-        switch self {
-        case .system: return "System"
-        case .light: return "Light"
-        case .dark: return "Dark"
-        }
-    }
-}
+// AppTheme is defined in DesignTokens.swift
 
 // MARK: - Task Models
 
-struct Task: Identifiable, Codable {
+@IntentEntity(displayName: "Task")
+struct TaskItem: AppEntity, Identifiable, Codable, Sendable {
     let id: String
     let title: String
     let description: String?
-    let isCompleted: Bool
+    let status: TaskStatus
     let priority: TaskPriority
     let dueDate: Date?
     let createdAt: Date
-    let updatedAt: Date
-    let project: Project?
-    let assignee: User?
     let tags: [String]
-    let attachments: [Attachment]
-    let subtasks: [Subtask]
+
+    // Project excluded from Sendable struct - use projectId for relationships
+    var projectId: String?
+
+    var isCompleted: Bool { status == .completed }
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        description: String? = nil,
+        status: TaskStatus = .todo,
+        priority: TaskPriority = .medium,
+        dueDate: Date? = nil,
+        tags: [String] = [],
+        projectId: String? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.status = status
+        self.priority = priority
+        self.dueDate = dueDate
+        self.tags = tags
+        self.projectId = projectId
+        self.createdAt = createdAt
+    }
+
+    // Legacy init for compatibility
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        description: String? = nil,
+        status: TaskStatus = .todo,
+        priority: TaskPriority = .medium,
+        dueDate: Date? = nil,
+        tags: [String] = [],
+        project: Project?,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.status = status
+        self.priority = priority
+        self.dueDate = dueDate
+        self.tags = tags
+        self.projectId = project?.id
+        self.createdAt = createdAt
+    }
     
     var sectionTitle: String {
         if isCompleted {
@@ -94,12 +130,37 @@ struct Task: Identifiable, Codable {
     }
 }
 
-enum TaskPriority: Int, Codable, CaseIterable {
+// MARK: - TaskItem EntityQuery (required for AppEntity)
+
+struct TaskItemQuery: EntityQuery, Sendable {
+    func entities(for identifiers: [String]) async throws -> [TaskItem] {
+        TaskItem.mockTasks.filter { identifiers.contains($0.id) }
+    }
+
+    func suggestedEntities() async throws -> [TaskItem] {
+        Array(TaskItem.mockTasks.prefix(5))
+    }
+}
+
+extension TaskItem {
+    static var defaultQuery: TaskItemQuery { TaskItemQuery() }
+}
+
+@IntentEnum(displayName: "Status")
+enum TaskStatus: String, AppEnum, Codable, CaseIterable, Sendable {
+    case todo
+    case inProgress
+    case completed
+    case archived
+}
+
+@IntentEnum(displayName: "Priority")
+enum TaskPriority: Int, AppEnum, Codable, CaseIterable, Sendable {
     case low = 0
     case medium = 1
     case high = 2
     case urgent = 3
-    
+
     var title: String {
         switch self {
         case .low: return "Low"
@@ -108,7 +169,7 @@ enum TaskPriority: Int, Codable, CaseIterable {
         case .urgent: return "Urgent"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .low: return "arrow.down.circle"
@@ -117,7 +178,7 @@ enum TaskPriority: Int, Codable, CaseIterable {
         case .urgent: return "exclamationmark.circle.fill"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .low: return .gray
@@ -182,7 +243,7 @@ struct DashboardStats: Codable {
 }
 
 struct ActivityDataPoint: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let day: String
     let date: Date
     let count: Int
@@ -205,9 +266,9 @@ struct PrivacySettings: Codable {
 }
 
 enum ProfileVisibility: String, Codable {
-    case public
+    case `public`
     case team
-    case private
+    case `private`
 }
 
 // MARK: - Auth Models
@@ -220,14 +281,17 @@ struct AuthCredentials: Codable {
 }
 
 enum AuthError: LocalizedError {
+    case notAuthenticated
     case invalidCredentials
     case networkError
     case serverError(Int)
     case socialLoginFailed(String)
     case unknown(Error)
-    
+
     var errorDescription: String? {
         switch self {
+        case .notAuthenticated:
+            return "Authentication required"
         case .invalidCredentials:
             return "Invalid email or password"
         case .networkError:
@@ -243,6 +307,8 @@ enum AuthError: LocalizedError {
     
     var analyticsReason: String {
         switch self {
+        case .notAuthenticated:
+            return "not_authenticated"
         case .invalidCredentials:
             return "invalid_credentials"
         case .networkError:
@@ -298,4 +364,49 @@ enum AnalyticsEvent {
     case taskArchived(id: String)
     case formSubmitted(type: String)
     case error(code: String, message: String)
+}
+
+// MARK: - Mock Data
+
+extension User {
+    static let mock = User(
+        id: "user-1",
+        email: "demo@archery.app",
+        name: "Demo User"
+    )
+}
+
+extension TaskItem {
+    static let mockTasks: [TaskItem] = [
+        TaskItem(id: "1", title: "Review pull request", description: "Check the latest changes", status: .inProgress, priority: .high, dueDate: Date().addingTimeInterval(3600), tags: ["work", "urgent"]),
+        TaskItem(id: "2", title: "Update documentation", description: "Add examples for new APIs", status: .todo, priority: .medium, dueDate: Date().addingTimeInterval(86400), tags: ["docs"]),
+        TaskItem(id: "3", title: "Fix login bug", description: "Handle edge case for social login", status: .todo, priority: .urgent, dueDate: Date(), tags: ["bug", "auth"]),
+        TaskItem(id: "4", title: "Design system update", description: "Refresh color tokens", status: .inProgress, priority: .medium, tags: ["design"]),
+        TaskItem(id: "5", title: "Weekly team sync", status: .completed, priority: .low, dueDate: Date().addingTimeInterval(-86400)),
+        TaskItem(id: "6", title: "Performance optimization", description: "Improve app launch time", status: .todo, priority: .high, dueDate: Date().addingTimeInterval(172800), tags: ["performance"]),
+    ]
+}
+
+extension DashboardStats {
+    static let mock = DashboardStats(
+        totalTasks: 42,
+        completedTasks: 28,
+        inProgressTasks: 8,
+        overdueTaskss: 2,
+        thisWeekTasks: 12,
+        teamMembers: 5,
+        activeProjects: 3
+    )
+}
+
+extension ActivityDataPoint {
+    static let mockWeek: [ActivityDataPoint] = [
+        ActivityDataPoint(day: "Mon", date: Date().addingTimeInterval(-6*86400), count: 8),
+        ActivityDataPoint(day: "Tue", date: Date().addingTimeInterval(-5*86400), count: 12),
+        ActivityDataPoint(day: "Wed", date: Date().addingTimeInterval(-4*86400), count: 6),
+        ActivityDataPoint(day: "Thu", date: Date().addingTimeInterval(-3*86400), count: 15),
+        ActivityDataPoint(day: "Fri", date: Date().addingTimeInterval(-2*86400), count: 9),
+        ActivityDataPoint(day: "Sat", date: Date().addingTimeInterval(-86400), count: 3),
+        ActivityDataPoint(day: "Sun", date: Date(), count: 5),
+    ]
 }

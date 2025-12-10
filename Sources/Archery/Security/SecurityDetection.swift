@@ -6,7 +6,7 @@ import UIKit
 import MachO
 #endif
 
-public enum SecurityThreat: String, CaseIterable {
+public enum SecurityThreat: String, CaseIterable, Sendable {
     case jailbroken = "Device is jailbroken"
     case debuggerAttached = "Debugger is attached"
     case simulatorDetected = "Running on simulator"
@@ -222,78 +222,84 @@ public final class SecurityDetection: @unchecked Sendable {
     }
     
     private func handleThreatDetection(_ threat: SecurityThreat) {
+        let threatValue = threat.rawValue
         Task { @MainActor in
-            logger.critical("Security threat detected: \(threat.rawValue)")
+            logger.critical("Security threat detected: \(threatValue)")
         }
-        
+
         delegate?.securityDetection(didDetectThreat: threat)
-        
+
         if let hooks = detectionHooks[threat] {
             for hook in hooks {
                 hook(threat)
             }
         }
-        
+
         #if !DEBUG
         switch threat {
         case .jailbroken, .debuggerAttached, .tampered, .reverseEngineering:
             fatalError("Security violation detected")
         case .simulatorDetected, .unsignedBinary:
-            logger.warning("Non-critical security warning: \(threat.rawValue)")
+            MainActor.assumeIsolated {
+                logger.warning("Non-critical security warning: \(threatValue)")
+            }
         }
         #endif
     }
 }
 
+@MainActor
 public class SecurityMonitor: ObservableObject {
     @Published public private(set) var threats: Set<SecurityThreat> = []
     @Published public private(set) var isSecure: Bool = true
     @Published public private(set) var lastCheckDate: Date?
-    
+
     private let detection = SecurityDetection.shared
     private var checkTimer: Timer?
-    
+
     public init(checkInterval: TimeInterval = 300) {
         setupDetection()
         startMonitoring(interval: checkInterval)
     }
-    
+
     private func setupDetection() {
         for threat in SecurityThreat.allCases {
-            detection.registerHook(for: threat) { [weak self] threat in
-                DispatchQueue.main.async {
-                    self?.threats.insert(threat)
+            detection.registerHook(for: threat) { [weak self] detectedThreat in
+                Task { @MainActor in
+                    self?.threats.insert(detectedThreat)
                     self?.isSecure = false
                 }
             }
         }
     }
-    
+
     public func startMonitoring(interval: TimeInterval) {
         checkTimer?.invalidate()
-        
+
         performCheck()
-        
-        checkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            self.performCheck()
+
+        checkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.performCheck()
+            }
         }
     }
-    
+
     public func stopMonitoring() {
         checkTimer?.invalidate()
         checkTimer = nil
     }
-    
+
     public func performCheck() {
         threats.removeAll()
         isSecure = true
         lastCheckDate = Date()
-        
+
         detection.performAllChecks()
     }
-    
-    deinit {
-        stopMonitoring()
+
+    nonisolated deinit {
+        // Timer cleanup is handled by the system when the object is deallocated
     }
 }
 
