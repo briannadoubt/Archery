@@ -5,16 +5,16 @@ import SwiftSyntaxMacros
 
 // MARK: - Diagnostics
 
-enum GRDBRepositoryDiagnostic: String, DiagnosticMessage {
+enum DatabaseRepositoryDiagnostic: String, DiagnosticMessage {
     case mustBeClass
     case missingRecordType
 
     var message: String {
         switch self {
         case .mustBeClass:
-            return "@GRDBRepository can only be applied to a class"
+            return "@DatabaseRepository can only be applied to a class"
         case .missingRecordType:
-            return "@GRDBRepository requires a record type parameter"
+            return "@DatabaseRepository requires a record type parameter"
         }
     }
 
@@ -25,11 +25,11 @@ enum GRDBRepositoryDiagnostic: String, DiagnosticMessage {
     var severity: DiagnosticSeverity { .error }
 }
 
-// MARK: - @GRDBRepository Macro
+// MARK: - @DatabaseRepository Macro
 
 /// Generates a repository pattern for GRDB with protocol, live, and mock implementations.
 /// Automatically generates CRUD methods for the specified record type.
-public enum GRDBRepositoryMacro: PeerMacro {
+public enum DatabaseRepositoryMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingPeersOf decl: some DeclSyntaxProtocol,
@@ -37,7 +37,7 @@ public enum GRDBRepositoryMacro: PeerMacro {
     ) throws -> [DeclSyntax] {
         guard let classDecl = decl.as(ClassDeclSyntax.self) else {
             throw DiagnosticsError(diagnostics: [
-                Diagnostic(node: Syntax(node), message: GRDBRepositoryDiagnostic.mustBeClass)
+                Diagnostic(node: Syntax(node), message: DatabaseRepositoryDiagnostic.mustBeClass)
             ])
         }
 
@@ -45,7 +45,7 @@ public enum GRDBRepositoryMacro: PeerMacro {
 
         guard let recordType = config.recordType else {
             throw DiagnosticsError(diagnostics: [
-                Diagnostic(node: Syntax(node), message: GRDBRepositoryDiagnostic.missingRecordType)
+                Diagnostic(node: Syntax(node), message: DatabaseRepositoryDiagnostic.missingRecordType)
             ])
         }
 
@@ -192,20 +192,20 @@ public enum GRDBRepositoryMacro: PeerMacro {
         return """
 
 \(access)final class \(name): \(protocolName), @unchecked Sendable {
-    private let db: any GRDB.DatabaseWriter
+    private let container: Archery.PersistenceContainer
     private let base: \(className)
     private let entityTypeName = "\(recordType)"
 
-    \(access)init(db: any GRDB.DatabaseWriter) {
-        self.db = db
+    \(access)init(container: Archery.PersistenceContainer) {
+        self.container = container
         self.base = \(className)()
     }
 
-    \(access)init(container: EnvContainer) {
-        guard let grdb = container.grdb else {
-            fatalError("GRDBContainer not registered in EnvContainer")
+    \(access)init(envContainer: Archery.EnvContainer) {
+        guard let persistenceContainer = envContainer.grdb else {
+            fatalError("PersistenceContainer not registered in EnvContainer")
         }
-        self.db = grdb.writer
+        self.container = persistenceContainer
         self.base = \(className)()
     }
 
@@ -213,7 +213,7 @@ public enum GRDBRepositoryMacro: PeerMacro {
 
     \(access)func fetchAll() async throws -> [\(recordType)] {
         let start = ContinuousClock.now
-        let results = try await db.read { db in try \(recordType).fetchAll(db) }
+        let results = try await container.read { db in try \(recordType).fetchAll(db) }
         let duration = ContinuousClock.now - start
         let durationMs = Double(duration.components.attoseconds) / 1_000_000_000_000_000
 
@@ -228,11 +228,11 @@ public enum GRDBRepositoryMacro: PeerMacro {
     }
 
     \(access)func fetch(id: \(recordType).ID) async throws -> \(recordType)? {
-        try await db.read { db in try \(recordType).fetchOne(db, id: id) }
+        try await container.read { db in try \(recordType).fetchOne(db, id: id) }
     }
 
     \(access)func insert(_ record: \(recordType)) async throws -> \(recordType) {
-        let result = try await db.write { db in
+        let result = try await container.write { db in
             var record = record
             try record.insert(db)
             return record
@@ -249,7 +249,7 @@ public enum GRDBRepositoryMacro: PeerMacro {
     }
 
     \(access)func update(_ record: \(recordType)) async throws {
-        try await db.write { db in try record.update(db) }
+        try await container.write { db in try record.update(db) }
 
         // Auto-track entity updated
         await MainActor.run {
@@ -260,7 +260,7 @@ public enum GRDBRepositoryMacro: PeerMacro {
     }
 
     \(access)func upsert(_ record: \(recordType)) async throws -> \(recordType) {
-        let result = try await db.write { db in
+        let result = try await container.write { db in
             var record = record
             try record.save(db)
             return record
@@ -277,7 +277,7 @@ public enum GRDBRepositoryMacro: PeerMacro {
     }
 
     \(access)func delete(id: \(recordType).ID) async throws -> Bool {
-        let deleted = try await db.write { db in try \(recordType).deleteOne(db, id: id) }
+        let deleted = try await container.write { db in try \(recordType).deleteOne(db, id: id) }
 
         if deleted {
             // Auto-track entity deleted
@@ -292,11 +292,11 @@ public enum GRDBRepositoryMacro: PeerMacro {
     }
 
     \(access)func deleteAll() async throws -> Int {
-        try await db.write { db in try \(recordType).deleteAll(db) }
+        try await container.write { db in try \(recordType).deleteAll(db) }
     }
 
     \(access)func count() async throws -> Int {
-        try await db.read { db in try \(recordType).fetchCount(db) }
+        try await container.read { db in try \(recordType).fetchCount(db) }
     }\(customSection)
 }
 """

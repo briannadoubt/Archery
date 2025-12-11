@@ -1,6 +1,7 @@
 import SwiftUI
 
 // MARK: - Form Examples View
+
 struct FormExamplesView: View {
     @State private var registrationForm = RegistrationFormData()
     @State private var contactForm = ContactFormData()
@@ -8,68 +9,29 @@ struct FormExamplesView: View {
     var body: some View {
         List {
             Section("Basic Forms") {
-                NavigationLink {
-                    RegistrationFormView(form: $registrationForm)
-                } label: {
-                    FormRowLabel(
-                        title: "Registration Form",
-                        description: "User sign-up with validation",
-                        icon: "person.badge.plus"
-                    )
+                NavigationLink { RegistrationFormView(form: $registrationForm) } label: {
+                    FormRowLabel(title: "Registration Form", description: "User sign-up with validation", icon: "person.badge.plus")
                 }
-
-                NavigationLink {
-                    ContactFormView(form: $contactForm)
-                } label: {
-                    FormRowLabel(
-                        title: "Contact Form",
-                        description: "Support request with priority",
-                        icon: "envelope"
-                    )
+                NavigationLink { ContactFormView(form: $contactForm) } label: {
+                    FormRowLabel(title: "Contact Form", description: "Support request with priority", icon: "envelope")
                 }
-
-                NavigationLink {
-                    TaskFormView()
-                } label: {
-                    FormRowLabel(
-                        title: "Task Form",
-                        description: "Create task with metadata",
-                        icon: "checklist"
-                    )
+                NavigationLink { TaskFormView() } label: {
+                    FormRowLabel(title: "Task Form", description: "Create task with metadata", icon: "checklist")
                 }
             }
 
             Section("Advanced Forms") {
-                NavigationLink {
-                    WizardFormView()
-                } label: {
-                    FormRowLabel(
-                        title: "Multi-Step Wizard",
-                        description: "Step-by-step onboarding flow",
-                        icon: "rectangle.stack"
-                    )
+                NavigationLink { WizardFormView() } label: {
+                    FormRowLabel(title: "Multi-Step Wizard", description: "Step-by-step onboarding flow", icon: "rectangle.stack")
                 }
             }
 
             Section("Navigation & Flows") {
-                NavigationLink {
-                    NavigationShowcaseView()
-                } label: {
-                    FormRowLabel(
-                        title: "Navigation Demo",
-                        description: "@Route, @Flow, @presents, deep links",
-                        icon: "arrow.triangle.branch"
-                    )
+                NavigationLink { NavigationShowcaseView() } label: {
+                    FormRowLabel(title: "Navigation Demo", description: "@Route, @Flow, @presents, deep links", icon: "arrow.triangle.branch")
                 }
-
-                NavigationLink {
-                    TaskCreationFlowHost()
-                } label: {
-                    FormRowLabel(
-                        title: "Task Creation Flow",
-                        description: "@Flow wizard with 4 steps",
-                        icon: "rectangle.stack.badge.plus"
-                    )
+                NavigationLink { TaskCreationFlowHost() } label: {
+                    FormRowLabel(title: "Task Creation Flow", description: "@Flow wizard with 4 steps", icon: "rectangle.stack.badge.plus")
                 }
             }
         }
@@ -77,7 +39,6 @@ struct FormExamplesView: View {
     }
 }
 
-// Helper view for form list rows
 private struct FormRowLabel: View {
     let title: String
     let description: String
@@ -89,647 +50,167 @@ private struct FormRowLabel: View {
                 .font(.title2)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 32)
-
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(title).font(.headline)
+                Text(description).font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
     }
 }
 
-// MARK: - Wizard Form View (Multi-Step Form Demo)
+// MARK: - Wizard Form View
+
 struct WizardFormView: View {
     @Environment(\.dismiss) var dismiss
     @State private var currentStep = 0
     @State private var name = ""
     @State private var email = ""
-    @State private var role = "Developer"
-    @State private var experience = "1-3 years"
-    @State private var notifications = true
-    @State private var newsletter = false
+    @State private var company = ""
+    @State private var role = ""
 
-    private let roles = ["Developer", "Designer", "Product Manager", "QA Engineer", "Other"]
-    private let experienceLevels = ["Less than 1 year", "1-3 years", "3-5 years", "5+ years"]
+    private let steps = ["Personal Info", "Work Details", "Review"]
 
     var body: some View {
         VStack(spacing: 0) {
-            stepIndicator
-
-            TabView(selection: $currentStep) {
-                step1.tag(0)
-                step2.tag(1)
-                step3.tag(2)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut, value: currentStep)
-
-            navigationButtons
-        }
-        .navigationTitle("Onboarding")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var stepIndicator: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<3) { step in
-                Capsule()
-                    .fill(step <= currentStep ? Color.accentColor : Color.secondary.opacity(0.3))
-                    .frame(height: 4)
-            }
-        }
-        .padding()
-    }
-
-    private var step1: some View {
-        Form {
-            Section {
-                Text("Let's get to know you")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-            }
-
-            Section("Personal Information") {
-                TextField("Full Name", text: $name)
-                TextField("Email", text: $email)
-                    .textContentType(.emailAddress)
-                    .autocapitalization(.none)
-            }
-        }
-    }
-
-    private var step2: some View {
-        Form {
-            Section {
-                Text("Tell us about your work")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-            }
-
-            Section("Professional Details") {
-                Picker("Role", selection: $role) {
-                    ForEach(roles, id: \.self) { Text($0) }
-                }
-
-                Picker("Experience", selection: $experience) {
-                    ForEach(experienceLevels, id: \.self) { Text($0) }
-                }
-            }
-        }
-    }
-
-    private var step3: some View {
-        Form {
-            Section {
-                Text("Almost done!")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-            }
-
-            Section("Preferences") {
-                Toggle("Push Notifications", isOn: $notifications)
-                Toggle("Newsletter", isOn: $newsletter)
-            }
-
-            Section("Summary") {
-                LabeledContent("Name", value: name.isEmpty ? "Not provided" : name)
-                LabeledContent("Email", value: email.isEmpty ? "Not provided" : email)
-                LabeledContent("Role", value: role)
-                LabeledContent("Experience", value: experience)
-            }
-        }
-    }
-
-    private var navigationButtons: some View {
-        HStack {
-            if currentStep > 0 {
-                Button("Back") {
-                    currentStep -= 1
-                }
-                .buttonStyle(.bordered)
-            }
-
-            Spacer()
-
-            if currentStep < 2 {
-                Button("Next") {
-                    currentStep += 1
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!isStepValid)
-            } else {
-                Button("Complete") {
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!isStepValid)
-            }
-        }
-        .padding()
-    }
-
-    private var isStepValid: Bool {
-        switch currentStep {
-        case 0: return !name.isEmpty && !email.isEmpty
-        case 1: return true
-        case 2: return true
-        default: return true
-        }
-    }
-}
-
-// MARK: - Settings View
-struct SettingsView: View {
-    @Environment(\.navigationHandle) private var nav
-
-    var body: some View {
-        List {
-            Section("Account") {
-                NavigationLink("Profile", destination: ProfileView())
-                NavigationLink("Subscription", destination: SubscriptionView())
-                NavigationLink("Privacy", destination: Text("Privacy Settings").navigationTitle("Privacy"))
-            }
-
-            Section("Preferences") {
-                NavigationLink("Appearance", destination: AppearanceView())
-                NavigationLink("Notifications", destination: NotificationsSettingsView())
-                NavigationLink("Data & Storage", destination: Text("Data & Storage").navigationTitle("Data & Storage"))
-            }
-
-            Section("Developer") {
-                NavigationLink {
-                    AnalyticsShowcaseView()
-                } label: {
-                    Label("Analytics & Events", systemImage: "chart.bar.xaxis")
-                }
-
-                NavigationLink {
-                    ObservabilityShowcaseView()
-                } label: {
-                    Label("Observability Dashboard", systemImage: "waveform.path.ecg")
-                }
-
-                NavigationLink {
-                    MonetizationShowcaseView()
-                } label: {
-                    Label("StoreKit & Monetization", systemImage: "creditcard")
-                }
-
-                NavigationLink {
-                    GRDBShowcaseView()
-                } label: {
-                    Label("GRDB Persistence", systemImage: "cylinder.split.1x2")
-                }
-
-                NavigationLink("Macro Showcase", destination: MacroShowcaseView())
-                NavigationLink("Advanced Macros", destination: AdvancedMacrosShowcaseView())
-                NavigationLink("App Intents", destination: AppIntentsShowcaseView())
-                NavigationLink("Widget Setup", destination: WidgetSharedPreview())
-                NavigationLink("Routes & Deep Links", destination: DeepLinkTesterView())
-                NavigationLink("Design Tokens", destination: DesignTokensShowcaseView())
-                NavigationLink("@ViewModelBound", destination: ViewModelBoundShowcaseView())
-                NavigationLink("@AppShell", destination: AppShellShowcaseView())
-                NavigationLink("@SharedModel", destination: SharedModelShowcaseView())
-            }
-
-            Section("About") {
-                NavigationLink("Help & Support", destination: Text("Help").navigationTitle("Help"))
-                NavigationLink("Terms of Service", destination: Text("Terms").navigationTitle("Terms"))
-                NavigationLink("Privacy Policy", destination: Text("Privacy").navigationTitle("Privacy"))
-            }
-        }
-        .navigationTitle("Settings")
-    }
-}
-
-// MARK: - Appearance View
-struct AppearanceView: View {
-    @EnvironmentObject var themeManager: ThemeManager
-
-    var body: some View {
-        Form {
-            Section("Theme") {
-                Picker("Appearance", selection: $themeManager.currentTheme) {
-                    ForEach(AppTheme.allCases, id: \.self) { theme in
-                        Label(theme.displayName, systemImage: theme.icon)
-                            .tag(theme)
+            // Progress indicator
+            HStack(spacing: 0) {
+                ForEach(0..<steps.count, id: \.self) { index in
+                    StepIndicator(index: index, title: steps[index], isCompleted: index < currentStep, isCurrent: index == currentStep)
+                    if index < steps.count - 1 {
+                        Rectangle().fill(index < currentStep ? Color.accentColor : Color.gray.opacity(0.3)).frame(height: 2)
                     }
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
             }
-
-            Section("Preview") {
-                previewColors
-            }
-
-            Section {
-                Text("Theme changes are applied immediately and saved automatically.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .navigationTitle("Appearance")
-    }
-
-    private var previewColors: some View {
-        HStack(spacing: 16) {
-            colorSwatch(color: Color.accentColor, label: "Accent")
-            colorSwatch(color: Color(.systemBackground), label: "Background")
-            colorSwatch(color: Color(.secondarySystemBackground), label: "Secondary")
-        }
-    }
-
-    private func colorSwatch(color: Color, label: String) -> some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(color)
-            .frame(height: 60)
-            .overlay {
-                Text(label)
-                    .font(.caption)
-                    .foregroundStyle(label == "Accent" ? .white : .primary)
-            }
-    }
-}
-
-// MARK: - Notifications Settings View
-struct NotificationsSettingsView: View {
-    @State private var pushEnabled = true
-    @State private var taskReminders = true
-    @State private var dailySummary = false
-    @State private var weeklyReport = true
-
-    var body: some View {
-        Form {
-            Section("Push Notifications") {
-                Toggle("Enable Notifications", isOn: $pushEnabled)
-            }
-
-            Section("Reminders") {
-                Toggle("Task Reminders", isOn: $taskReminders)
-                    .disabled(!pushEnabled)
-                Toggle("Daily Summary", isOn: $dailySummary)
-                    .disabled(!pushEnabled)
-                Toggle("Weekly Report", isOn: $weeklyReport)
-                    .disabled(!pushEnabled)
-            }
-
-            Section {
-                Text("Manage notification permissions in System Settings.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .navigationTitle("Notifications")
-    }
-}
-
-// MARK: - Deep Link Tester View
-struct DeepLinkTesterView: View {
-    @State private var urlText = "tasks/list"
-    @State private var matchedRoute: String?
-
-    var body: some View {
-        Form {
-            Section("Test URL Path") {
-                TextField("Enter path (e.g., tasks/list)", text: $urlText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                Button("Test Route") {
-                    testRoute()
-                }
-            }
-
-            Section("Result") {
-                if let route = matchedRoute {
-                    Label(route, systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else {
-                    Label("No match", systemImage: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Available Routes") {
-                Group {
-                    Text("dashboard/main, dashboard/stats, dashboard/insights")
-                    Text("tasks/list, tasks/create, tasks/{id}")
-                    Text("forms/list, forms/registration, forms/contact")
-                    Text("settings/main, settings/profile, settings/preferences")
-                }
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-            }
-        }
-        .navigationTitle("Deep Links")
-    }
-
-    private func testRoute() {
-        let path = urlText.split(separator: "/").map(String.init)
-
-        // Try each route type
-        if let route = TasksRoute.fromURL(path: path, query: [:]) {
-            matchedRoute = "TasksRoute.\(route)"
-        } else if let route = DashboardRoute.fromURL(path: path, query: [:]) {
-            matchedRoute = "DashboardRoute.\(route)"
-        } else if let route = FormsRoute.fromURL(path: path, query: [:]) {
-            matchedRoute = "FormsRoute.\(route)"
-        } else if let route = SettingsRoute.fromURL(path: path, query: [:]) {
-            matchedRoute = "SettingsRoute.\(route)"
-        } else {
-            matchedRoute = nil
-        }
-    }
-}
-
-// MARK: - Design Tokens Catalog View
-struct DesignTokensCatalogView: View {
-    @Environment(\.designTokens) var tokens
-
-    var body: some View {
-        List {
-            Section("Colors") {
-                ColorRow(name: "Primary", color: tokens.colors.primary)
-                ColorRow(name: "Secondary", color: tokens.colors.secondary)
-                ColorRow(name: "Error", color: tokens.colors.error)
-                ColorRow(name: "Warning", color: tokens.colors.warning)
-                ColorRow(name: "Success", color: tokens.colors.success)
-            }
-
-            Section("Typography") {
-                TypographyRow(name: "Large Title", font: tokens.typography.largeTitle)
-                TypographyRow(name: "Title 1", font: tokens.typography.title1)
-                TypographyRow(name: "Headline", font: tokens.typography.headline)
-                TypographyRow(name: "Body", font: tokens.typography.body)
-                TypographyRow(name: "Caption", font: tokens.typography.caption1)
-            }
-
-            Section("Spacing") {
-                SpacingRow(name: "xxSmall", value: tokens.spacing.xxSmall)
-                SpacingRow(name: "xSmall", value: tokens.spacing.xSmall)
-                SpacingRow(name: "small", value: tokens.spacing.small)
-                SpacingRow(name: "medium", value: tokens.spacing.medium)
-                SpacingRow(name: "large", value: tokens.spacing.large)
-                SpacingRow(name: "xLarge", value: tokens.spacing.xLarge)
-                SpacingRow(name: "xxLarge", value: tokens.spacing.xxLarge)
-            }
-
-            Section("Corner Radius") {
-                SpacingRow(name: "small", value: tokens.cornerRadius.small)
-                SpacingRow(name: "medium", value: tokens.cornerRadius.medium)
-                SpacingRow(name: "large", value: tokens.cornerRadius.large)
-            }
-        }
-        .navigationTitle("Design Tokens")
-    }
-}
-
-private struct ColorRow: View {
-    let name: String
-    let color: Color
-
-    var body: some View {
-        HStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(color)
-                .frame(width: 32, height: 32)
-
-            Text(name)
-
-            Spacer()
-
-            Text("tokens.colors.\(name.lowercased())")
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct TypographyRow: View {
-    let name: String
-    let font: Font
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(name)
-                .font(font)
-
-            Text("tokens.typography.\(name.lowercased().replacingOccurrences(of: " ", with: ""))")
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-private struct SpacingRow: View {
-    let name: String
-    let value: CGFloat
-
-    var body: some View {
-        HStack {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.accentColor)
-                .frame(width: value, height: 16)
-
-            Text(name)
-
-            Spacer()
-
-            Text("\(Int(value))pt")
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - Profile View
-struct ProfileView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "person.circle.fill")
-                .font(.system(size: 100))
-                .foregroundStyle(.quaternary)
-                .padding()
-
-            Text("Demo User")
-                .font(.title)
-                .fontWeight(.bold)
-
-            Text("demo@archery.app")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-        }
-        .navigationTitle("Profile")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Task Detail View
-struct TaskDetailView: View {
-    let taskId: String
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Task Details")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.horizontal)
-
-                Text("Task ID: \(taskId)")
-                    .font(.subheadline.monospaced())
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-
-                Text("This view would show detailed task information.")
-                    .padding(.horizontal)
-            }
-        }
-        .navigationTitle("Task")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Onboarding Flow
-struct OnboardingFlow: View {
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        VStack {
-            TabView {
-                OnboardingPage(
-                    title: "Welcome to Archery",
-                    subtitle: "Macro-powered SwiftUI Architecture",
-                    systemImage: "target"
-                )
-
-                OnboardingPage(
-                    title: "Powerful Macros",
-                    subtitle: "Generate boilerplate code automatically",
-                    systemImage: "wand.and.stars"
-                )
-
-                OnboardingPage(
-                    title: "Type-Safe",
-                    subtitle: "Strongly typed, testable architecture",
-                    systemImage: "checkmark.shield"
-                )
-            }
-            .tabViewStyle(.page)
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
-
-            Button("Get Started") {
-                dismiss()
-            }
-            .buttonStyle(.borderedProminent)
             .padding()
-        }
-    }
-}
 
-struct OnboardingPage: View {
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: systemImage)
-                .font(.system(size: 80))
-                .foregroundStyle(Color.accentColor)
-            
-            Text(title)
-                .font(.title)
-                .fontWeight(.bold)
-            
-            Text(subtitle)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        }
-        .padding()
-    }
-}
+            Spacer()
 
-// MARK: - Subscription View
-struct SubscriptionView: View {
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text("Premium Features")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+            // Step content
+            Group {
+                switch currentStep {
+                case 0: PersonalInfoStep(name: $name, email: $email)
+                case 1: WorkDetailsStep(company: $company, role: $role)
+                case 2: ReviewStep(name: name, email: email, company: company, role: role)
+                default: EmptyView()
+                }
+            }
+            .padding()
 
-                FeatureRow(
-                    icon: "infinity",
-                    title: "Unlimited Tasks",
-                    description: "Create as many tasks as you need"
-                )
+            Spacer()
 
-                FeatureRow(
-                    icon: "person.3",
-                    title: "Team Collaboration",
-                    description: "Work together with your team"
-                )
-
-                FeatureRow(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "Advanced Analytics",
-                    description: "Detailed insights and reports"
-                )
-
-                Button("Subscribe Now") {
-                    // Handle subscription
+            // Navigation buttons
+            HStack {
+                if currentStep > 0 {
+                    Button("Back") { withAnimation { currentStep -= 1 } }
+                        .buttonStyle(.bordered)
+                }
+                Spacer()
+                Button(currentStep == steps.count - 1 ? "Submit" : "Next") {
+                    if currentStep == steps.count - 1 {
+                        dismiss()
+                    } else {
+                        withAnimation { currentStep += 1 }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .disabled(currentStep == 0 && (name.isEmpty || email.isEmpty))
+                .disabled(currentStep == 1 && company.isEmpty)
             }
             .padding()
         }
-        .navigationTitle("Premium")
+        .navigationTitle("Wizard Form")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
-struct FeatureRow: View {
-    let icon: String
+// MARK: - Wizard Step Views
+
+private struct StepIndicator: View {
+    let index: Int
     let title: String
-    let description: String
-    
+    let isCompleted: Bool
+    let isCurrent: Bool
+
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 40)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 4) {
+            ZStack {
+                Circle()
+                    .fill(isCompleted ? Color.accentColor : (isCurrent ? Color.accentColor.opacity(0.2) : Color.gray.opacity(0.2)))
+                    .frame(width: 32, height: 32)
+                if isCompleted {
+                    Image(systemName: "checkmark").foregroundStyle(.white).font(.caption.bold())
+                } else {
+                    Text("\(index + 1)").foregroundStyle(isCurrent ? Color.accentColor : .secondary).font(.caption.bold())
+                }
             }
-            
-            Spacer()
+            Text(title).font(.caption2).foregroundStyle(isCurrent ? .primary : .secondary)
         }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
-// MARK: - Sign Up View
+private struct PersonalInfoStep: View {
+    @Binding var name: String
+    @Binding var email: String
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Personal Information").font(.title2).fontWeight(.semibold)
+            TextField("Full Name", text: $name).textFieldStyle(.roundedBorder)
+            TextField("Email Address", text: $email).textFieldStyle(.roundedBorder).textInputAutocapitalization(.never).keyboardType(.emailAddress)
+        }
+    }
+}
+
+private struct WorkDetailsStep: View {
+    @Binding var company: String
+    @Binding var role: String
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Work Details").font(.title2).fontWeight(.semibold)
+            TextField("Company Name", text: $company).textFieldStyle(.roundedBorder)
+            TextField("Your Role", text: $role).textFieldStyle(.roundedBorder)
+        }
+    }
+}
+
+private struct ReviewStep: View {
+    let name: String
+    let email: String
+    let company: String
+    let role: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Review").font(.title2).fontWeight(.semibold)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    ReviewRow(label: "Name", value: name)
+                    ReviewRow(label: "Email", value: email)
+                    ReviewRow(label: "Company", value: company)
+                    ReviewRow(label: "Role", value: role.isEmpty ? "Not specified" : role)
+                }
+            }
+        }
+    }
+}
+
+private struct ReviewRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).fontWeight(.medium)
+        }
+    }
+}
+
+// MARK: - Auth Views
+
 struct SignUpView: View {
     @Environment(\.dismiss) var dismiss
     @State private var email = ""
@@ -738,85 +219,78 @@ struct SignUpView: View {
     @State private var name = ""
 
     var body: some View {
-        VStack(spacing: 20) {
-            TextField("Name", text: $name)
-                .textFieldStyle(.roundedBorder)
-
-            TextField("Email", text: $email)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.emailAddress)
-                .autocapitalization(.none)
-
-            SecureField("Password", text: $password)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.newPassword)
-
-            SecureField("Confirm Password", text: $confirmPassword)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.newPassword)
-
-            Button("Create Account") {
-                // Handle sign up
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: .infinity)
-
-            Spacer()
-        }
-        .padding()
-        .navigationTitle("Sign Up")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
+        NavigationStack {
+            Form {
+                Section { TextField("Full Name", text: $name) }
+                Section { TextField("Email", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress) }
+                Section {
+                    SecureField("Password", text: $password)
+                    SecureField("Confirm Password", text: $confirmPassword)
                 }
+                Section {
+                    Button("Create Account") { dismiss() }
+                        .disabled(email.isEmpty || password.isEmpty || password != confirmPassword)
+                }
+            }
+            .navigationTitle("Sign Up")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
     }
 }
 
-// MARK: - Forgot Password View
 struct ForgotPasswordView: View {
     @Environment(\.dismiss) var dismiss
     @State private var email = ""
+    @State private var submitted = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Enter your email address and we'll send you a link to reset your password.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            TextField("Email", text: $email)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.emailAddress)
-                .autocapitalization(.none)
-
-            Button("Send Reset Link") {
-                // Handle password reset
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: .infinity)
-
-            Spacer()
-        }
-        .padding()
-        .navigationTitle("Reset Password")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
+        NavigationStack {
+            if submitted {
+                ContentUnavailableView("Check Your Email", systemImage: "envelope.badge", description: Text("We've sent password reset instructions to \(email)"))
+            } else {
+                Form {
+                    Section {
+                        TextField("Email Address", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress)
+                    } footer: {
+                        Text("Enter the email associated with your account.")
+                    }
+                    Section {
+                        Button("Send Reset Link") { withAnimation { submitted = true } }.disabled(email.isEmpty)
+                    }
                 }
             }
         }
+        .navigationTitle("Forgot Password")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        }
+    }
+}
+
+// MARK: - Task Detail View
+
+struct TaskDetailView: View {
+    let taskId: String
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Task Details").font(.largeTitle).fontWeight(.bold).padding(.horizontal)
+                Text("Task ID: \(taskId)").font(.subheadline.monospaced()).foregroundStyle(.secondary).padding(.horizontal)
+                Text("This view would show detailed task information.").padding(.horizontal)
+            }
+        }
+        .navigationTitle("Task")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 // MARK: - New Task View
+
 struct NewTaskView: View {
     @Environment(\.dismiss) var dismiss
     @State private var title = ""
@@ -826,44 +300,29 @@ struct NewTaskView: View {
     @State private var hasDueDate = false
 
     var body: some View {
-        Form {
-            Section("Task Details") {
-                TextField("Title", text: $title)
-
-                TextField("Description", text: $description, axis: .vertical)
-                    .lineLimit(3...6)
-            }
-
-            Section("Options") {
-                Picker("Priority", selection: $priority) {
-                    ForEach(TaskPriority.allCases, id: \.self) { priority in
-                        Label(priority.title, systemImage: priority.icon)
-                            .tag(priority)
+        NavigationStack {
+            Form {
+                Section { TextField("Task Title", text: $title) }
+                Section { TextField("Description", text: $description, axis: .vertical).lineLimit(3...6) }
+                Section {
+                    Picker("Priority", selection: $priority) {
+                        ForEach(TaskPriority.allCases, id: \.self) { priority in
+                            Label(priority.title, systemImage: priority.icon).tag(priority)
+                        }
                     }
                 }
-
-                Toggle("Set Due Date", isOn: $hasDueDate)
-
-                if hasDueDate {
-                    DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date, .hourAndMinute])
+                Section {
+                    Toggle("Set Due Date", isOn: $hasDueDate.animation())
+                    if hasDueDate {
+                        DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date, .hourAndMinute])
+                    }
                 }
             }
-        }
-        .navigationTitle("New Task")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
-                }
-            }
-
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    // Save task
-                    dismiss()
-                }
-                .disabled(title.isEmpty)
+            .navigationTitle("New Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Create") { dismiss() }.disabled(title.isEmpty) }
             }
         }
     }

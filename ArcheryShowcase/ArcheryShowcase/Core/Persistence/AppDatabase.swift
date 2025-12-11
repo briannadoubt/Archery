@@ -1,12 +1,11 @@
 import Foundation
 import SwiftUI
 import Archery
-import GRDB
 
 // MARK: - Persistent Task Model
 
-/// TaskItem adapted for GRDB persistence
-/// Uses the same structure as the app's TaskItem but with GRDB conformances
+/// TaskItem adapted for database persistence
+/// Uses the same structure as the app's TaskItem but with database conformances
 @Persistable(table: "tasks")
 struct PersistentTask: Codable, Identifiable, Hashable, Sendable, FetchableRecord, PersistableRecord {
     var id: String
@@ -112,7 +111,7 @@ struct PersistentProject: Codable, Identifiable, Hashable, Sendable, FetchableRe
 final class AppDatabase: ObservableObject {
     static let shared = AppDatabase()
 
-    private(set) var container: GRDBContainer?
+    private(set) var container: PersistenceContainer?
     @Published var isReady = false
     @Published var error: Error?
 
@@ -125,7 +124,7 @@ final class AppDatabase: ObservableObject {
         do {
             // Use file-based database for persistence
             let dbURL = AppDatabase.databaseURL
-            container = try GRDBContainer.file(at: dbURL)
+            container = try PersistenceContainer.file(at: dbURL)
 
             // Run migrations
             try appMigrations.run(on: container!)
@@ -145,7 +144,7 @@ final class AppDatabase: ObservableObject {
         let db = AppDatabase()
         Task { @MainActor in
             do {
-                db.container = try GRDBContainer.inMemory()
+                db.container = try PersistenceContainer.inMemory()
                 try appMigrations.run(on: db.container!)
                 try await db.seedDemoData()
                 db.isReady = true
@@ -165,16 +164,16 @@ final class AppDatabase: ObservableObject {
 
     // MARK: - Writers
 
-    var writer: GRDBWriter? {
+    var writer: PersistenceWriter? {
         guard let container else { return nil }
-        return GRDBWriter(container: container)
+        return PersistenceWriter(container: container)
     }
 }
 
 // MARK: - Migrations
 
-private let appMigrations = GRDBMigrationRunner {
-    GRDBMigration(id: "v1_create_tasks") { db in
+private let appMigrations = MigrationRunner {
+    Migration(id: "v1_create_tasks") { db in
         try db.create(table: "tasks") { t in
             t.primaryKey("id", .text)
             t.column("title", .text).notNull()
@@ -193,7 +192,7 @@ private let appMigrations = GRDBMigrationRunner {
         try db.create(index: "tasks_project_id_idx", on: "tasks", columns: ["project_id"])
     }
 
-    GRDBMigration(id: "v1_create_projects") { db in
+    Migration(id: "v1_create_projects") { db in
         try db.create(table: "projects") { t in
             t.primaryKey("id", .text)
             t.column("name", .text).notNull()
@@ -268,29 +267,29 @@ extension AppDatabase {
 
 extension PersistentTask {
     /// All tasks ordered by due date
-    static func allByDueDate() -> GRDBQueryBuilder<PersistentTask> {
+    static func allByDueDate() -> QueryBuilder<PersistentTask> {
         PersistentTask.all().order(by: Columns.dueDate, ascending: true)
     }
 
     /// Tasks filtered by status
-    static func withStatus(_ status: TaskStatus) -> GRDBQueryBuilder<PersistentTask> {
+    static func withStatus(_ status: TaskStatus) -> QueryBuilder<PersistentTask> {
         PersistentTask.all().filter(Columns.status == status.rawValue)
     }
 
     /// Tasks for a specific project
-    static func forProject(_ projectId: String) -> GRDBQueryBuilder<PersistentTask> {
+    static func forProject(_ projectId: String) -> QueryBuilder<PersistentTask> {
         PersistentTask.all().filter(Columns.projectId == projectId)
     }
 
     /// Incomplete tasks (not completed or archived)
-    static func incomplete() -> GRDBQueryBuilder<PersistentTask> {
+    static func incomplete() -> QueryBuilder<PersistentTask> {
         PersistentTask.all()
             .filter(Columns.status != TaskStatus.completed.rawValue)
             .filter(Columns.status != TaskStatus.archived.rawValue)
     }
 
     /// Overdue tasks
-    static func overdue() -> GRDBQueryBuilder<PersistentTask> {
+    static func overdue() -> QueryBuilder<PersistentTask> {
         PersistentTask.all()
             .filter(Columns.status != TaskStatus.completed.rawValue)
             .filter(Columns.dueDate < Date())
@@ -299,7 +298,7 @@ extension PersistentTask {
 
 extension PersistentProject {
     /// All projects ordered by name
-    static func allByName() -> GRDBQueryBuilder<PersistentProject> {
+    static func allByName() -> QueryBuilder<PersistentProject> {
         PersistentProject.all().order(by: Columns.name, ascending: true)
     }
 }
@@ -320,6 +319,6 @@ extension EnvironmentValues {
 extension View {
     func appDatabase(_ database: AppDatabase) -> some View {
         environment(\.appDatabase, database)
-            .grdbContainer(database.container ?? (try! GRDBContainer.inMemory()))
+            .databaseContainer(database.container ?? (try! PersistenceContainer.inMemory()))
     }
 }

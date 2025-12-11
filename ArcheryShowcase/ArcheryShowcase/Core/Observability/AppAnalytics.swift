@@ -8,7 +8,7 @@ import Archery
 //
 // AUTO-TRACKED BY FRAMEWORK (don't define here):
 // - screen_viewed, flow_started/completed/abandoned → NavigationCoordinator
-// - entity_created/updated/deleted/fetched → @GRDBRepository macro
+// - entity_created/updated/deleted/fetched → @DatabaseRepository macro
 // - paywall_viewed, purchase_started/completed/failed → PaywallView
 // - auth_started/completed/failed, auth_signed_out → AuthenticationManager
 // - error_occurred → ArcheryErrorTracker
@@ -125,7 +125,7 @@ struct AnalyticsShowcaseView: View {
 
                     AutoTrackedEventRow(icon: "rectangle.portrait", name: "screen_viewed", source: "NavigationCoordinator")
                     AutoTrackedEventRow(icon: "arrow.triangle.branch", name: "flow_started/completed", source: "NavigationCoordinator")
-                    AutoTrackedEventRow(icon: "tray.full", name: "entity_created/updated/deleted", source: "@GRDBRepository")
+                    AutoTrackedEventRow(icon: "tray.full", name: "entity_created/updated/deleted", source: "@DatabaseRepository")
                     AutoTrackedEventRow(icon: "creditcard", name: "purchase_started/completed/failed", source: "PaywallView")
                     AutoTrackedEventRow(icon: "person.badge.key", name: "auth_started/completed/failed", source: "AuthenticationManager")
                     AutoTrackedEventRow(icon: "exclamationmark.triangle", name: "error_occurred", source: "ArcheryErrorTracker")

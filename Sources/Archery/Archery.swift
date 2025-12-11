@@ -186,8 +186,48 @@ public struct AutoRegister: Sendable { public init() {} }
 @attached(member, names: arbitrary)
 public macro KeyValueStore() = #externalMacro(module: "ArcheryMacros", type: "KeyValueStoreMacro")
 
+@available(*, deprecated, message: "Use @Query with cache policy and @APIClient for data access. See QueryCachePolicy for network coordination patterns.")
 @attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
 public macro Repository() = #externalMacro(module: "ArcheryMacros", type: "RepositoryMacro")
+
+/// Marks a type as a query source provider.
+///
+/// Use with structs that define QuerySource properties for a specific model/domain.
+/// This macro adds conformance to `QuerySourceProvider` protocol.
+///
+/// Example:
+/// ```swift
+/// @QuerySources
+/// struct TaskSources {
+///     let api: TasksAPIProtocol
+///
+///     var all: QuerySource<Task> {
+///         QuerySource(Task.all().order(by: .createdAt))
+///             .remote { try await api.fetchAll() }
+///             .cache(.staleWhileRevalidate(staleAfter: .minutes(5)))
+///     }
+///
+///     var completed: QuerySource<Task> {
+///         QuerySource(Task.all().filter(Task.Columns.isCompleted == true))
+///             .remote { try await api.fetchCompleted() }
+///             .cache(.cacheFirst(ttl: .hours(1)))
+///     }
+/// }
+/// ```
+///
+/// Then inject at app root:
+/// ```swift
+/// ContentView()
+///     .querySources(TaskSources(api: TasksAPI.live()))
+/// ```
+///
+/// And use in views:
+/// ```swift
+/// @Query(\TaskSources.all)
+/// var tasks: [Task]
+/// ```
+@attached(extension, conformances: QuerySourceProvider)
+public macro QuerySources() = #externalMacro(module: "ArcheryMacros", type: "QuerySourcesMacro")
 
 @attached(member, names: arbitrary)
 @attached(memberAttribute)
@@ -203,7 +243,7 @@ public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShel
 @attached(member, names: arbitrary)
 public macro PersistenceGateway() = #externalMacro(module: "ArcheryMacros", type: "PersistenceGatewayMacro")
 
-/// Generates GRDB conformances helpers: Columns enum and databaseTableName.
+/// Generates database conformances helpers: Columns enum and databaseTableName.
 /// User must manually add FetchableRecord, PersistableRecord conformances.
 ///
 /// Example:
@@ -223,11 +263,11 @@ public macro Persistable(
     primaryKey: String = "id"
 ) = #externalMacro(module: "ArcheryMacros", type: "PersistableMacro")
 
-/// Generates a repository pattern for GRDB with protocol, live, and mock implementations.
+/// Generates a repository pattern for the database with protocol, live, and mock implementations.
 ///
 /// Example:
 /// ```swift
-/// @GRDBRepository(record: Player.self)
+/// @DatabaseRepository(record: Player.self)
 /// class PlayerStore {
 ///     func topScorers(limit: Int) async throws -> [Player] {
 ///         try await db.read { db in
@@ -237,10 +277,10 @@ public macro Persistable(
 /// }
 /// ```
 @attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
-public macro GRDBRepository<T>(
+public macro DatabaseRepository<T>(
     record: T.Type,
     tracing: Bool = false
-) = #externalMacro(module: "ArcheryMacros", type: "GRDBRepositoryMacro")
+) = #externalMacro(module: "ArcheryMacros", type: "DatabaseRepositoryMacro")
 
 @attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
 public macro APIClient() = #externalMacro(module: "ArcheryMacros", type: "APIClientMacro")

@@ -302,13 +302,22 @@ public enum SubscriptionStatus: Equatable {
 }
 
 public enum Entitlement: String, CaseIterable, Codable, Sendable {
+    // Subscription tiers
     case basic = "com.app.basic"
     case premium = "com.app.premium"
     case pro = "com.app.pro"
     case unlimitedAccess = "com.app.unlimited"
     case removeAds = "com.app.remove_ads"
     case additionalStorage = "com.app.storage"
-    
+
+    // Role-based entitlements (for @requiresAny/@requiresAll demos)
+    case admin = "com.app.role.admin"
+    case moderator = "com.app.role.moderator"
+    case support = "com.app.role.support"
+    case verified = "com.app.status.verified"
+    case twoFactorEnabled = "com.app.security.2fa"
+    case betaTester = "com.app.beta"
+
     public var displayName: String {
         switch self {
         case .basic: return "Basic"
@@ -317,9 +326,15 @@ public enum Entitlement: String, CaseIterable, Codable, Sendable {
         case .unlimitedAccess: return "Unlimited Access"
         case .removeAds: return "Ad-Free Experience"
         case .additionalStorage: return "Extra Storage"
+        case .admin: return "Admin"
+        case .moderator: return "Moderator"
+        case .support: return "Support"
+        case .verified: return "Verified"
+        case .twoFactorEnabled: return "2FA Enabled"
+        case .betaTester: return "Beta Tester"
         }
     }
-    
+
     public var icon: String {
         switch self {
         case .basic: return "star"
@@ -328,6 +343,12 @@ public enum Entitlement: String, CaseIterable, Codable, Sendable {
         case .unlimitedAccess: return "infinity"
         case .removeAds: return "minus.circle"
         case .additionalStorage: return "internaldrive"
+        case .admin: return "person.badge.key.fill"
+        case .moderator: return "person.badge.shield.checkmark.fill"
+        case .support: return "headphones"
+        case .verified: return "checkmark.seal.fill"
+        case .twoFactorEnabled: return "lock.shield.fill"
+        case .betaTester: return "testtube.2"
         }
     }
     

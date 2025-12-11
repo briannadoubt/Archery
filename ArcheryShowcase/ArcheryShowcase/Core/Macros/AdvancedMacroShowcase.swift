@@ -350,12 +350,12 @@ struct AdvancedMacrosShowcaseView: View {
 
             Section("Persistence") {
                 NavigationLink {
-                    PersistenceGatewayDemoView()
+                    PersistenceGatewayShowcaseView()
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("@PersistenceGateway")
                             .font(.headline)
-                        Text("SQLite-backed typed key-value storage")
+                        Text("SQLite-backed typed key-value storage (Live Demo)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

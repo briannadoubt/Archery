@@ -1,12 +1,11 @@
 import SwiftUI
 import Archery
-import GRDB
 
 // MARK: - Task Edit Wrapper (fetches task by ID)
 
 struct TaskEditWrapper: View {
     let taskId: String
-    @GRDBQuery(PersistentTask.all()) var tasks: [PersistentTask]
+    @Query(PersistentTask.all()) var tasks: [PersistentTask]
 
     var task: PersistentTask? {
         tasks.first { $0.id == taskId }
@@ -25,7 +24,7 @@ struct TaskEditWrapper: View {
 
 struct TaskEditView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.grdbWriter) private var writer
+    @Environment(\.databaseWriter) private var writer
 
     let task: TaskItem
 

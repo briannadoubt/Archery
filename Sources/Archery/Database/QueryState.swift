@@ -9,7 +9,7 @@ public enum QueryLoadState: Sendable, Equatable {
     case idle
     case loading
     case success
-    case failure(GRDBError)
+    case failure(PersistenceError)
 
     public var isLoading: Bool {
         if case .loading = self { return true }
@@ -26,7 +26,7 @@ public enum QueryLoadState: Sendable, Equatable {
         return false
     }
 
-    public var error: GRDBError? {
+    public var error: PersistenceError? {
         if case .failure(let error) = self { return error }
         return nil
     }
@@ -48,9 +48,9 @@ public final class GRDBArrayQueryState<Element: FetchableRecord & Sendable> {
     public init() {}
 
     /// Start observing the query on the given container
-    func startObservation<Request: GRDBQueryRequest>(
+    func startObservation<Request: QueryRequest>(
         _ request: Request,
-        on container: GRDBContainer
+        on container: PersistenceContainer
     ) where Request.Element == Element {
         guard !isStarted else { return }
         isStarted = true
@@ -81,7 +81,7 @@ public final class GRDBArrayQueryState<Element: FetchableRecord & Sendable> {
     }
 
     private func handleError(_ error: Error) {
-        self.state = .failure(normalizeGRDBError(error))
+        self.state = .failure(normalizePersistenceError(error))
         self.lastError = error
     }
 
@@ -93,9 +93,9 @@ public final class GRDBArrayQueryState<Element: FetchableRecord & Sendable> {
     }
 
     /// Restart the observation (useful for manual refresh)
-    func restart<Request: GRDBQueryRequest>(
+    func restart<Request: QueryRequest>(
         _ request: Request,
-        on container: GRDBContainer
+        on container: PersistenceContainer
     ) where Request.Element == Element {
         cancel()
         startObservation(request, on: container)
@@ -118,9 +118,9 @@ public final class GRDBSingleQueryState<Element: FetchableRecord & Sendable> {
     public init() {}
 
     /// Start observing the query on the given container
-    func startObservation<Request: GRDBSingleQueryRequest>(
+    func startObservation<Request: SingleQueryRequest>(
         _ request: Request,
-        on container: GRDBContainer
+        on container: PersistenceContainer
     ) where Request.Element == Element {
         guard !isStarted else { return }
         isStarted = true
@@ -151,7 +151,7 @@ public final class GRDBSingleQueryState<Element: FetchableRecord & Sendable> {
     }
 
     private func handleError(_ error: Error) {
-        self.state = .failure(normalizeGRDBError(error))
+        self.state = .failure(normalizePersistenceError(error))
         self.lastError = error
     }
 
@@ -180,8 +180,8 @@ public final class GRDBCountQueryState {
 
     /// Start observing the count on the given container
     func startObservation(
-        _ request: some GRDBCountQueryRequest,
-        on container: GRDBContainer
+        _ request: some CountQueryRequest,
+        on container: PersistenceContainer
     ) {
         guard !isStarted else { return }
         isStarted = true
@@ -212,7 +212,7 @@ public final class GRDBCountQueryState {
     }
 
     private func handleError(_ error: Error) {
-        self.state = .failure(normalizeGRDBError(error))
+        self.state = .failure(normalizePersistenceError(error))
         self.lastError = error
     }
 

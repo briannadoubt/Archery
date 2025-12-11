@@ -25,7 +25,9 @@ struct ArcheryPlugin: CompilerPlugin {
         RouteMacro.self,
         // GRDB persistence macros
         PersistableMacro.self,
-        GRDBRepositoryMacro.self,
+        DatabaseRepositoryMacro.self,
+        // Query sources macro
+        QuerySourcesMacro.self,
         // Entitlement gating macros
         RequiresMacro.self,
         RequiresAnyMacro.self,

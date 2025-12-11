@@ -8,7 +8,7 @@ import GRDB
 /// Usage:
 /// ```swift
 /// struct CreatePlayerView: View {
-///     @Environment(\.grdbWriter) private var writer
+///     @Environment(\.databaseWriter) private var writer
 ///
 ///     var body: some View {
 ///         Button("Create Player") {
@@ -19,11 +19,11 @@ import GRDB
 ///     }
 /// }
 /// ```
-public struct GRDBWriter: Sendable {
-    private let container: GRDBContainer
+public struct PersistenceWriter: Sendable {
+    private let container: PersistenceContainer
 
     /// Create a writer for the given container
-    public init(container: GRDBContainer) {
+    public init(container: PersistenceContainer) {
         self.container = container
     }
 
@@ -171,7 +171,7 @@ public struct GRDBWriter: Sendable {
 
 // MARK: - Convenience Methods
 
-public extension GRDBWriter {
+public extension PersistenceWriter {
     /// Save a record (insert if new, update if exists)
     @discardableResult
     func save<Record: MutablePersistableRecord & Sendable>(

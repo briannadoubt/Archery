@@ -4,7 +4,7 @@ import GRDB
 // MARK: - GRDB Error Types
 
 /// Normalized error type for GRDB operations
-public enum GRDBError: Error, Equatable, Sendable {
+public enum PersistenceError: Error, Equatable, Sendable {
     case notFound
     case constraintViolation(String)
     case migrationFailed(String)
@@ -15,7 +15,7 @@ public enum GRDBError: Error, Equatable, Sendable {
     case unknown(String)
 }
 
-extension GRDBError: LocalizedError {
+extension PersistenceError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .notFound:
@@ -40,13 +40,13 @@ extension GRDBError: LocalizedError {
 
 // MARK: - Error Normalization
 
-/// Normalize any error into a GRDBError
-public func normalizeGRDBError(_ error: Error) -> GRDBError {
-    if let grdbError = error as? GRDBError {
-        return grdbError
+/// Normalize any error into a PersistenceError
+public func normalizePersistenceError(_ error: Error) -> PersistenceError {
+    if let persistenceError = error as? PersistenceError {
+        return persistenceError
     }
 
-    if let databaseError = error as? DatabaseError {
+    if let databaseError = error as? GRDB.DatabaseError {
         switch databaseError.resultCode {
         case .SQLITE_CONSTRAINT,
              .SQLITE_CONSTRAINT_CHECK,
@@ -82,15 +82,15 @@ public func normalizeGRDBError(_ error: Error) -> GRDBError {
 
 // MARK: - Error Context
 
-/// Wrapper that adds context to GRDB errors
-public struct GRDBSourceError: Error, Sendable {
+/// Wrapper that adds context to database errors
+public struct PersistenceSourceError: Error, Sendable {
     public let function: String
     public let file: String
     public let line: Int
-    public let underlying: GRDBError
+    public let underlying: PersistenceError
 
     public init(
-        _ underlying: GRDBError,
+        _ underlying: PersistenceError,
         function: String = #function,
         file: String = #file,
         line: Int = #line
@@ -102,18 +102,18 @@ public struct GRDBSourceError: Error, Sendable {
     }
 }
 
-extension GRDBSourceError: LocalizedError {
+extension PersistenceSourceError: LocalizedError {
     public var errorDescription: String? {
         "\(underlying.errorDescription ?? "Unknown error") at \(function) (\(file):\(line))"
     }
 }
 
 /// Wrap and normalize an error with source context
-public func normalizeGRDBError(
+public func normalizePersistenceError(
     _ error: Error,
     function: String = #function,
     file: String = #file,
     line: Int = #line
-) -> GRDBSourceError {
-    GRDBSourceError(normalizeGRDBError(error), function: function, file: file, line: line)
+) -> PersistenceSourceError {
+    PersistenceSourceError(normalizePersistenceError(error), function: function, file: file, line: line)
 }

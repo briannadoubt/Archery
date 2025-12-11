@@ -1,10 +1,9 @@
 import SwiftUI
 import Archery
-import GRDB
 
 struct DashboardStatsView: View {
-    @GRDBQuery(PersistentTask.all()) var allTasks: [PersistentTask]
-    @GRDBQuery(PersistentProject.all()) var allProjects: [PersistentProject]
+    @Query(PersistentTask.all()) var allTasks: [PersistentTask]
+    @Query(PersistentProject.all()) var allProjects: [PersistentProject]
 
     var body: some View {
         List {

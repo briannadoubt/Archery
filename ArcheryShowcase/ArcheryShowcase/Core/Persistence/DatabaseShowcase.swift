@@ -1,11 +1,10 @@
 import Foundation
 import SwiftUI
 import Archery
-import GRDB
 
 // MARK: - @Persistable Demo
 //
-// The @Persistable macro generates GRDB conformances for your Codable types:
+// The @Persistable macro generates database conformances for your Codable types:
 // - FetchableRecord: For reading from database
 // - PersistableRecord: For writing to database
 // - TableRecord: Table name and column definitions
@@ -31,15 +30,15 @@ struct Player: Codable, Identifiable, Hashable, Sendable, FetchableRecord, Mutab
     }
 }
 
-// MARK: - @GRDBRepository Demo
+// MARK: - @DatabaseRepository Demo
 //
-// The @GRDBRepository macro generates:
+// The @DatabaseRepository macro generates:
 // - Protocol with CRUD methods
-// - Live implementation using GRDB
+// - Live implementation using SQLite
 // - Mock implementation for testing
 // - DI helper methods
 
-@GRDBRepository(record: Player.self)
+@DatabaseRepository(record: Player.self)
 class PlayerStore {
     // Custom queries can be added here
     func topScorers(limit: Int) async throws -> [Player] {
@@ -55,8 +54,8 @@ class PlayerStore {
 // MARK: - Database Setup
 
 /// Migrations for the Player database
-private let playerMigrations = GRDBMigrationRunner {
-    GRDBMigration(id: "v1_create_players") { db in
+private let playerMigrations = MigrationRunner {
+    Migration(id: "v1_create_players") { db in
         try db.create(table: "players") { t in
             t.autoIncrementedPrimaryKey("id")
             t.column("name", .text).notNull()
@@ -72,17 +71,17 @@ private let playerMigrations = GRDBMigrationRunner {
 
 /// Demo database container
 @MainActor
-class GRDBDemoDatabase: ObservableObject {
-    static let shared = GRDBDemoDatabase()
+class DemoDatabase: ObservableObject {
+    static let shared = DemoDatabase()
 
-    private(set) var container: GRDBContainer?
+    private(set) var container: PersistenceContainer?
     @Published var isReady = false
     @Published var error: Error?
 
     func setup() async {
         do {
             // Create in-memory database for demo
-            container = try GRDBContainer.inMemory()
+            container = try PersistenceContainer.inMemory()
 
             // Run migrations
             try playerMigrations.run(on: container!)
@@ -98,7 +97,7 @@ class GRDBDemoDatabase: ObservableObject {
 
     private func seedDemoData() async throws {
         guard let container else { return }
-        let writer = GRDBWriter(container: container)
+        let writer = PersistenceWriter(container: container)
 
         // Add some initial players if empty
         let count = try await container.read { db in
@@ -121,14 +120,14 @@ class GRDBDemoDatabase: ObservableObject {
 
     var store: PlayerStoreLive? {
         guard let container else { return nil }
-        return PlayerStoreLive(db: container.writer)
+        return PlayerStoreLive(container: container)
     }
 }
 
 // MARK: - Showcase View
 
-struct GRDBShowcaseView: View {
-    @StateObject private var database = GRDBDemoDatabase.shared
+struct DatabaseShowcaseView: View {
+    @StateObject private var database = DemoDatabase.shared
     @State private var players: [Player] = []
     @State private var newPlayerName = ""
     @State private var newPlayerTeam = "Blue"
@@ -141,14 +140,14 @@ struct GRDBShowcaseView: View {
     var body: some View {
         List {
             Section {
-                Text("The @Persistable and @GRDBRepository macros provide type-safe SQLite persistence using GRDB. The @GRDBQuery property wrapper enables reactive SwiftUI queries.")
+                Text("The @Persistable and @DatabaseRepository macros provide type-safe SQLite persistence using SQLite. The @Query property wrapper enables reactive SwiftUI queries.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section("@Persistable Macro") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Generates GRDB conformances:")
+                    Text("Generates database conformances:")
                         .font(.caption.weight(.medium))
 
                     GeneratedCodeRow(
@@ -170,7 +169,7 @@ struct GRDBShowcaseView: View {
                 }
             }
 
-            Section("@GRDBRepository Macro") {
+            Section("@DatabaseRepository Macro") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Generates repository pattern:")
                         .font(.caption.weight(.medium))
@@ -194,25 +193,25 @@ struct GRDBShowcaseView: View {
                 }
             }
 
-            Section("@GRDBQuery - Reactive SwiftUI") {
+            Section("@Query - Reactive SwiftUI") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Property wrappers for reactive queries:")
                         .font(.caption.weight(.medium))
 
                     GeneratedCodeRow(
-                        code: "@GRDBQuery",
+                        code: "@Query",
                         description: "Observe array of records"
                     )
                     GeneratedCodeRow(
-                        code: "@GRDBQueryOne",
+                        code: "@QueryOne",
                         description: "Observe single record"
                     )
                     GeneratedCodeRow(
-                        code: "@GRDBQueryCount",
+                        code: "@QueryCount",
                         description: "Observe record count"
                     )
                     GeneratedCodeRow(
-                        code: "GRDBWriter",
+                        code: "PersistenceWriter",
                         description: "Write operations via environment"
                     )
                 }
@@ -220,7 +219,7 @@ struct GRDBShowcaseView: View {
                 if database.isReady, let container = database.container {
                     NavigationLink {
                         ReactiveQueryDemoView()
-                            .grdbContainer(container)
+                            .databaseContainer(container)
                     } label: {
                         Label("Try Reactive Demo", systemImage: "bolt.fill")
                     }
@@ -317,7 +316,7 @@ struct GRDBShowcaseView: View {
                     Text("}")
                         .font(.caption.monospaced())
                     Text("")
-                    Text("// Add GRDB conformances")
+                    Text("// Add database conformances")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                     Text("@Persistable(table: \"players\")")
@@ -329,7 +328,7 @@ struct GRDBShowcaseView: View {
                     Text("// Generate repository")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
-                    Text("@GRDBRepository(record: Player.self)")
+                    Text("@DatabaseRepository(record: Player.self)")
                         .font(.caption.monospaced())
                         .foregroundStyle(.blue)
                     Text("class PlayerStore {}")
@@ -341,7 +340,7 @@ struct GRDBShowcaseView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
-        .navigationTitle("GRDB Persistence")
+        .navigationTitle("Database Persistence")
         .task {
             await database.setup()
             await loadPlayers()
@@ -457,19 +456,19 @@ private struct PlayerRow: View {
 
 // MARK: - Reactive Query Demo View
 
-/// Demonstrates @GRDBQuery property wrapper for reactive database queries
+/// Demonstrates @Query property wrapper for reactive database queries
 struct ReactiveQueryDemoView: View {
     // Reactive query - automatically updates when database changes!
-    // Uses clean Archery syntax: Player.all() instead of GRDBQueryBuilder<Player>.all()
-    @GRDBQuery(Player.all().order(by: Player.Columns.score, ascending: false))
+    // Uses clean Archery syntax: Player.all() instead of QueryBuilder<Player>.all()
+    @Query(Player.all().order(by: Player.Columns.score, ascending: false))
     var players: [Player]
 
     // Reactive count - uses type-safe query builder
-    @GRDBQueryCount(Player.count())
+    @QueryCount(Player.count())
     var playerCount: Int
 
     // Environment writer for mutations
-    @Environment(\.grdbWriter) private var writer
+    @Environment(\.databaseWriter) private var writer
 
     @State private var newPlayerName = ""
     @State private var showError: Error?
@@ -478,7 +477,7 @@ struct ReactiveQueryDemoView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("This view uses @GRDBQuery for automatic UI updates when the database changes. No manual refresh needed!")
+                    Text("This view uses @Query for automatic UI updates when the database changes. No manual refresh needed!")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -547,7 +546,7 @@ struct ReactiveQueryDemoView: View {
                 .disabled(players.isEmpty)
             }
 
-            Section("Archery GRDB Integration") {
+            Section("Archery Database Integration") {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("// 1. Define model with @Persistable")
                         .font(.caption.monospaced())
@@ -568,10 +567,10 @@ struct ReactiveQueryDemoView: View {
                     Text("}")
                         .font(.caption.monospaced())
                     Text("")
-                    Text("// 2. Reactive queries with @GRDBQuery")
+                    Text("// 2. Reactive queries with @Query")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
-                    Text("@GRDBQuery(Player.all())")
+                    Text("@Query(Player.all())")
                         .font(.caption.monospaced())
                         .foregroundStyle(.blue)
                     Text("var players: [Player]")
@@ -580,7 +579,7 @@ struct ReactiveQueryDemoView: View {
                     Text("// Filtered & sorted")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
-                    Text("@GRDBQuery(Player.all()")
+                    Text("@Query(Player.all()")
                         .font(.caption.monospaced())
                         .foregroundStyle(.blue)
                     Text("  .filter(Player.Columns.score > 50)")
@@ -595,7 +594,7 @@ struct ReactiveQueryDemoView: View {
                     Text("// 3. Write via environment")
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
-                    Text("@Environment(\\.grdbWriter) var writer")
+                    Text("@Environment(\\.databaseWriter) var writer")
                         .font(.caption.monospaced())
                         .foregroundStyle(.blue)
                     Text("try await writer?.insert(player)")
@@ -700,19 +699,19 @@ struct ReactiveQueryDemoView: View {
 
 #Preview {
     NavigationStack {
-        GRDBShowcaseView()
+        DatabaseShowcaseView()
     }
 }
 
 #Preview("Reactive Demo") {
     NavigationStack {
-        if let container = try? GRDBContainer.inMemory() {
+        if let container = try? PersistenceContainer.inMemory() {
             ReactiveQueryDemoView()
-                .grdbContainer(container)
+                .databaseContainer(container)
                 .task {
                     // Run migrations for preview
-                    try? GRDBMigrationRunner {
-                        GRDBMigration(id: "v1_create_players") { db in
+                    try? MigrationRunner {
+                        Migration(id: "v1_create_players") { db in
                             try db.create(table: "players", ifNotExists: true) { t in
                                 t.autoIncrementedPrimaryKey("id")
                                 t.column("name", .text).notNull()

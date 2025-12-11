@@ -1,15 +1,14 @@
 import SwiftUI
 import Archery
-import GRDB
 
-// MARK: - Task List View (GRDB-powered)
+// MARK: - Task List View (database-powered)
 
 struct TaskListView: View {
     // Reactive query - automatically updates when database changes
-    @GRDBQuery(PersistentTask.all().order(by: PersistentTask.Columns.createdAt, ascending: false))
+    @Query(PersistentTask.all().order(by: PersistentTask.Columns.createdAt, ascending: false))
     var persistentTasks: [PersistentTask]
 
-    @Environment(\.grdbWriter) private var writer
+    @Environment(\.databaseWriter) private var writer
     @Environment(\.appDatabase) private var database
     @Environment(\.navigationHandle) private var nav
 
@@ -142,7 +141,7 @@ struct TaskListView: View {
         do {
             let persistentTask = PersistentTask(from: task)
             _ = try await writer.insert(persistentTask)
-            // Analytics: entity_created auto-tracked by @GRDBRepository
+            // Analytics: entity_created auto-tracked by @DatabaseRepository
         } catch {
             showError = error
             // Analytics: error_occurred auto-tracked by ArcheryErrorTracker
@@ -153,7 +152,7 @@ struct TaskListView: View {
         guard let writer else { return }
         do {
             _ = try await writer.delete(PersistentTask.self, id: task.id)
-            // Analytics: entity_deleted auto-tracked by @GRDBRepository
+            // Analytics: entity_deleted auto-tracked by @DatabaseRepository
         } catch {
             showError = error
         }
@@ -263,7 +262,7 @@ struct TaskRowView: View {
 
 struct TaskCreationView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.grdbWriter) private var writer
+    @Environment(\.databaseWriter) private var writer
 
     var onSave: ((TaskItem) -> Void)?
 
@@ -360,5 +359,5 @@ struct TaskCreationView: View {
 
 #Preview {
     TaskListView()
-        .grdbContainer(try! GRDBContainer.inMemory())
+        .databaseContainer(try! PersistenceContainer.inMemory())
 }

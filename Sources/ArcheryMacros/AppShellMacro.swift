@@ -683,7 +683,7 @@ public enum AppShellMacro: MemberMacro {
             SwiftUI.Group {
                 if __database.isReady, let container = __database.container {
                     ShellView()
-                        .grdbContainer(container)
+                        .databaseContainer(container)
                         .environment(\\.appDatabase, __database)
                 } else if let error = __database.error {
                     SwiftUI.ContentUnavailableView {

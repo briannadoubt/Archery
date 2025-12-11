@@ -1,9 +1,8 @@
 import SwiftUI
 import Archery
-import GRDB
 
 struct DashboardActivityView: View {
-    @GRDBQuery(PersistentTask.all().order(by: PersistentTask.Columns.createdAt, ascending: false).limit(20))
+    @Query(PersistentTask.all().order(by: PersistentTask.Columns.createdAt, ascending: false).limit(20))
     var recentTasks: [PersistentTask]
 
     var body: some View {

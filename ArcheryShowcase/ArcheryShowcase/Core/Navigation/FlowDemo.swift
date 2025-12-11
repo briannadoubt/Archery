@@ -12,15 +12,10 @@ import Archery
 /// Hosts the task creation flow, managing state and step resolution
 struct TaskCreationFlowHost: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.grdbWriter) private var writer
+    @Environment(\.databaseWriter) private var writer
 
-    @State private var flowState: FlowState
+    @State private var flowState = FlowState(flowType: TaskCreationFlow.self)
     @State private var flowData = TaskFlowData()
-
-    init() {
-        // Initialize with the TaskCreationFlow type
-        _flowState = State(initialValue: FlowState(flowType: TaskCreationFlow.self))
-    }
 
     var body: some View {
         NavigationStack {
@@ -382,4 +377,235 @@ private struct TagFlowLayout: Layout {
 
 #Preview("Task Creation Flow") {
     TaskCreationFlowHost()
+}
+
+// MARK: - Onboarding Flow Demo (with @branch/@skip)
+//
+// This demonstrates conditional flow control using:
+// - @skip: Steps that are skipped when a condition is met
+// - @branch: Alternative steps that replace other steps
+
+struct SetupFlowHost: View {
+    @Environment(\.dismiss) private var dismiss
+
+    // Use local index since we dynamically compute steps based on conditions
+    @State private var currentIndex: Int = 0
+    @State private var conditions: Set<String> = []
+
+    // These track what conditions are active
+    @State private var hasExistingAccount = false
+    @State private var permissionsGranted = false
+    @State private var isFreeTier = true
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Condition toggles for demo purposes
+                conditionControls
+
+                Divider()
+
+                // Flow content
+                VStack {
+                    // Progress indicator
+                    HStack {
+                        Text("Step \(currentIndex + 1) of \(resolvedSteps.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+
+                    currentStepView
+
+                    // Navigation buttons
+                    HStack {
+                        Button("Back") {
+                            back()
+                        }
+                        .disabled(currentIndex == 0)
+
+                        Spacer()
+
+                        if currentIndex < resolvedSteps.count - 1 {
+                            Button("Next") {
+                                advance()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        } else {
+                            Button("Done") {
+                                dismiss()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle(stepTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .onChange(of: hasExistingAccount) { _, _ in updateConditions() }
+            .onChange(of: permissionsGranted) { _, _ in updateConditions() }
+            .onChange(of: isFreeTier) { _, _ in updateConditions() }
+        }
+    }
+
+    private var conditionControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Flow Conditions (toggle to see @branch/@skip behavior)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 16) {
+                Toggle("Existing Account", isOn: $hasExistingAccount)
+                Toggle("Permissions OK", isOn: $permissionsGranted)
+                Toggle("Free Tier", isOn: $isFreeTier)
+            }
+            .toggleStyle(.button)
+            .controlSize(.small)
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+    }
+
+    @ViewBuilder
+    private var currentStepView: some View {
+        VStack(spacing: 24) {
+            Image(systemName: stepIcon)
+                .font(.system(size: 60))
+                .foregroundStyle(.tint)
+
+            Text(stepDescription)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
+            // Show if this step was affected by conditions
+            if let effect = currentStepEffect {
+                Label(effect, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(8)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            Spacer()
+        }
+        .padding()
+    }
+
+    private var currentStep: SetupFlow {
+        resolvedSteps[min(currentIndex, resolvedSteps.count - 1)]
+    }
+
+    /// Steps after applying @branch and @skip conditions
+    private var resolvedSteps: [SetupFlow] {
+        var steps: [SetupFlow] = [.welcome, .createAccount, .requestPermissions, .selectTheme, .premiumSetup, .complete]
+
+        // Apply @branch: replace createAccount with signIn
+        if hasExistingAccount {
+            if let idx = steps.firstIndex(of: .createAccount) {
+                steps[idx] = .signIn
+            }
+        }
+
+        // Apply @skip: remove requestPermissions
+        if permissionsGranted {
+            steps.removeAll { $0 == .requestPermissions }
+        }
+
+        // Apply @skip: remove premiumSetup for free tier
+        if isFreeTier {
+            steps.removeAll { $0 == .premiumSetup }
+        }
+
+        return steps
+    }
+
+    private var stepTitle: String {
+        switch currentStep {
+        case .welcome: return "Welcome"
+        case .createAccount: return "Create Account"
+        case .signIn: return "Sign In"
+        case .requestPermissions: return "Permissions"
+        case .selectTheme: return "Theme"
+        case .premiumSetup: return "Premium"
+        case .complete: return "Complete"
+        }
+    }
+
+    private var stepIcon: String {
+        switch currentStep {
+        case .welcome: return "hand.wave.fill"
+        case .createAccount: return "person.badge.plus.fill"
+        case .signIn: return "person.fill.checkmark"
+        case .requestPermissions: return "bell.badge.fill"
+        case .selectTheme: return "paintbrush.fill"
+        case .premiumSetup: return "crown.fill"
+        case .complete: return "checkmark.circle.fill"
+        }
+    }
+
+    private var stepDescription: String {
+        switch currentStep {
+        case .welcome:
+            return "Welcome to the app! Let's get you set up."
+        case .createAccount:
+            return "Create a new account to get started."
+        case .signIn:
+            return "Welcome back! Sign in to your existing account.\n\n(@branch replaced createAccount)"
+        case .requestPermissions:
+            return "We need a few permissions to work properly."
+        case .selectTheme:
+            return "Choose how the app looks."
+        case .premiumSetup:
+            return "Configure your premium features."
+        case .complete:
+            return "You're all set! Enjoy the app."
+        }
+    }
+
+    private var currentStepEffect: String? {
+        switch currentStep {
+        case .signIn:
+            return "@branch(replacing: .createAccount, when: .hasExistingAccount)"
+        case .requestPermissions where !permissionsGranted:
+            return "Would be @skip'd if permissions were granted"
+        case .premiumSetup where !isFreeTier:
+            return "Would be @skip'd for free tier users"
+        default:
+            return nil
+        }
+    }
+
+    private func updateConditions() {
+        conditions = []
+        if hasExistingAccount { conditions.insert("hasExistingAccount") }
+        if permissionsGranted { conditions.insert("permissionsAlreadyGranted") }
+        if isFreeTier { conditions.insert("isFreeTier") }
+
+        // Reset flow when conditions change
+        currentIndex = 0
+    }
+
+    private func advance() {
+        let maxIndex = resolvedSteps.count - 1
+        guard currentIndex < maxIndex else { return }
+        currentIndex += 1
+    }
+
+    private func back() {
+        guard currentIndex > 0 else { return }
+        currentIndex -= 1
+    }
+}
+
+#Preview("Setup Flow (with @branch/@skip)") {
+    SetupFlowHost()
 }

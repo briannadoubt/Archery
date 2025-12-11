@@ -5,39 +5,39 @@ import GRDB
 
 /// DI container for GRDB database connections.
 /// Wraps DatabaseQueue or DatabasePool for use with EnvContainer.
-public final class GRDBContainer: @unchecked Sendable {
+public final class PersistenceContainer: @unchecked Sendable {
     /// The underlying database writer (DatabaseQueue or DatabasePool)
-    public let writer: any DatabaseWriter
+    public let writer: any GRDB.DatabaseWriter
 
-    /// Initialize with an existing DatabaseWriter
-    public init(writer: any DatabaseWriter) {
+    /// Initialize with an existing PersistenceWriter
+    public init(writer: any GRDB.DatabaseWriter) {
         self.writer = writer
     }
 
     /// Create an in-memory database (useful for tests and previews)
-    public static func inMemory() throws -> GRDBContainer {
+    public static func inMemory() throws -> PersistenceContainer {
         let queue = try DatabaseQueue()
-        return GRDBContainer(writer: queue)
+        return PersistenceContainer(writer: queue)
     }
 
     /// Create a file-backed database using DatabaseQueue (single writer)
-    public static func file(at url: URL) throws -> GRDBContainer {
+    public static func file(at url: URL) throws -> PersistenceContainer {
         let directory = url.deletingLastPathComponent()
         if !FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
         let queue = try DatabaseQueue(path: url.path)
-        return GRDBContainer(writer: queue)
+        return PersistenceContainer(writer: queue)
     }
 
     /// Create a file-backed database using DatabasePool (concurrent readers)
-    public static func pool(at url: URL) throws -> GRDBContainer {
+    public static func pool(at url: URL) throws -> PersistenceContainer {
         let directory = url.deletingLastPathComponent()
         if !FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
         let pool = try DatabasePool(path: url.path)
-        return GRDBContainer(writer: pool)
+        return PersistenceContainer(writer: pool)
     }
 
     /// Default database location in Application Support
@@ -52,19 +52,19 @@ public final class GRDBContainer: @unchecked Sendable {
 
 public extension EnvContainer {
     /// Register a GRDB container for dependency injection
-    func registerGRDB(_ container: GRDBContainer) {
+    func registerGRDB(_ container: PersistenceContainer) {
         register(container)
     }
 
     /// Resolve the registered GRDB container
-    var grdb: GRDBContainer? {
+    var grdb: PersistenceContainer? {
         resolve()
     }
 }
 
 // MARK: - Database Reader/Writer Convenience
 
-public extension GRDBContainer {
+public extension PersistenceContainer {
     /// Execute a read-only database operation
     func read<T: Sendable>(_ block: @Sendable (Database) throws -> T) async throws -> T {
         try await writer.read(block)

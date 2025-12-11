@@ -34,6 +34,8 @@ public protocol Validator<T>: Sendable {
 // MARK: - String Validators
 
 public struct RequiredValidator: Validator {
+    public init() {}
+
     public func validate(_ value: String, field: String) -> [ValidationError] {
         if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [ValidationError(

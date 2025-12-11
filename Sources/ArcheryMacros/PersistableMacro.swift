@@ -174,7 +174,7 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
 
         // Generate Columns enum
         let columnDeclarations = properties.map { prop in
-            "static let \(prop.name) = GRDB.Column(CodingKeys.\(prop.name))"
+            "static let \(prop.name) = Column(CodingKeys.\(prop.name))"
         }.joined(separator: "\n        ")
 
         let columnsEnum = """
