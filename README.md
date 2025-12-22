@@ -24,7 +24,7 @@ Add Archery to your Swift package:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/Archery.git", from: "1.0.0")
+    .package(url: "https://github.com/briannadoubt/Archery.git", from: "1.0.0")
 ]
 ```
 
@@ -195,7 +195,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/Archery.git
+git clone https://github.com/briannadoubt/Archery.git
 
 # Run tests
 swift test
@@ -223,9 +223,8 @@ Apache-2.0 - See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/Archery/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/Archery/discussions)
-- **Documentation**: [https://archery-docs.example.com](https://archery-docs.example.com)
+- **Issues**: [GitHub Issues](https://github.com/briannadoubt/Archery/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/briannadoubt/Archery/discussions)
 
 ## Acknowledgments
 
