@@ -178,7 +178,7 @@ final class ObservabilityTests: XCTestCase {
         span.setStatus(.error(nil), message: "Error occurred")
         
         if case .error = span.status {
-            XCTAssertEqual(span.attributes["status.message"] as? String, "Error occurred")
+            XCTAssertEqual(span.attributes["status.message"], "Error occurred")
         } else {
             XCTFail("Expected error status")
         }
