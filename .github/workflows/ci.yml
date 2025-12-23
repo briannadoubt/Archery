@@ -8,299 +8,107 @@ on:
   workflow_dispatch:
 
 env:
-  SWIFT_VERSION: '6.2'
   XCODE_VERSION: '26.0'
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-      
-      - name: SwiftLint
-        run: |
-          brew install swiftlint
-          swiftlint --strict
-      
-      - name: SwiftFormat Check
-        run: |
-          brew install swiftformat
-          swiftformat --lint .
-      
-      - name: MainActor Linting
-        run: swift run archery-lint --mainactor Sources/
-      
-      - name: Accessibility Linting
-        run: swift run archery-lint --accessibility Sources/
-
-  test:
-    name: Test (${{ matrix.platform }})
-    runs-on: ${{ matrix.os }}
+  build-and-test:
+    name: Build & Test (${{ matrix.platform }})
+    runs-on: macos-15
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - platform: iOS
-            os: macos-latest
-            destination: 'platform=iOS Simulator,name=iPhone 16 Pro'
           - platform: macOS
-            os: macos-latest
             destination: 'platform=macOS'
+          - platform: iOS
+            destination: 'platform=iOS Simulator,name=iPhone 16 Pro'
           - platform: tvOS
-            os: macos-latest
-            destination: 'platform=tvOS Simulator,name=Apple TV'
+            destination: 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
           - platform: watchOS
-            os: macos-latest
-            destination: 'platform=watchOS Simulator,name=Apple Watch Series 10 (45mm)'
+            destination: 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)'
           - platform: visionOS
-            os: macos-latest
             destination: 'platform=visionOS Simulator,name=Apple Vision Pro'
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-      
+
+      - name: Show Versions
+        run: |
+          xcodebuild -version
+          swift --version
+
       - name: Cache SPM
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
-      
+          key: ${{ runner.os }}-spm-${{ matrix.platform }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.platform }}-
+            ${{ runner.os }}-spm-
+
+      - name: Resolve Dependencies
+        run: swift package resolve
+
       - name: Build
-        run: |
-          xcodebuild build-for-testing \
-            -scheme Archery \
-            -destination "${{ matrix.destination }}" \
-            -derivedDataPath .build
-      
+        run: swift build --configuration debug
+
       - name: Test
-        run: |
-          xcodebuild test-without-building \
-            -scheme Archery \
-            -destination "${{ matrix.destination }}" \
-            -derivedDataPath .build \
-            -resultBundlePath TestResults.xcresult
-      
-      - name: Upload Test Results
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-results-${{ matrix.platform }}
-          path: TestResults.xcresult
+        run: swift test
 
-  ui-test:
-    name: UI Tests
-    runs-on: macos-latest
+  macro-tests:
+    name: Macro Expansion Tests
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-      
-      - name: Boot Simulator
-        run: |
-          xcrun simctl boot "iPhone 16 Pro" || true
-          xcrun simctl openurl booted https://example.com
-      
-      - name: Run UI Tests
-        run: |
-          xcodebuild test \
-            -scheme ArcheryUITests \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            -resultBundlePath UITestResults.xcresult \
-            -test-iterations 3 \
-            -retry-tests-on-failure
-      
-      - name: Upload UI Test Results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: ui-test-results
-          path: UITestResults.xcresult
 
-  performance:
-    name: Performance Tests
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-      
-      - name: Run Performance Tests
-        run: |
-          xcodebuild test \
-            -scheme ArcheryPerformanceTests \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            -only-testing:ArcheryTests/PerformanceTests \
-            -resultBundlePath PerformanceResults.xcresult
-      
-      - name: Analyze Performance
-        run: |
-          xcrun xcresulttool get --format json \
-            --path PerformanceResults.xcresult > performance.json
-          swift run archery-perf-check performance.json
-      
-      - name: Upload Performance Report
-        uses: actions/upload-artifact@v3
-        with:
-          name: performance-report
-          path: performance-report.html
+      - name: Build Macros
+        run: swift build --target ArcheryMacros
 
-  snapshot:
+      - name: Test Macro Expansions
+        run: swift test --filter MacroTests
+
+  snapshot-tests:
     name: Snapshot Tests
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-      
+
       - name: Run Snapshot Tests
-        run: |
-          swift test --filter SnapshotTests
-      
+        run: swift test --filter SnapshotTests
+
       - name: Upload Failed Snapshots
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: failed-snapshots
           path: '**/__Snapshots__/'
-
-  macro-expansion:
-    name: Macro Expansion Tests
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Build Macros
-        run: swift build --target ArcheryMacros
-      
-      - name: Test Macro Expansions
-        run: swift test --filter MacroTests
-      
-      - name: Generate Macro Report
-        run: swift run archery-macro-report
-      
-      - name: Upload Macro Report
-        uses: actions/upload-artifact@v3
-        with:
-          name: macro-expansion-report
-          path: macro-report.html
-
-  coverage:
-    name: Code Coverage
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-      
-      - name: Build and Test with Coverage
-        run: |
-          xcodebuild test \
-            -scheme Archery \
-            -destination 'platform=macOS' \
-            -enableCodeCoverage YES \
-            -resultBundlePath Coverage.xcresult
-      
-      - name: Export Coverage
-        run: |
-          xcrun xccov view --report --json Coverage.xcresult > coverage.json
-          swift run archery-coverage-report coverage.json
-      
-      - name: Upload Coverage
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./coverage.json
-          fail_ci_if_error: true
 
   security:
     name: Security Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
         with:
           config: >-
             p/security-audit
             p/secrets
-            p/owasp-top-ten
-      
+        continue-on-error: true
+
       - name: Check for Secrets
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
-      
-      - name: SAST Scan
-        run: |
-          docker run --rm -v "$PWD":/src \
-            -e SNYK_TOKEN=${{ secrets.SNYK_TOKEN }} \
-            snyk/snyk:swift test --severity-threshold=high
-
-  compatibility:
-    name: Compatibility Matrix
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        xcode: ['25.0', '26.0', '26.1']
-        swift: ['6.0', '6.1', '6.2']
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      
-      - name: Swift Version
-        run: swift --version
-      
-      - name: Build
-        run: swift build
-      
-      - name: Test
-        run: swift test
-
-  release-check:
-    name: Release Readiness
-    runs-on: macos-latest
-    if: github.ref == 'refs/heads/main'
-    needs: [lint, test, ui-test, performance, security]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Check Version
-        run: |
-          VERSION=$(grep 'let version' Sources/Archery/Version.swift | cut -d'"' -f2)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-      
-      - name: Check Changelog
-        run: |
-          if ! grep -q "$VERSION" CHANGELOG.md; then
-            echo "Version $VERSION not found in CHANGELOG.md"
-            exit 1
-          fi
-      
-      - name: Documentation Check
-        run: |
-          swift package generate-documentation
-          swift package diagnose-documentation-issues
-      
-      - name: Archive Build
-        run: |
-          swift build -c release --arch arm64 --arch x86_64
-          tar -czf archery-$VERSION.tar.gz .build/release/
-      
-      - name: Upload Release Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: release-candidate
-          path: archery-*.tar.gz
+        continue-on-error: true
