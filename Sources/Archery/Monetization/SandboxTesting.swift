@@ -3,37 +3,60 @@ import StoreKit
 
 // MARK: - Sandbox Testing Support
 
-/// Manages sandbox testing and TestFlight preview features
+/// Manages sandbox testing and TestFlight preview features using StoreKit 2
 public struct SandboxTestingManager: Sendable {
     public static let shared = SandboxTestingManager()
-    
+
     private init() {}
-    
+
     // MARK: - Environment Detection
-    
+
     /// Check if running in sandbox environment
     public var isSandbox: Bool {
         #if DEBUG
         return true
         #else
-        // Check receipt URL for sandbox
-        if let url = Bundle.main.appStoreReceiptURL {
-            return url.lastPathComponent == "sandboxReceipt"
-        }
-        return false
+        return !isProduction
         #endif
     }
-    
-    /// Check if running in TestFlight
-    @available(macOS, deprecated: 15.0, message: "Use AppTransaction from StoreKit 2")
-    @available(iOS, deprecated: 18.0, message: "Use AppTransaction from StoreKit 2")
-    public var isTestFlight: Bool {
-        guard let path = Bundle.main.appStoreReceiptURL?.path else {
-            return false
+
+    /// Check if running in production (App Store)
+    public var isProduction: Bool {
+        get async {
+            do {
+                let appTransaction = try await AppTransaction.shared
+                switch appTransaction {
+                case .verified(let transaction):
+                    return transaction.environment == .production
+                case .unverified:
+                    return false
+                }
+            } catch {
+                return false
+            }
         }
-        return path.contains("sandboxReceipt")
     }
-    
+
+    /// Check if running in TestFlight
+    /// Note: TestFlight runs in sandbox environment, so we detect it by checking
+    /// for sandbox environment while NOT being in Xcode
+    public var isTestFlight: Bool {
+        get async {
+            do {
+                let appTransaction = try await AppTransaction.shared
+                switch appTransaction {
+                case .verified(let transaction):
+                    // TestFlight uses sandbox environment but isn't Xcode
+                    return transaction.environment == .sandbox && !isXcodeBuild
+                case .unverified:
+                    return false
+                }
+            } catch {
+                return false
+            }
+        }
+    }
+
     /// Check if running in Xcode
     public var isXcodeBuild: Bool {
         #if targetEnvironment(simulator)
@@ -42,41 +65,49 @@ public struct SandboxTestingManager: Sendable {
         return ProcessInfo.processInfo.environment["DTPlatformName"] != nil
         #endif
     }
-    
-    // MARK: - Test Configuration
-    
-    /// Configure StoreKit for testing
-    @available(macOS, deprecated: 15.0, message: "Use StoreKit 2")
-    @available(iOS, deprecated: 18.0, message: "Use StoreKit 2")
-    public func configureForTesting() {
-        if isSandbox {
-            // Enable StoreKit testing features
-            SKPaymentQueue.default().add(TestTransactionObserver.shared)
 
-            // Log sandbox mode
-            print("🧪 StoreKit: Running in Sandbox Mode")
+    // MARK: - Transaction Monitoring
 
-            // Configure test products if needed
-            if isXcodeBuild {
-                configureLocalTestProducts()
+    /// Start observing transaction updates using StoreKit 2
+    public func startTransactionObserver() -> Task<Void, Never> {
+        Task.detached {
+            for await result in Transaction.updates {
+                await self.handleTransaction(result)
             }
         }
     }
-    
-    private func configureLocalTestProducts() {
-        // Configure StoreKit configuration file for local testing
-        print("📦 Configuring local StoreKit products")
+
+    @MainActor
+    private func handleTransaction(_ result: VerificationResult<Transaction>) async {
+        switch result {
+        case .verified(let transaction):
+            print("""
+            📝 Transaction Update (StoreKit 2):
+               Product: \(transaction.productID)
+               Type: \(transaction.productType)
+               Purchase Date: \(transaction.purchaseDate)
+               Environment: \(transaction.environment)
+            """)
+            await transaction.finish()
+
+        case .unverified(let transaction, let error):
+            print("""
+            ⚠️ Unverified Transaction:
+               Product: \(transaction.productID)
+               Error: \(error)
+            """)
+        }
     }
-    
+
     // MARK: - Test Accounts
-    
+
     /// Sandbox test account management
-    public struct TestAccount {
+    public struct TestAccount: Sendable {
         public let email: String
         public let territory: String
         public let subscriptionStatus: TestSubscriptionStatus
-        
-        public enum TestSubscriptionStatus {
+
+        public enum TestSubscriptionStatus: Sendable {
             case none
             case active
             case expired
@@ -84,58 +115,58 @@ public struct SandboxTestingManager: Sendable {
             case gracePeriod
         }
     }
-    
+
     /// Clear sandbox purchase history
     public func clearSandboxPurchases() async {
         guard isSandbox else { return }
-        
+
         // Clear all transactions in sandbox
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
                 await transaction.finish()
             }
         }
-        
-        print("🧹 Cleared sandbox purchase history")
+
+        print("Cleared sandbox purchase history")
     }
-    
+
     // MARK: - Test Scenarios
-    
+
     /// Simulate different purchase scenarios for testing
     public func simulateScenario(_ scenario: TestScenario) async {
         guard isSandbox else { return }
-        
+
         switch scenario {
         case .successfulPurchase:
-            print("✅ Simulating successful purchase")
-            
+            print("Simulating successful purchase")
+
         case .failedPayment:
-            print("❌ Simulating failed payment")
-            
+            print("Simulating failed payment")
+
         case .restoredPurchase:
-            print("♻️ Simulating restored purchase")
-            
+            print("Simulating restored purchase")
+
         case .pendingApproval:
-            print("⏳ Simulating pending approval (Ask to Buy)")
-            
+            print("Simulating pending approval (Ask to Buy)")
+
         case .subscriptionRenewal:
-            print("🔄 Simulating subscription renewal")
-            
+            print("Simulating subscription renewal")
+
         case .subscriptionExpiry:
-            print("⏰ Simulating subscription expiry")
-            
+            print("Simulating subscription expiry")
+
         case .billingRetry:
-            print("💳 Simulating billing retry")
-            
+            print("Simulating billing retry")
+
         case .gracePeriod:
-            print("⏱ Simulating grace period")
-            
+            print("Simulating grace period")
+
         case .refund:
-            print("💰 Simulating refund")
+            print("Simulating refund")
         }
     }
-    
-    public enum TestScenario {
+
+    public enum TestScenario: Sendable {
         case successfulPurchase
         case failedPayment
         case restoredPurchase
@@ -148,58 +179,13 @@ public struct SandboxTestingManager: Sendable {
     }
 }
 
-// MARK: - Test Transaction Observer
-
-@available(macOS, deprecated: 15.0, message: "Use StoreKit 2 instead")
-@available(iOS, deprecated: 18.0, message: "Use StoreKit 2 instead")
-class TestTransactionObserver: NSObject, SKPaymentTransactionObserver, @unchecked Sendable {
-    static let shared = TestTransactionObserver()
-
-    private override init() {
-        super.init()
-    }
-
-    @available(macOS, deprecated: 15.0)
-    @available(iOS, deprecated: 18.0)
-    func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
-        for transaction in transactions {
-            logTransaction(transaction)
-        }
-    }
-    
-    private func logTransaction(_ transaction: SKPaymentTransaction) {
-        let state: String
-        switch transaction.transactionState {
-        case .purchasing:
-            state = "Purchasing"
-        case .purchased:
-            state = "Purchased"
-        case .failed:
-            state = "Failed"
-        case .restored:
-            state = "Restored"
-        case .deferred:
-            state = "Deferred"
-        @unknown default:
-            state = "Unknown"
-        }
-        
-        print("""
-        📝 Transaction Update:
-           Product: \(transaction.payment.productIdentifier)
-           State: \(state)
-           Date: \(transaction.transactionDate ?? Date())
-        """)
-    }
-}
-
 // MARK: - Preview Seeds
 
 /// Provides seed data for SwiftUI previews and testing
 public struct PreviewSeeds {
-    
+
     // MARK: - Products
-    
+
     public static let products: [MockProduct] = [
         MockProduct(
             id: "com.app.premium.monthly",
@@ -231,9 +217,9 @@ public struct PreviewSeeds {
             type: .consumable
         )
     ]
-    
+
     // MARK: - Subscription States
-    
+
     public static let subscriptionStates: [MockSubscriptionState] = [
         MockSubscriptionState(
             status: .active,
@@ -264,9 +250,9 @@ public struct PreviewSeeds {
             willRenew: false
         )
     ]
-    
+
     // MARK: - Entitlements
-    
+
     public static let entitlementSets: [Set<Entitlement>] = [
         [], // No entitlements
         [.basic], // Basic only
@@ -296,7 +282,7 @@ public struct MockProduct: Sendable {
             case yearly
         }
     }
-    
+
     public init(
         id: String,
         displayName: String,
@@ -312,7 +298,7 @@ public struct MockProduct: Sendable {
         self.type = type
         self.badge = badge
     }
-    
+
     public var displayPrice: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -342,7 +328,7 @@ public struct MockSubscriptionState: Sendable {
 
 /// Generates StoreKit configuration files for testing
 public struct StoreKitConfigurationGenerator {
-    
+
     /// Generate a StoreKit configuration file
     public static func generateConfiguration(
         products: [MockProduct],
@@ -351,13 +337,13 @@ public struct StoreKitConfigurationGenerator {
         let configuration = StoreKitConfiguration(products: products)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        
+
         let data = try encoder.encode(configuration)
         try data.write(to: outputPath)
-        
-        print("✅ Generated StoreKit configuration at: \(outputPath)")
+
+        print("Generated StoreKit configuration at: \(outputPath)")
     }
-    
+
     private struct StoreKitConfiguration: Codable {
         var identifier: String = UUID().uuidString
         let products: [ProductConfiguration]
@@ -366,7 +352,7 @@ public struct StoreKitConfigurationGenerator {
             self.products = products.map { ProductConfiguration(from: $0) }
         }
     }
-    
+
     private struct ProductConfiguration: Codable {
         let id: String
         let type: String
@@ -375,14 +361,14 @@ public struct StoreKitConfigurationGenerator {
         let price: Decimal
         let familyShareable: Bool
         let subscription: SubscriptionConfiguration?
-        
+
         init(from mock: MockProduct) {
             self.id = mock.id
             self.displayName = mock.displayName
             self.description = mock.description
             self.price = mock.price
             self.familyShareable = false
-            
+
             switch mock.type {
             case .consumable:
                 self.type = "consumable"
@@ -396,11 +382,11 @@ public struct StoreKitConfigurationGenerator {
             }
         }
     }
-    
+
     private struct SubscriptionConfiguration: Codable {
         let duration: String
         let introductoryOffer: IntroductoryOffer?
-        
+
         init(period: MockProduct.ProductType.Period) {
             switch period {
             case .weekly:
@@ -410,7 +396,7 @@ public struct StoreKitConfigurationGenerator {
             case .yearly:
                 self.duration = "P1Y"
             }
-            
+
             // Add free trial for yearly subscriptions
             if case .yearly = period {
                 self.introductoryOffer = IntroductoryOffer(
@@ -422,7 +408,7 @@ public struct StoreKitConfigurationGenerator {
             }
         }
     }
-    
+
     private struct IntroductoryOffer: Codable {
         let duration: String
         let paymentMode: String

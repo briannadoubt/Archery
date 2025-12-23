@@ -65,11 +65,11 @@ public class LiveActivityManager<Attributes: ActivityAttributes>: LiveActivityMa
             throw LiveActivityError.activityNotFound(id)
         }
         
-        let updatedContent = ActivityContent(
+        nonisolated(unsafe) let updatedContent = ActivityContent(
             state: contentState,
             staleDate: Date().addingTimeInterval(staleTimeout)
         )
-        
+
         await activity.update(updatedContent)
     }
     

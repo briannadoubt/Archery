@@ -362,6 +362,20 @@ public final class WidgetAnalytics {
     }
     
     private func familyString(for family: WidgetFamily) -> String {
+        #if os(watchOS)
+        switch family {
+        case .accessoryCircular:
+            return "accessory_circular"
+        case .accessoryRectangular:
+            return "accessory_rectangular"
+        case .accessoryInline:
+            return "accessory_inline"
+        case .accessoryCorner:
+            return "accessory_corner"
+        @unknown default:
+            return "unknown"
+        }
+        #elseif os(visionOS)
         switch family {
         case .systemSmall:
             return "small"
@@ -370,34 +384,30 @@ public final class WidgetAnalytics {
         case .systemLarge:
             return "large"
         case .systemExtraLarge:
-            if #available(iOS 15.0, macOS 12.0, *) {
-                return "extra_large"
-            } else {
-                return "large"
-            }
-        #if !os(visionOS)
-        case .accessoryCircular:
-            if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
-                return "accessory_circular"
-            } else {
-                return "small"
-            }
-        case .accessoryRectangular:
-            if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
-                return "accessory_rectangular"
-            } else {
-                return "small"
-            }
-        case .accessoryInline:
-            if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
-                return "accessory_inline"
-            } else {
-                return "small"
-            }
-        #endif
+            return "extra_large"
         @unknown default:
             return "unknown"
         }
+        #else
+        switch family {
+        case .systemSmall:
+            return "small"
+        case .systemMedium:
+            return "medium"
+        case .systemLarge:
+            return "large"
+        case .systemExtraLarge:
+            return "extra_large"
+        case .accessoryCircular:
+            return "accessory_circular"
+        case .accessoryRectangular:
+            return "accessory_rectangular"
+        case .accessoryInline:
+            return "accessory_inline"
+        @unknown default:
+            return "unknown"
+        }
+        #endif
     }
 }
 

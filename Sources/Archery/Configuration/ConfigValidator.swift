@@ -133,13 +133,17 @@ public final class ConfigValidator {
             }
             
         case .url:
-            if let stringValue = value as? String,
-               URL(string: stringValue) == nil {
-                throw ConfigValidationError(
-                    path: fullPath,
-                    message: rule.message ?? "Invalid URL format",
-                    severity: rule.severity ?? .error
-                )
+            if let stringValue = value as? String {
+                // Require a valid URL with scheme and host
+                guard let url = URL(string: stringValue),
+                      url.scheme != nil,
+                      url.host != nil else {
+                    throw ConfigValidationError(
+                        path: fullPath,
+                        message: rule.message ?? "Invalid URL format",
+                        severity: rule.severity ?? .error
+                    )
+                }
             }
             
         case .email:

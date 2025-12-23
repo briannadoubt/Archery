@@ -187,58 +187,68 @@ public enum FormError: LocalizedError {
 
 // MARK: - Focus State Manager
 
+@MainActor
 @Observable
 public final class FocusStateManager {
     public var focusedFieldId: String?
     public var keyboardHeight: CGFloat = 0
     public var isKeyboardVisible = false
-    
-    private var observers: [NSObjectProtocol] = []
-    
+
+    private var showObserver: (any NSObjectProtocol)?
+    private var hideObserver: (any NSObjectProtocol)?
+
     public init() {
         setupKeyboardObservers()
     }
-    
+
     private func setupKeyboardObservers() {
         #if os(iOS)
         let notificationCenter = NotificationCenter.default
 
-        observers.append(
-            notificationCenter.addObserver(
-                forName: UIResponder.keyboardWillShowNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                if let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+        showObserver = notificationCenter.addObserver(
+            forName: UIResponder.keyboardWillShowNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+            Task { @MainActor in
+                if let frame {
                     self?.keyboardHeight = frame.height
                     self?.isKeyboardVisible = true
                 }
             }
-        )
+        }
 
-        observers.append(
-            notificationCenter.addObserver(
-                forName: UIResponder.keyboardWillHideNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
+        hideObserver = notificationCenter.addObserver(
+            forName: UIResponder.keyboardWillHideNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
                 self?.keyboardHeight = 0
                 self?.isKeyboardVisible = false
             }
-        )
+        }
         #endif
     }
-    
+
     public func focus(_ fieldId: String?) {
         focusedFieldId = fieldId
     }
-    
+
     public func clearFocus() {
         focusedFieldId = nil
     }
-    
-    deinit {
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
+
+    public func cleanup() {
+        #if os(iOS)
+        if let observer = showObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = hideObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        #endif
     }
 }
 

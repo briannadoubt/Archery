@@ -146,6 +146,60 @@ private let cases: [SnapshotCase] = [
         }
         """,
         macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/GRDB/persistable_basic",
+        source: """
+        @Persistable(table: "players")
+        struct Player: Codable, Identifiable {
+            var id: Int64
+            var name: String
+            var score: Int
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/GRDB/persistable_default_table",
+        source: """
+        @Persistable
+        struct Task: Codable, Identifiable {
+            var id: UUID
+            var title: String
+            var completed: Bool
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/GRDB/repository_basic",
+        source: """
+        @DatabaseRepository(record: Player.self)
+        class PlayerStore {
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/GRDB/repository_custom_methods",
+        source: """
+        @DatabaseRepository(record: Player.self)
+        class PlayerStore {
+            func topScorers(limit: Int) async throws -> [Player] {
+                fatalError("Implemented by generated Live class")
+            }
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/GRDB/repository_public",
+        source: """
+        @DatabaseRepository(record: Player.self)
+        public class PlayerStore {
+        }
+        """,
+        macros: archeryMacros
     )
 ]
 

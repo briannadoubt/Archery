@@ -145,12 +145,16 @@ public struct SnapshotMetadata: Codable {
     }
     
     private static func currentDevice() -> String {
-        #if os(iOS) || os(tvOS)
-        return UIDevice.current.model
+        #if os(iOS)
+        return "iPhone"
+        #elseif os(tvOS)
+        return "Apple TV"
         #elseif os(macOS)
         return Host.current().localizedName ?? "Mac"
         #elseif os(watchOS)
         return "Apple Watch"
+        #elseif os(visionOS)
+        return "Apple Vision Pro"
         #else
         return "Unknown"
         #endif
