@@ -1,0 +1,42 @@
+struct Task: Codable, FetchableRecord, PersistableRecord {
+    var id: String
+    var title: String
+    var status: String
+    var dueDate: Date?
+    var createdAt: Date
+    var updatedAt: Date
+    var isSelected: Bool = false
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+            static let title = Column(CodingKeys.title)
+            static let status = Column(CodingKeys.status)
+            static let dueDate = Column(CodingKeys.dueDate)
+            static let createdAt = Column(CodingKeys.createdAt)
+            static let updatedAt = Column(CodingKeys.updatedAt)
+    }
+
+    static let databaseTableName = "tasks"
+
+    static let createTableMigration = Migration(id: "create_tasks") { db in
+                try db.create(table: "tasks") { t in
+                t.primaryKey("id", .text)
+                t.column("title", .text).notNull()
+                t.column("status", .text).notNull()
+                t.column("due_date", .datetime)
+                t.column("created_at", .datetime).notNull()
+                t.column("updated_at", .datetime).notNull()
+                }
+                try db.create(index: "tasks_status_idx", on: "tasks", columns: ["status"])
+                try db.create(index: "tasks_due_date_idx", on: "tasks", columns: ["due_date"])
+            }
+}
+
+extension Task: Identifiable, Hashable, Sendable {
+}
+
+extension Task: AutoMigrating {
+}
+
+extension Task: HasTimestamps {
+}
