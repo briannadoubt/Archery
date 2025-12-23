@@ -291,11 +291,11 @@ public struct ValidationResult {
 
 // MARK: - Validation Error
 
-public struct ConfigValidationError: Error {
+public struct ConfigValidationError: Error, Sendable {
     public let path: String
     public let message: String
     public let severity: ValidationSeverity
-    
+
     public init(path: String, message: String, severity: ValidationSeverity = .error) {
         self.path = path
         self.message = message
@@ -303,7 +303,7 @@ public struct ConfigValidationError: Error {
     }
 }
 
-public enum ValidationSeverity {
+public enum ValidationSeverity: Sendable {
     case error
     case warning
 }

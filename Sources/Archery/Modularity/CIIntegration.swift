@@ -468,7 +468,7 @@ public struct BuildMetrics {
     public var cacheHitRate: Double = 0
 }
 
-public struct BudgetCheckResults {
+public struct BudgetCheckResults: Sendable {
     public var violations: [BudgetViolation] = []
     
     public var allPassed: Bool {

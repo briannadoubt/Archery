@@ -71,12 +71,16 @@ public class FormField<T>: @preconcurrency FormFieldProtocol, Identifiable {
                     message: "\(label) is required",
                     type: .required
                 ))
-            } else if let optionalValue = value as? Any?, optionalValue == nil {
-                errors.append(ValidationError(
-                    field: label,
-                    message: "\(label) is required",
-                    type: .required
-                ))
+            } else {
+                // Check if value is nil by using Mirror to inspect optional values
+                let mirror = Mirror(reflecting: value as Any)
+                if mirror.displayStyle == .optional && mirror.children.isEmpty {
+                    errors.append(ValidationError(
+                        field: label,
+                        message: "\(label) is required",
+                        type: .required
+                    ))
+                }
             }
         }
         
