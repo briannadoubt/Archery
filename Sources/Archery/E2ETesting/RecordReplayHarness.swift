@@ -411,7 +411,9 @@ class RecordReplayURLProtocol: URLProtocol {
     override func startLoading() {
         let currentRequest = request
         let currentClient = client
-        let protocolSelf = self
+        // Use nonisolated(unsafe) because URLProtocol callbacks must run on main queue
+        // and we're explicitly dispatching there. This bridges pre-concurrency URLProtocol APIs.
+        nonisolated(unsafe) let protocolSelf = self
 
         Task { @Sendable in
             do {

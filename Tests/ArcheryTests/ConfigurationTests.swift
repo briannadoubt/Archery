@@ -258,7 +258,7 @@ final class ConfigurationTests: XCTestCase {
         
         // Set environment variable (this would normally be done externally)
         // For testing, we can only test the key parsing
-        let keys = try await provider.listSecrets()
+        _ = try await provider.listSecrets()
         
         // Environment secrets are read-only
         do {
@@ -361,14 +361,14 @@ struct TestConfiguration: Configuration {
 }
 
 struct DefaultTestConfiguration: Configuration {
-    let apiUrl: String = "https://api.example.com"
-    let apiTimeout: Int = 30
-    let logLevel: String = "info"
-    let debugMode: Bool = true
-    let database: DatabaseConfig = DatabaseConfig()
-    
+    var apiUrl: String = "https://api.example.com"
+    var apiTimeout: Int = 30
+    var logLevel: String = "info"
+    var debugMode: Bool = true
+    var database: DatabaseConfig = DatabaseConfig()
+
     struct DatabaseConfig: Codable {
-        let ssl: Bool = false
+        var ssl: Bool = false
     }
     
     static var defaultValues: DefaultTestConfiguration {

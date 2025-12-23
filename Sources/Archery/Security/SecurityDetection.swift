@@ -136,7 +136,7 @@ public final class SecurityDetection: @unchecked Sendable {
     
     @MainActor
     public func checkTampering() {
-        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+        guard Bundle.main.bundleIdentifier != nil else {
             delegate?.securityDetection(didPassCheck: .tampering)
             return
         }

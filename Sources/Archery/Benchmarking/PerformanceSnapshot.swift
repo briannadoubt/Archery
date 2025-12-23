@@ -391,7 +391,7 @@ public final class SnapshotStorage {
             options: .skipsHiddenFiles
         )
         
-        return try urls.compactMap { url -> PerformanceSnapshot? in
+        return urls.compactMap { url -> PerformanceSnapshot? in
             guard url.pathExtension == "json" else { return nil }
             return try? PerformanceSnapshot.load(from: url)
         }

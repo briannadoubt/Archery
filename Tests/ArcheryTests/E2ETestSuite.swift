@@ -147,7 +147,7 @@ final class E2ETestSuite: XCTestCase {
         let storage = MemoryRecordingStorage()
         
         // Record mode
-        let recordHarness = RecordReplayHarness(
+        _ = RecordReplayHarness(
             mode: .record,
             storage: storage
         )
@@ -296,7 +296,7 @@ final class E2ETestSuite: XCTestCase {
         
         // 1. Setup record/replay for deterministic network
         let storage = MemoryRecordingStorage()
-        let harness = RecordReplayHarness(mode: .replay, storage: storage)
+        _ = RecordReplayHarness(mode: .replay, storage: storage)
         
         // 2. Setup navigation graph for fuzzing
         let graph = NavigationGraphBuilder.buildFromRoutes([

@@ -76,7 +76,7 @@ public final class NavigationFuzzer {
         var crash: FuzzCrashReport?
         
         // Random walk through navigation graph
-        for depth in 0..<maxDepth {
+        for _ in 0..<maxDepth {
             // Get available actions from current node
             let actions = graph.availableActions(from: currentNode)
             

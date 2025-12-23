@@ -195,7 +195,6 @@ public actor DiskCache<Item: Cacheable> {
         }
         
         return files.compactMap { url in
-            let identifier = url.deletingPathExtension().lastPathComponent
             guard let data = try? Data(contentsOf: url),
                   let item = try? decoder.decode(Item.self, from: data) else {
                 return nil

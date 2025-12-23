@@ -25,6 +25,8 @@ public struct SandboxTestingManager: Sendable {
     }
     
     /// Check if running in TestFlight
+    @available(macOS, deprecated: 15.0, message: "Use AppTransaction from StoreKit 2")
+    @available(iOS, deprecated: 18.0, message: "Use AppTransaction from StoreKit 2")
     public var isTestFlight: Bool {
         guard let path = Bundle.main.appStoreReceiptURL?.path else {
             return false
@@ -44,6 +46,8 @@ public struct SandboxTestingManager: Sendable {
     // MARK: - Test Configuration
     
     /// Configure StoreKit for testing
+    @available(macOS, deprecated: 15.0, message: "Use StoreKit 2")
+    @available(iOS, deprecated: 18.0, message: "Use StoreKit 2")
     public func configureForTesting() {
         if isSandbox {
             // Enable StoreKit testing features
@@ -146,13 +150,17 @@ public struct SandboxTestingManager: Sendable {
 
 // MARK: - Test Transaction Observer
 
+@available(macOS, deprecated: 15.0, message: "Use StoreKit 2 instead")
+@available(iOS, deprecated: 18.0, message: "Use StoreKit 2 instead")
 class TestTransactionObserver: NSObject, SKPaymentTransactionObserver, @unchecked Sendable {
     static let shared = TestTransactionObserver()
-    
+
     private override init() {
         super.init()
     }
-    
+
+    @available(macOS, deprecated: 15.0)
+    @available(iOS, deprecated: 18.0)
     func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
         for transaction in transactions {
             logTransaction(transaction)
@@ -351,9 +359,9 @@ public struct StoreKitConfigurationGenerator {
     }
     
     private struct StoreKitConfiguration: Codable {
-        let identifier: String = UUID().uuidString
+        var identifier: String = UUID().uuidString
         let products: [ProductConfiguration]
-        
+
         init(products: [MockProduct]) {
             self.products = products.map { ProductConfiguration(from: $0) }
         }

@@ -67,7 +67,7 @@ public actor ModuleBoundaryLinter {
     // MARK: - File Processing
     
     private func lintFile(_ fileURL: URL, module: String) throws -> [BoundaryViolation] {
-        let source = try String(contentsOf: fileURL)
+        let source = try String(contentsOf: fileURL, encoding: .utf8)
         let sourceFile = Parser.parse(source: source)
         
         let visitor = ImportVisitor(

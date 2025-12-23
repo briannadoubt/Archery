@@ -78,9 +78,9 @@ final class ObservabilityTests: XCTestCase {
         XCTAssertEqual(span.name, "test-span")
         XCTAssertEqual(span.context.traceId, initialContext.traceId)
         XCTAssertEqual(span.context.parentSpanId, initialContext.spanId)
-        XCTAssertEqual(span.attributes["key"] as? String, "value")
+        XCTAssertEqual(span.attributes["key"], "value")
     }
-    
+
     @MainActor
     func testContextPropagatorEndSpan() {
         let propagator = ContextPropagator.shared
@@ -108,10 +108,10 @@ final class ObservabilityTests: XCTestCase {
             sampled: true
         )
         
-        _ = propagator.withContext(context) {
+        propagator.withContext(context) {
             var headers = [String: String]()
             propagator.injectIntoHeaders(&headers)
-            
+
             XCTAssertEqual(headers["X-Trace-Id"], "trace123")
             XCTAssertEqual(headers["X-Span-Id"], "span456")
             XCTAssertEqual(headers["X-Parent-Span-Id"], "parent789")
@@ -152,7 +152,7 @@ final class ObservabilityTests: XCTestCase {
         
         XCTAssertEqual(span.name, "test-span")
         XCTAssertEqual(span.context.traceId, context.traceId)
-        XCTAssertEqual(span.attributes["key"] as? String, "value")
+        XCTAssertEqual(span.attributes["key"], "value")
         XCTAssertNil(span.endTime)
         XCTAssertEqual(span.status, .unset)
     }
@@ -160,17 +160,17 @@ final class ObservabilityTests: XCTestCase {
     func testSpanSetAttribute() {
         let span = Span(name: "test", context: CorrelationContext())
         span.setAttribute("key", value: "value")
-        
-        XCTAssertEqual(span.attributes["key"] as? String, "value")
+
+        XCTAssertEqual(span.attributes["key"], "value")
     }
-    
+
     func testSpanAddEvent() {
         let span = Span(name: "test", context: CorrelationContext())
         span.addEvent("test-event", attributes: ["key": "value"])
-        
+
         XCTAssertEqual(span.events.count, 1)
         XCTAssertEqual(span.events[0].name, "test-event")
-        XCTAssertEqual(span.events[0].attributes["key"] as? String, "value")
+        XCTAssertEqual(span.events[0].attributes["key"], "value")
     }
     
     func testSpanSetStatus() {
@@ -259,7 +259,7 @@ final class ObservabilityTests: XCTestCase {
         XCTAssertEqual(counter.name, "api.requests")
         XCTAssertEqual(counter.value, 1)
         XCTAssertEqual(counter.unit, .count)
-        XCTAssertEqual(counter.attributes["endpoint"] as? String, "/users")
+        XCTAssertEqual(counter.attributes["endpoint"], "/users")
     }
     
     func testGaugeMetric() {

@@ -349,11 +349,6 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         // Filter out transient properties
         let persistedProperties = properties.filter { !$0.isTransient }
 
-        // Find the primary key property
-        let pkProperty = persistedProperties.first { $0.isPrimaryKey } ??
-                         persistedProperties.first { $0.name == primaryKey } ??
-                         persistedProperties.first { $0.name == "id" }
-
         // Build column definitions
         var columnDefs: [String] = []
         var indexDefs: [String] = []

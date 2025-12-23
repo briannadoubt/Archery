@@ -95,45 +95,31 @@ public final class SyncCoordinator {
         let startTime = Date()
         metrics.syncAttempts += 1
         
-        do {
-            await mutationQueue.processQueue()
-            
-            syncProgress = 0.5
-            
-            if !conflicts.isEmpty {
-                syncState = .resolving
-                await resolveConflicts()
-            }
-            
-            syncProgress = 1.0
-            syncState = .idle
-            lastSyncTime = Date()
-            
-            let duration = Date().timeIntervalSince(startTime)
-            metrics.successfulSyncs += 1
-            metrics.totalSyncTime += duration
-            metrics.lastSyncDuration = duration
-            
-            await diagnostics.recordSync(
-                success: true,
-                duration: duration,
-                changesSync: pendingChanges,
-                conflicts: conflicts.count
-            )
-            cachedDiagnosticsReport = await diagnostics.generateReport()
-        } catch {
-            syncState = .failed
-            metrics.failedSyncs += 1
+        await mutationQueue.processQueue()
 
-            await diagnostics.recordSync(
-                success: false,
-                duration: Date().timeIntervalSince(startTime),
-                changesSync: pendingChanges,
-                conflicts: conflicts.count,
-                error: error
-            )
-            cachedDiagnosticsReport = await diagnostics.generateReport()
+        syncProgress = 0.5
+
+        if !conflicts.isEmpty {
+            syncState = .resolving
+            await resolveConflicts()
         }
+
+        syncProgress = 1.0
+        syncState = .idle
+        lastSyncTime = Date()
+
+        let duration = Date().timeIntervalSince(startTime)
+        metrics.successfulSyncs += 1
+        metrics.totalSyncTime += duration
+        metrics.lastSyncDuration = duration
+
+        await diagnostics.recordSync(
+            success: true,
+            duration: duration,
+            changesSync: pendingChanges,
+            conflicts: conflicts.count
+        )
+        cachedDiagnosticsReport = await diagnostics.generateReport()
     }
     
     public func forceSync() async {

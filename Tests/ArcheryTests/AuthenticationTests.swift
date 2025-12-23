@@ -9,7 +9,7 @@ final class AuthenticationTests: XCTestCase {
     
     override func setUp() async throws {
         mockProvider = MockAuthProvider(delay: 0.1)
-        authManager = await AuthenticationManager(
+        authManager = AuthenticationManager(
             provider: mockProvider,
             tokenStorage: .inMemory()
         )
@@ -32,7 +32,7 @@ final class AuthenticationTests: XCTestCase {
     
     func testFailedAuthentication() async {
         let failingProvider = MockAuthProvider(delay: 0.1, shouldFail: true)
-        let failingManager = await AuthenticationManager(
+        let failingManager = AuthenticationManager(
             provider: failingProvider,
             tokenStorage: .inMemory()
         )
@@ -54,7 +54,7 @@ final class AuthenticationTests: XCTestCase {
     func testTokenRefresh() async throws {
         try await authManager.authenticate()
         
-        guard let initialToken = await authManager.state.token else {
+        guard let initialToken = authManager.state.token else {
             XCTFail("No initial token")
             return
         }

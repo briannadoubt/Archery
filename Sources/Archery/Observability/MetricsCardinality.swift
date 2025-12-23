@@ -174,7 +174,7 @@ public struct HierarchicalAggregator {
         var aggregated = attributes
         
         for (dimension, hierarchy) in hierarchies {
-            guard let value = attributes[dimension] as? String else { continue }
+            guard let value = attributes[dimension] else { continue }
             
             let components = value.split(separator: hierarchy.first?.first ?? "/")
                 .map(String.init)
@@ -282,7 +282,7 @@ public actor CardinalityMonitor {
     private func startMonitoring() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: UInt64(checkInterval * 1_000_000_000))
-            await checkCardinalities()
+            checkCardinalities()
         }
     }
     
@@ -351,9 +351,9 @@ public struct CardinalityEnricher: TelemetryEnricher {
     
     public func enrich(log: inout LogEntry) {
         // Logs have string attributes, apply basic reduction
-        let reduced = log.attributes.filter { $0.key != "password" && $0.key != "token" }
         // Note: Can't modify log attributes as they're let constants
         // This would need API change to make attributes mutable
+        _ = log.attributes.filter { $0.key != "password" && $0.key != "token" }
     }
 }
 
