@@ -52,19 +52,14 @@ jobs:
       - name: Resolve Dependencies
         run: swift package resolve
 
-      - name: Install xcpretty
-        run: gem install xcpretty
-
       - name: Build and Test
         run: |
-          set -o pipefail
           xcodebuild test \
             -scheme Archery \
             -destination '${{ matrix.destination }}' \
             -configuration Debug \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | xcpretty --color || exit 1
+            CODE_SIGNING_ALLOWED=NO
 
   macro-tests:
     name: Macro Expansion Tests
