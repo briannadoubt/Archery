@@ -172,6 +172,35 @@ private let cases: [SnapshotCase] = [
         macros: archeryMacros
     ),
     SnapshotCase(
+        name: "ArcheryMacros/GRDB/persistable_schema_attrs",
+        source: """
+        @Persistable(table: "tasks")
+        struct Task: Codable, FetchableRecord, PersistableRecord {
+            @PrimaryKey var id: String
+            var title: String
+            @Indexed var status: String
+            @Indexed var dueDate: Date?
+            @CreatedAt var createdAt: Date
+            @UpdatedAt var updatedAt: Date
+            @NotPersisted var isSelected: Bool = false
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/GRDB/persistable_foreign_key",
+        source: """
+        @Persistable(table: "comments")
+        struct Comment: Codable, FetchableRecord, PersistableRecord {
+            @PrimaryKey var id: String
+            var content: String
+            @ForeignKey(Post.self) @Indexed var postId: String?
+            @CreatedAt var createdAt: Date
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
         name: "ArcheryMacros/GRDB/repository_basic",
         source: """
         @DatabaseRepository(record: Player.self)
