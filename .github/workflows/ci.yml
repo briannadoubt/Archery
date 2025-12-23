@@ -55,7 +55,7 @@ jobs:
       - name: Build and Test
         run: |
           xcodebuild test \
-            -scheme Archery \
+            -scheme Archery-Package \
             -destination '${{ matrix.destination }}' \
             -configuration Debug \
             -parallel-testing-enabled NO \
