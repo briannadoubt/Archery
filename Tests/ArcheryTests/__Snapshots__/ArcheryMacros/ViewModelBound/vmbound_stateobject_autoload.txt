@@ -1,7 +1,7 @@
 struct SampleView {
 
     @SwiftUI.Environment(\.archeryContainer) private var __archeryEnv
-    @SwiftUI.StateObject private var vmHolder = __ArcheryVMHolder(factory: { SampleVM() })
+    @SwiftUI.State private var vmHolder = __ArcheryVMHolder(factory: { SampleVM() })
 
     var vm: SampleVM {
         vmHolder.value(container: __archeryEnv)
@@ -43,9 +43,9 @@ struct SampleView {
     }
     #endif
 
-    @MainActor private final class __ArcheryVMHolder: ObservableObject {
-        private var cached: SampleVM?
-        private let factory: @MainActor () -> SampleVM
+    @MainActor @Observable fileprivate final class __ArcheryVMHolder {
+        fileprivate var cached: SampleVM?
+        fileprivate let factory: @MainActor () -> SampleVM
         init(factory: @escaping @MainActor () -> SampleVM = {
                 SampleVM()
             }) {

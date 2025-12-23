@@ -122,7 +122,7 @@ struct MiniShell {
     /// - Full-screen presentations
     /// - Deep link handling via onOpenURL
     struct ShellView: SwiftUI.View {
-        @SwiftUI.StateObject private var coordinator: ShellNavigationCoordinator
+        @SwiftUI.State private var coordinator: ShellNavigationCoordinator
         private var container: EnvContainer
 
         enum HomeRoute: NavigationRoute, Codable { case root 
@@ -142,7 +142,7 @@ struct MiniShell {
             
             patch?(&working)
             self.container = working
-            self._coordinator = SwiftUI.StateObject(wrappedValue: ShellNavigationCoordinator(container: working))
+            self._coordinator = SwiftUI.State(initialValue: ShellNavigationCoordinator(container: working))
 
             // Configure analytics providers and framework-level auto-tracking
             Self.__configureAnalytics()
@@ -190,7 +190,7 @@ struct MiniShell {
             #endif
             .environment(\.navigationHandle, coordinator.makeHandle(for: .tab(0)))
             .environment(\.archeryContainer, container)
-            .environmentObject(coordinator)
+            .environment(coordinator)
             .onOpenURL { url in
                 _ = coordinator.handle(url: url)
             }
@@ -342,7 +342,7 @@ struct MiniShell {
 
     // MARK: - Generated App Infrastructure
 
-        @SwiftUI.StateObject private var __store = StoreKitManager.shared
+        @SwiftUI.State private var __store = StoreKitManager.shared
         init() {
             Self.__configureAppearance()
         }
@@ -357,7 +357,7 @@ struct MiniShell {
         var body: some SwiftUI.Scene {
             SwiftUI.WindowGroup {
                 ShellView()
-                .environmentObject(__store)
+                .environment(__store)
             }
             #if os(macOS)
             .windowStyle(.hiddenTitleBar)

@@ -40,7 +40,7 @@ public struct PIIRedactor {
     
     public static func redactString(_ string: String) -> String {
         var result = string
-        
+
         // Redact email addresses
         let emailRegex = try? NSRegularExpression(
             pattern: #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,64}"#,
@@ -53,24 +53,20 @@ public struct PIIRedactor {
                 withTemplate: "[EMAIL]"
             )
         }
-        
-        // Redact phone numbers
-        let phonePatterns = [
-            #"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"#,  // US format
-            #"\b\+?\d{1,3}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}\b"#  // International
-        ]
-        
-        for pattern in phonePatterns {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                result = regex.stringByReplacingMatches(
-                    in: result,
-                    range: NSRange(result.startIndex..., in: result),
-                    withTemplate: "[PHONE]"
-                )
-            }
+
+        // Redact SSN (must be before phone to avoid false positive matches)
+        let ssnRegex = try? NSRegularExpression(
+            pattern: #"\b\d{3}-\d{2}-\d{4}\b"#
+        )
+        if let regex = ssnRegex {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: "[SSN]"
+            )
         }
-        
-        // Redact credit card numbers
+
+        // Redact credit card numbers (must be before phone to avoid partial matches)
         let creditCardRegex = try? NSRegularExpression(
             pattern: #"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"#
         )
@@ -81,17 +77,21 @@ public struct PIIRedactor {
                 withTemplate: "[CARD]"
             )
         }
-        
-        // Redact SSN
-        let ssnRegex = try? NSRegularExpression(
-            pattern: #"\b\d{3}-\d{2}-\d{4}\b"#
-        )
-        if let regex = ssnRegex {
-            result = regex.stringByReplacingMatches(
-                in: result,
-                range: NSRange(result.startIndex..., in: result),
-                withTemplate: "[SSN]"
-            )
+
+        // Redact phone numbers
+        let phonePatterns = [
+            #"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"#,  // US format
+            #"\b\+?\d{1,3}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}\b"#  // International
+        ]
+
+        for pattern in phonePatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                result = regex.stringByReplacingMatches(
+                    in: result,
+                    range: NSRange(result.startIndex..., in: result),
+                    withTemplate: "[PHONE]"
+                )
+            }
         }
         
         // Redact API keys and tokens (common patterns)

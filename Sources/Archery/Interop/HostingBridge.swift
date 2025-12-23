@@ -355,7 +355,7 @@ public struct UIKitViewControllerRepresentable<ViewControllerType: UIViewControl
 
 // MARK: - AppKit View Representable
 
-#if canImport(AppKit)
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 /// Wrapper to use AppKit views in SwiftUI
 public struct AppKitViewRepresentable<ViewType: NSView>: NSViewRepresentable {
