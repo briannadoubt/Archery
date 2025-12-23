@@ -26,7 +26,7 @@ final class ModularityTests: XCTestCase {
         }
         
         // Register module
-        try await registry.register(TestModule.self)
+        try registry.register(TestModule.self)
         
         // Verify registration
         let contract: TestContract? = registry.contract(for: "TestModule")
@@ -62,11 +62,11 @@ final class ModularityTests: XCTestCase {
         let registry = ModuleRegistry.shared
         
         // First module registers fine
-        try await registry.register(ModuleA.self)
-        
+        try registry.register(ModuleA.self)
+
         // Second module should fail due to circular dependency
         do {
-            try await registry.register(ModuleB.self)
+            try registry.register(ModuleB.self)
             XCTFail("Should have thrown circular dependency error")
         } catch ModuleError.circularDependency {
             // Expected
