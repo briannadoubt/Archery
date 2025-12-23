@@ -456,10 +456,10 @@ public struct ConfigDiff: Equatable {
 
 // MARK: - Configuration Errors
 
-public enum ConfigurationError: LocalizedError {
+public enum ConfigurationError: LocalizedError, Sendable {
     case validationFailed(String)
     case missingRequired(String)
-    case invalidValue(key: String, value: Any)
+    case invalidValue(key: String, value: String)
     case invalidEnvironment
     case secretsNotConfigured
     

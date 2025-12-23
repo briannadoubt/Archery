@@ -2,13 +2,13 @@ import Foundation
 
 // MARK: - Validation Error
 
-public struct ValidationError: Identifiable, Equatable {
+public struct ValidationError: Identifiable, Equatable, Sendable {
     public let id = UUID()
     public let field: String
     public let message: String
     public let type: ValidationType
-    
-    public enum ValidationType: String {
+
+    public enum ValidationType: String, Sendable {
         case required
         case format
         case length

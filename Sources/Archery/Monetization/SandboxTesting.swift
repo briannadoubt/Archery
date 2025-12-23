@@ -147,7 +147,7 @@ public struct SandboxTestingManager: Sendable {
 // MARK: - Test Transaction Observer
 
 class TestTransactionObserver: NSObject, SKPaymentTransactionObserver, @unchecked Sendable {
-    nonisolated(unsafe) static let shared = TestTransactionObserver()
+    static let shared = TestTransactionObserver()
     
     private override init() {
         super.init()
@@ -192,7 +192,7 @@ public struct PreviewSeeds {
     
     // MARK: - Products
     
-    nonisolated(unsafe) public static let products: [MockProduct] = [
+    public static let products: [MockProduct] = [
         MockProduct(
             id: "com.app.premium.monthly",
             displayName: "Premium Monthly",
@@ -226,7 +226,7 @@ public struct PreviewSeeds {
     
     // MARK: - Subscription States
     
-    nonisolated(unsafe) public static let subscriptionStates: [MockSubscriptionState] = [
+    public static let subscriptionStates: [MockSubscriptionState] = [
         MockSubscriptionState(
             status: .active,
             productId: "com.app.premium.monthly",
@@ -259,7 +259,7 @@ public struct PreviewSeeds {
     
     // MARK: - Entitlements
     
-    nonisolated(unsafe) public static let entitlementSets: [Set<Entitlement>] = [
+    public static let entitlementSets: [Set<Entitlement>] = [
         [], // No entitlements
         [.basic], // Basic only
         [.premium, .removeAds], // Premium user

@@ -231,7 +231,7 @@ public struct BudgetValidationResult {
     }
 }
 
-public struct BudgetViolation {
+public struct BudgetViolation: Sendable {
     public let constraint: String
     public let message: String
     public let actual: Double

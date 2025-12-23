@@ -182,19 +182,26 @@ public final class DataMigrationManager: Sendable {
         // Batch process for better performance
         let batchSize = 100
         for batch in coreDataObjects.chunked(into: batchSize) {
-            do {
-                try await swiftDataContext.transaction {
-                    for object in batch {
-                        do {
-                            let swiftDataModel = try transform(object)
-                            swiftDataContext.insert(swiftDataModel)
-                            migrated += 1
-                        } catch {
-                            failed += 1
-                            errors.append(error)
-                        }
-                    }
+            var batchMigrated = 0
+            var batchFailed = 0
+            var batchErrors: [Error] = []
+
+            for object in batch {
+                do {
+                    let swiftDataModel = try transform(object)
+                    swiftDataContext.insert(swiftDataModel)
+                    batchMigrated += 1
+                } catch {
+                    batchFailed += 1
+                    batchErrors.append(error)
                 }
+            }
+
+            do {
+                try swiftDataContext.save()
+                migrated += batchMigrated
+                failed += batchFailed
+                errors.append(contentsOf: batchErrors)
             } catch {
                 failed += batch.count
                 errors.append(error)
@@ -230,21 +237,30 @@ public final class DataMigrationManager: Sendable {
         let batchSize = 100
         for batch in swiftDataObjects.chunked(into: batchSize) {
             do {
-                try await coreDataContext.perform {
+                let (batchMigrated, batchFailed, batchErrors) = try await coreDataContext.perform { () -> (Int, Int, [Error]) in
+                    var localMigrated = 0
+                    var localFailed = 0
+                    var localErrors: [Error] = []
+
                     for object in batch {
                         do {
                             _ = try transform(object, coreDataContext)
-                            migrated += 1
+                            localMigrated += 1
                         } catch {
-                            failed += 1
-                            errors.append(error)
+                            localFailed += 1
+                            localErrors.append(error)
                         }
                     }
-                    
+
                     if coreDataContext.hasChanges {
                         try coreDataContext.save()
                     }
+
+                    return (localMigrated, localFailed, localErrors)
                 }
+                migrated += batchMigrated
+                failed += batchFailed
+                errors.append(contentsOf: batchErrors)
             } catch {
                 failed += batch.count
                 errors.append(error)

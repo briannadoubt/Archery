@@ -353,7 +353,7 @@ struct TestConfiguration: Configuration {
         }
         
         guard timeout > 0 && timeout <= 300 else {
-            throw ConfigurationError.invalidValue(key: "timeout", value: timeout)
+            throw ConfigurationError.invalidValue(key: "timeout", value: String(timeout))
         }
         
         return true
