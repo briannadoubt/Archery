@@ -5,7 +5,7 @@ import PackageDescription
 import CompilerPluginSupport
 
 let warningFlags: [SwiftSetting] = [
-//    .treatAllWarnings(as: .error, .when(configuration: .debug)),
+    .treatAllWarnings(as: .error),
 ]
 
 let package = Package(

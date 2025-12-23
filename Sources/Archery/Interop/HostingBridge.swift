@@ -152,6 +152,7 @@ public struct HostingBridge {
     }
     
     /// Remove an embedded SwiftUI view
+    @MainActor
     public static func removeEmbedded(from containerView: NSView) {
         containerView.subviews.forEach { subview in
             if subview.identifier == NSUserInterfaceItemIdentifier("ArcheryHostedView") {

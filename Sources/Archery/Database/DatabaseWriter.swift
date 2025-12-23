@@ -72,8 +72,7 @@ public struct PersistenceWriter: Sendable {
         _ record: Record
     ) async throws {
         try await container.write { db in
-            var mutableRecord = record
-            try mutableRecord.update(db)
+            try record.update(db)
         }
     }
 
@@ -95,8 +94,7 @@ public struct PersistenceWriter: Sendable {
     ) async throws {
         try await container.write { db in
             for record in records {
-                var mutableRecord = record
-                try mutableRecord.update(db)
+                try record.update(db)
             }
         }
     }
@@ -110,8 +108,7 @@ public struct PersistenceWriter: Sendable {
         _ record: Record
     ) async throws -> Bool {
         try await container.write { db in
-            var mutableRecord = record
-            return try mutableRecord.delete(db)
+            try record.delete(db)
         }
     }
 
@@ -186,8 +183,7 @@ public extension PersistenceWriter {
     ) async throws {
         try await container.write { db in
             for record in records {
-                var mutableRecord = record
-                _ = try mutableRecord.delete(db)
+                _ = try record.delete(db)
             }
         }
     }

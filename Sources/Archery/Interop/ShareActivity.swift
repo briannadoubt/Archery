@@ -41,7 +41,7 @@ public struct ShareSheet: ViewModifier {
             }
         #elseif canImport(AppKit)
         content
-            .onChange(of: isPresented) { newValue in
+            .onChange(of: isPresented) { _, newValue in
                 if newValue {
                     showMacShareSheet()
                 }
@@ -56,10 +56,14 @@ public struct ShareSheet: ViewModifier {
         guard let window = NSApplication.shared.keyWindow else { return }
 
         let picker = NSSharingServicePicker(items: items)
-        picker.delegate = MacShareDelegate(completion: { success in
+        // Keep a strong reference to prevent deallocation
+        let delegate = MacShareDelegate(completion: { [self] success in
             isPresented = false
             completion?(success)
         })
+        // Store delegate to prevent deallocation (picker.delegate is weak)
+        objc_setAssociatedObject(picker, "delegateKey", delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        picker.delegate = delegate
 
         if let contentView = window.contentView {
             picker.show(
@@ -275,7 +279,7 @@ public struct DocumentPicker: ViewModifier {
             }
         #elseif canImport(AppKit)
         content
-            .onChange(of: isPresented) { newValue in
+            .onChange(of: isPresented) { _, newValue in
                 if newValue {
                     showMacDocumentPicker()
                 }

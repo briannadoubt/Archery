@@ -237,21 +237,14 @@ public final class StoreKitManager {
         updateListenerTask = Task {
             // Transaction.updates can fail on simulator without active account
             // Wrap in do-catch to handle gracefully
-            do {
-                for await result in Transaction.updates {
-                    do {
-                        let transaction = try self.checkVerified(result)
-                        await updatePurchasedProducts()
-                        await transaction.finish()
-                    } catch {
-                        self.error = .transactionVerificationFailed
-                    }
+            for await result in Transaction.updates {
+                do {
+                    let transaction = try self.checkVerified(result)
+                    await updatePurchasedProducts()
+                    await transaction.finish()
+                } catch {
+                    self.error = .transactionVerificationFailed
                 }
-            } catch {
-                // No active account - expected on simulator
-                #if DEBUG
-                print("StoreKit: Transaction updates unavailable (no active account)")
-                #endif
             }
         }
     }
@@ -268,21 +261,13 @@ public final class StoreKitManager {
     private func updatePurchasedProducts() async {
         var purchased: Set<String> = []
 
-        // Transaction.currentEntitlements can fail on simulator without active account
-        do {
-            for await result in Transaction.currentEntitlements {
-                do {
-                    let transaction = try checkVerified(result)
-                    purchased.insert(transaction.productID)
-                } catch {
-                    continue
-                }
+        for await result in Transaction.currentEntitlements {
+            do {
+                let transaction = try checkVerified(result)
+                purchased.insert(transaction.productID)
+            } catch {
+                continue
             }
-        } catch {
-            // No active account - expected on simulator
-            #if DEBUG
-            print("StoreKit: Current entitlements unavailable (no active account)")
-            #endif
         }
 
         purchasedProductIDs = purchased

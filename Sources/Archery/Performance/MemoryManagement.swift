@@ -18,7 +18,6 @@ public final class MemoryWarningManager {
     
     private var cancellables = Set<AnyCancellable>()
     private let loadShedders: NSHashTable<AnyObject> = .weakObjects()
-    private let queue = DispatchQueue(label: "com.archery.memory")
     
     public enum MemoryPressure: Int, Comparable, Sendable {
         case normal = 0
@@ -65,15 +64,14 @@ public final class MemoryWarningManager {
     }
     
     private func handleMemoryWarning() {
-        queue.async { [weak self] in
-            self?.currentPressure = .warning
-            self?.triggerLoadShedding(level: .warning)
-            
-            // Auto-recover after delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-                if self?.currentPressure == .warning {
-                    self?.currentPressure = .normal
-                }
+        currentPressure = .warning
+        triggerLoadShedding(level: .warning)
+
+        // Auto-recover after delay
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+            if self?.currentPressure == .warning {
+                self?.currentPressure = .normal
             }
         }
     }
@@ -128,9 +126,7 @@ public final class MemoryWarningManager {
     // MARK: - Load Shedding
     
     public func register(_ loadShedder: LoadShedding) {
-        queue.async { [weak self] in
-            self?.loadShedders.add(loadShedder as AnyObject)
-        }
+        loadShedders.add(loadShedder as AnyObject)
     }
     
     private func triggerLoadShedding(level: MemoryPressure) {

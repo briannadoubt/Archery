@@ -230,7 +230,7 @@ public enum WidgetContentStrategy {
 }
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public final class WidgetContentManager<T: Codable> {
+public final class WidgetContentManager<T: Codable & Sendable> {
     
     private let strategy: WidgetContentStrategy
     private let cacheManager: WidgetCacheManager

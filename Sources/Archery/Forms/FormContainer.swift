@@ -38,15 +38,14 @@ public final class FormContainer {
     public func updateField<T>(id: String, value: T) {
         guard let index = fields.firstIndex(where: { $0.id == id }) else { return }
         
-        if var field = fields[index] as? FormField<T> {
+        if let field = fields[index] as? FormField<T> {
             field.value = value
             isDirty = true
-            
+
             if validateOnChange {
                 field.errors = field.validate()
             }
-            
-            fields[index] = field
+
             updateValidationState()
         }
     }

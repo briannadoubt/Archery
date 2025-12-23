@@ -208,6 +208,7 @@ public extension Binding where Value == Date? {
     }
 }
 
+@MainActor
 public extension Binding {
     /// Create a binding for an optional value that toggles between a value and nil
     func toggled<Wrapped>(defaultValue: Wrapped) -> (hasValue: Binding<Bool>, value: Binding<Wrapped>) where Value == Wrapped? {

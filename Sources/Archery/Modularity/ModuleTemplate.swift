@@ -92,7 +92,7 @@ public final class ModuleTemplateGenerator {
         var files: [GeneratedFile] = []
         
         // Generate module definition
-        let moduleFile = try generateModuleDefinition(
+        let moduleFile = generateModuleDefinition(
             name: name,
             type: type,
             configuration: configuration,
@@ -100,30 +100,30 @@ public final class ModuleTemplateGenerator {
         )
         files.append(moduleFile)
         try moduleFile.write(to: path.appendingPathComponent("Sources/\(name)/\(name)Module.swift"))
-        
+
         // Generate contract
-        let contractFile = try generateContract(name: name, type: type)
+        let contractFile = generateContract(name: name, type: type)
         files.append(contractFile)
         try contractFile.write(to: path.appendingPathComponent("Sources/\(name)/Contract/\(name)Contract.swift"))
-        
+
         // Generate type-specific files
         switch type {
         case .feature:
-            let featureFiles = try generateFeatureFiles(name: name)
+            let featureFiles = generateFeatureFiles(name: name)
             files.append(contentsOf: featureFiles)
             for file in featureFiles {
                 try file.write(to: path.appendingPathComponent("Sources/\(name)/\(file.name)"))
             }
-            
+
         case .shared:
-            let sharedFiles = try generateSharedFiles(name: name)
+            let sharedFiles = generateSharedFiles(name: name)
             files.append(contentsOf: sharedFiles)
             for file in sharedFiles {
                 try file.write(to: path.appendingPathComponent("Sources/\(name)/\(file.name)"))
             }
-            
+
         case .core:
-            let coreFiles = try generateCoreFiles(name: name)
+            let coreFiles = generateCoreFiles(name: name)
             files.append(contentsOf: coreFiles)
             for file in coreFiles {
                 try file.write(to: path.appendingPathComponent("Sources/\(name)/\(file.name)"))

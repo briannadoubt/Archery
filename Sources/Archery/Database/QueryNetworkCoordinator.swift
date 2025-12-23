@@ -253,7 +253,7 @@ public final class QueryNetworkCoordinator {
         refreshErrors.removeAll()
 
         do {
-            try await container.write { db in
+            _ = try await container.write { db in
                 try QueryMetadata.deleteAll(db)
             }
         } catch {

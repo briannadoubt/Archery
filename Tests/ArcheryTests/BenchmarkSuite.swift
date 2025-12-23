@@ -10,7 +10,7 @@ final class BenchmarkSuite: XCTestCase {
         let harness = BenchmarkHarness(name: "EnvContainer")
 
         // Setup container with a factory
-        var container = EnvContainer()
+        let container = EnvContainer()
         container.registerFactory { MockService(id: 42) }
 
         let result = harness.measure("Container Lookup") {
@@ -59,8 +59,8 @@ final class BenchmarkSuite: XCTestCase {
     
     @MainActor
     func testViewRendering() {
-        let harness = BenchmarkHarness(name: "View Rendering")
-        
+        _ = BenchmarkHarness(name: "View Rendering")
+
         measure {
             // Measure SwiftUI view creation
             _ = ComplexView()
@@ -270,12 +270,12 @@ final class BenchmarkSuite: XCTestCase {
     
     func testInstrumentsSignposts() async {
         let interval = SignpostMarkers.custom("Test Operation")
-        
-        let result = await interval.measure {
+
+        let result: ()? = await interval.measure {
             // Simulate work
             try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
         }
-        
+
         XCTAssertNotNil(result)
     }
     

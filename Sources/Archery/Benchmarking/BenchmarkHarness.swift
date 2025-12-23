@@ -9,7 +9,7 @@ private func currentTime() -> Double {
     #if os(watchOS)
     return CFAbsoluteTimeGetCurrent()
     #else
-    return currentTime()
+    return CACurrentMediaTime()
     #endif
 }
 

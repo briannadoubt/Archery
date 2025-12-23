@@ -233,16 +233,18 @@ public final class DataMigrationManager: Sendable {
         let descriptor = FetchDescriptor<T>()
         let swiftDataObjects = try swiftDataContext.fetch(descriptor)
         
-        // Batch process
+        // Batch process - use nonisolated(unsafe) for cross-context migration
+        // This is safe because we're doing a one-way migration and objects are only read
         let batchSize = 100
         for batch in swiftDataObjects.chunked(into: batchSize) {
+            nonisolated(unsafe) let unsafeBatch = batch
             do {
                 let (batchMigrated, batchFailed, batchErrors) = try await coreDataContext.perform { () -> (Int, Int, [Error]) in
                     var localMigrated = 0
                     var localFailed = 0
                     var localErrors: [Error] = []
 
-                    for object in batch {
+                    for object in unsafeBatch {
                         do {
                             _ = try transform(object, coreDataContext)
                             localMigrated += 1

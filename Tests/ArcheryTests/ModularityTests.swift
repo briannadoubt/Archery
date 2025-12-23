@@ -74,8 +74,8 @@ final class ModularityTests: XCTestCase {
     }
     
     func testVersionRequirements() {
-        let version = ModuleVersion("1.2.3")
-        
+        _ = ModuleVersion("1.2.3")
+
         // Test exact match
         XCTAssertTrue(VersionRequirement.exact("1.2.3").isSatisfied(by: "1.2.3"))
         XCTAssertFalse(VersionRequirement.exact("1.2.3").isSatisfied(by: "1.2.4"))
@@ -353,8 +353,8 @@ final class ModularityTests: XCTestCase {
     
     func testCIBuildExecution() async throws {
         let config = CIConfiguration.default
-        let ci = CIIntegration(configuration: config)
-        
+        _ = CIIntegration(configuration: config)
+
         // This would run actual build in real scenario
         // For testing, we'll verify configuration
         XCTAssertNotNil(config.budgets)

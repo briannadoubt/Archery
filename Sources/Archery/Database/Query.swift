@@ -790,7 +790,7 @@ public struct QueryProjection<Element: FetchableRecord & TableRecord & Sendable>
         }
 
         // Trigger network refresh if configured
-        guard let container = container,
+        guard let _ = container,
               let refreshAction = refreshAction,
               let coordinator = networkCoordinator else {
             return
@@ -813,7 +813,7 @@ public struct QueryProjection<Element: FetchableRecord & TableRecord & Sendable>
     public func forceRefresh() async {
         guard let request = request else { return }
 
-        guard let container = container,
+        guard let _ = container,
               let refreshAction = refreshAction,
               let coordinator = networkCoordinator else {
             // Fall back to restarting local observation only
