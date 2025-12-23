@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct AppearanceView: View {
-    @EnvironmentObject var themeManager: ThemeManager
+    @Environment(ThemeManager.self) var themeManager
 
     var body: some View {
+        @Bindable var themeManager = themeManager
         Form {
             Section("Theme") {
                 Picker("Appearance", selection: $themeManager.currentTheme) {
@@ -34,8 +35,13 @@ private struct PreviewColors: View {
     var body: some View {
         HStack(spacing: 16) {
             ColorSwatch(color: Color.accentColor, label: "Accent", isLight: false)
+            #if os(macOS)
+            ColorSwatch(color: Color(NSColor.windowBackgroundColor), label: "Background", isLight: true)
+            ColorSwatch(color: Color(NSColor.controlBackgroundColor), label: "Secondary", isLight: true)
+            #else
             ColorSwatch(color: Color(.systemBackground), label: "Background", isLight: true)
             ColorSwatch(color: Color(.secondarySystemBackground), label: "Secondary", isLight: true)
+            #endif
         }
     }
 }
@@ -60,6 +66,6 @@ private struct ColorSwatch: View {
 #Preview {
     NavigationStack {
         AppearanceView()
-            .environmentObject(ThemeManager())
+            .environment(ThemeManager())
     }
 }

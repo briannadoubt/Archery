@@ -177,64 +177,6 @@ final class InteropTests: XCTestCase {
         XCTAssertEqual(config.syncDirection, .bidirectional)
     }
     
-    // MARK: - Compatibility Shims Tests
-    
-    func testNavigationStackCompat() {
-        let view = CompatibilityShims.NavigationStackCompat {
-            Text("Content")
-        }
-        
-        // Test that it creates a view
-        XCTAssertNotNil(view)
-    }
-    
-    func testScrollViewCompat() {
-        let view = CompatibilityShims.ScrollViewCompat(
-            .vertical,
-            showsIndicators: true,
-            safeAreaInsets: EdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
-        ) {
-            Text("Scrollable Content")
-        }
-        
-        XCTAssertNotNil(view)
-    }
-    
-    func testSheetDetents() {
-        let detents: [CompatibilityShims.SheetDetent] = [
-            .medium,
-            .large,
-            .height(300),
-            .fraction(0.5)
-        ]
-        
-        for detent in detents {
-            if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
-                XCTAssertNotNil(detent.modernDetent)
-            }
-        }
-    }
-    
-    func testGaugeCompat() {
-        let gauge = CompatibilityShims.GaugeCompat(
-            value: 0.7,
-            in: 0...1,
-            label: "Progress"
-        )
-        
-        XCTAssertNotNil(gauge)
-    }
-    
-    func testContentUnavailableViewCompat() {
-        let view = ContentUnavailableViewCompat(
-            "No Data",
-            systemImage: "xmark.circle",
-            description: "There is no data available"
-        )
-        
-        XCTAssertNotNil(view)
-    }
-    
     // MARK: - Document/Image Picker Tests
     
     func testDocumentPickerError() {
@@ -305,21 +247,6 @@ final class InteropTests: XCTestCase {
         XCTAssertEqual(zeroInsets.right, 0)
     }
     
-    // MARK: - Async Compatibility Tests
-    
-    func testAsyncImageCompat() {
-        let url = URL(string: "https://example.com/image.jpg")
-        
-        let imageView = AsyncImageCompat(url: url) { image in
-            image
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-        } placeholder: {
-            ProgressView()
-        }
-        
-        XCTAssertNotNil(imageView)
-    }
 }
 
 // MARK: - Test Models

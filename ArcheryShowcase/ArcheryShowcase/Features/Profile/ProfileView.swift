@@ -44,7 +44,9 @@ struct ProfileView: View {
             }
         }
         .navigationTitle("Profile")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
 

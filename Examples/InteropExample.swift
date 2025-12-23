@@ -48,12 +48,6 @@ struct ContentView: View {
                     Label("Data", systemImage: "cylinder.split.1x2")
                 }
                 .tag(2)
-            
-            CompatibilityDemoView()
-                .tabItem {
-                    Label("Compatibility", systemImage: "checkmark.seal")
-                }
-                .tag(3)
         }
     }
 }
@@ -297,100 +291,6 @@ struct DataCoexistenceDemoView: View {
                 }
             }
             .navigationTitle("Data Coexistence")
-        }
-    }
-}
-
-// MARK: - Compatibility Demo
-
-struct CompatibilityDemoView: View {
-    @State private var searchText = ""
-    @State private var isRefreshing = false
-    @State private var showSheet = false
-    @State private var gaugeValue = 0.7
-    
-    var body: some View {
-        CompatibilityShims.NavigationStackCompat {
-            CompatibilityShims.ScrollViewCompat(.vertical) {
-                VStack(spacing: 20) {
-                    // Navigation Split View
-                    CompatibilityShims.NavigationSplitViewCompat {
-                        Text("Sidebar")
-                    } detail: {
-                        Text("Detail")
-                    }
-                    .frame(height: 200)
-                    .border(Color.gray.opacity(0.3))
-                    
-                    // Grid Layout
-                    CompatibilityShims.GridCompat(
-                        columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ],
-                        spacing: 10
-                    ) {
-                        ForEach(0..<9) { index in
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.blue.opacity(0.3))
-                                .frame(height: 50)
-                                .overlay(Text("\(index + 1)"))
-                        }
-                    }
-                    
-                    // Gauge
-                    CompatibilityShims.GaugeCompat(
-                        value: gaugeValue,
-                        in: 0...1,
-                        label: "Progress"
-                    )
-                    
-                    Slider(value: $gaugeValue, in: 0...1)
-                    
-                    // Async Image
-                    AsyncImageCompat(
-                        url: URL(string: "https://via.placeholder.com/150")
-                    ) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } placeholder: {
-                        ProgressView()
-                    }
-                    .frame(height: 150)
-                    
-                    // Content Unavailable
-                    ContentUnavailableViewCompat(
-                        "No Results",
-                        systemImage: "magnifyingglass",
-                        description: "Try adjusting your search criteria"
-                    )
-                    
-                    // Labeled Content
-                    CompatibilityShims.LabeledContentCompat {
-                        Text("Value")
-                    } label: {
-                        Text("Label")
-                    }
-                    
-                    // Share Link
-                    CompatibilityShims.ShareLinkCompat(item: "Shared content") {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                }
-                .padding()
-            }
-            .navigationTitle("Compatibility")
-            .searchableCompat(text: $searchText, prompt: "Search")
-            .refreshableCompat {
-                isRefreshing = true
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                isRefreshing = false
-            }
-            .taskCompat {
-                print("View appeared with task modifier")
-            }
         }
     }
 }

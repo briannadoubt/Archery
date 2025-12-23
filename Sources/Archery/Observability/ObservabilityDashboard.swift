@@ -10,7 +10,7 @@ import AppKit
 
 @MainActor
 public struct ObservabilityDashboard: View {
-    @StateObject private var viewModel = ObservabilityDashboardViewModel()
+    @State private var viewModel = ObservabilityDashboardViewModel()
     @State private var selectedTab = 0
     
     public init() {}
@@ -57,7 +57,7 @@ public struct ObservabilityDashboard: View {
 
 @MainActor
 struct TracingView: View {
-    @ObservedObject var viewModel: ObservabilityDashboardViewModel
+    @Bindable var viewModel: ObservabilityDashboardViewModel
     @State private var selectedTrace: TraceInfo?
     
     var body: some View {
@@ -148,10 +148,12 @@ struct TraceDetailView: View {
                     LabeledContent("Total Spans", value: "\(trace.spanCount)")
                 }
                 .padding()
-                #if canImport(UIKit)
+                #if os(iOS) || os(visionOS)
                 .background(Color(UIColor.secondarySystemBackground))
-                #else
+                #elseif os(macOS)
                 .background(Color(NSColor.controlBackgroundColor))
+                #else
+                .background(Color.gray.opacity(0.15))
                 #endif
                 .cornerRadius(8)
                 
@@ -176,10 +178,12 @@ struct TraceDetailView: View {
                     }
                 }
                 .padding()
-                #if canImport(UIKit)
+                #if os(iOS) || os(visionOS)
                 .background(Color(UIColor.secondarySystemBackground))
-                #else
+                #elseif os(macOS)
                 .background(Color(NSColor.controlBackgroundColor))
+                #else
+                .background(Color.gray.opacity(0.15))
                 #endif
                 .cornerRadius(8)
             }
@@ -268,7 +272,7 @@ struct SpanTimelineRow: View {
 
 @MainActor
 struct MetricsView: View {
-    @ObservedObject var viewModel: ObservabilityDashboardViewModel
+    var viewModel: ObservabilityDashboardViewModel
     @State private var selectedMetric: String?
     @State private var timeRange = TimeRange.lastHour
     
@@ -412,10 +416,12 @@ struct MetricDetailView: View {
                     }
                 }
                 .padding()
-                #if canImport(UIKit)
+                #if os(iOS) || os(visionOS)
                 .background(Color(UIColor.secondarySystemBackground))
-                #else
+                #elseif os(macOS)
                 .background(Color(NSColor.controlBackgroundColor))
+                #else
+                .background(Color.gray.opacity(0.15))
                 #endif
                 .cornerRadius(8)
                 
@@ -441,10 +447,12 @@ struct MetricDetailView: View {
                         .frame(height: 200)
                     }
                     .padding()
-                    #if canImport(UIKit)
+                    #if os(iOS) || os(visionOS)
                 .background(Color(UIColor.secondarySystemBackground))
-                #else
+                #elseif os(macOS)
                 .background(Color(NSColor.controlBackgroundColor))
+                #else
+                .background(Color.gray.opacity(0.15))
                 #endif
                     .cornerRadius(8)
                 }
@@ -468,10 +476,12 @@ struct MetricDetailView: View {
                     }
                 }
                 .padding()
-                #if canImport(UIKit)
+                #if os(iOS) || os(visionOS)
                 .background(Color(UIColor.secondarySystemBackground))
-                #else
+                #elseif os(macOS)
                 .background(Color(NSColor.controlBackgroundColor))
+                #else
+                .background(Color.gray.opacity(0.15))
                 #endif
                 .cornerRadius(8)
             }
@@ -504,10 +514,12 @@ struct StatCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
-        #if canImport(UIKit)
+        #if os(iOS) || os(visionOS)
         .background(Color(UIColor.tertiarySystemBackground))
-        #else
+        #elseif os(macOS)
         .background(Color(NSColor.controlBackgroundColor))
+        #else
+        .background(Color.gray.opacity(0.1))
         #endif
         .cornerRadius(4)
     }
@@ -517,7 +529,7 @@ struct StatCard: View {
 
 @MainActor
 struct LogsView: View {
-    @ObservedObject var viewModel: ObservabilityDashboardViewModel
+    var viewModel: ObservabilityDashboardViewModel
     @State private var selectedLevel: LogEntry.Level?
     @State private var searchText = ""
     
@@ -538,7 +550,9 @@ struct LogsView: View {
                         Text(level.rawValue.capitalized).tag(Optional(level))
                     }
                 }
+                #if !os(watchOS)
                 .pickerStyle(.segmented)
+                #endif
                 
                 Button("Clear") {
                     Task {
@@ -614,7 +628,7 @@ struct LogRow: View {
 
 @MainActor
 struct BreadcrumbsView: View {
-    @ObservedObject var viewModel: ObservabilityDashboardViewModel
+    var viewModel: ObservabilityDashboardViewModel
     @State private var selectedCategory: Breadcrumb.Category?
     
     var filteredBreadcrumbs: [Breadcrumb] {
@@ -718,10 +732,12 @@ struct FilterChip: View {
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 .background(isSelected ? Color.blue : Color(uiColor: .secondarySystemBackground))
-                #else
+                #elseif os(macOS)
                 .background(isSelected ? Color.blue : Color(nsColor: .controlBackgroundColor))
+                #else
+                .background(isSelected ? Color.blue : Color.secondary.opacity(0.2))
                 #endif
                 .foregroundColor(isSelected ? .white : .primary)
                 .cornerRadius(15)
@@ -733,7 +749,7 @@ struct FilterChip: View {
 
 @MainActor
 struct CardinalityView: View {
-    @ObservedObject var viewModel: ObservabilityDashboardViewModel
+    var viewModel: ObservabilityDashboardViewModel
     
     var body: some View {
         List {
@@ -791,13 +807,14 @@ struct CardinalityView: View {
 // MARK: - View Model
 
 @MainActor
-public class ObservabilityDashboardViewModel: ObservableObject {
-    @Published var traces: [TraceInfo] = []
-    @Published var metrics: [String: [MetricDataPoint]] = [:]
-    @Published var logs: [LogEntryInfo] = []
-    @Published var breadcrumbs: [Breadcrumb] = []
-    @Published var highCardinalityMetrics: [(String, Int)] = []
-    @Published var cardinalityAlerts: [CardinalityMonitor.CardinalityAlert] = []
+@Observable
+public class ObservabilityDashboardViewModel {
+    var traces: [TraceInfo] = []
+    var metrics: [String: [MetricDataPoint]] = [:]
+    var logs: [LogEntryInfo] = []
+    var breadcrumbs: [Breadcrumb] = []
+    var highCardinalityMetrics: [(String, Int)] = []
+    var cardinalityAlerts: [CardinalityMonitor.CardinalityAlert] = []
     
     private let monitor = CardinalityMonitor()
     private var monitoringTask: Task<Void, Never>?

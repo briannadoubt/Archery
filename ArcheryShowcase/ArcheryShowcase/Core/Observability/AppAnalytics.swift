@@ -28,14 +28,8 @@ enum AppAnalytics {
     case taskDueDateChanged(taskId: String, daysDelta: Int)
 }
 
-// MARK: - Analytics Manager Extension
-
-extension AnalyticsManager {
-    /// Track an app analytics event with the shared manager
-    func track(_ event: AppAnalytics) {
-        track(event)
-    }
-}
+// Conformance added via extension (required for enums with associated values)
+extension AppAnalytics: Archery.AnalyticsEvent {}
 
 // MARK: - View Extension for Screen Tracking
 
@@ -58,7 +52,7 @@ extension View {
 // MARK: - Analytics Demo View
 
 struct AnalyticsShowcaseView: View {
-    @StateObject private var analytics = AnalyticsManager.shared
+    private var analytics: AnalyticsManager { AnalyticsManager.shared }
     @State private var trackedEvents: [(name: String, properties: String, timestamp: Date)] = []
     @State private var debugProvider = ShowcaseDebugProvider()
 
@@ -213,7 +207,7 @@ struct AnalyticsShowcaseView: View {
         }
         .navigationTitle("Analytics")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     trackedEvents.removeAll()
                 } label: {
@@ -290,7 +284,7 @@ private struct MacroFeatureRow: View {
             Text(example)
                 .font(.caption.monospaced())
                 .padding(4)
-                .background(Color(.tertiarySystemBackground))
+                .background(Color(.secondarySystemBackground).opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
         }
         .padding(.vertical, 2)

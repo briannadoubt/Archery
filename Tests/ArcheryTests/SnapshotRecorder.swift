@@ -16,9 +16,18 @@ private let archeryMacros: [String: Macro.Type] = [
     "ObservableViewModel": ObservableViewModelMacro.self,
     "ViewModelBound": ViewModelBoundMacro.self,
     "KeyValueStore": KeyValueStoreMacro.self,
-    "Repository": RepositoryMacro.self,
+    "DatabaseRepository": DatabaseRepositoryMacro.self,
     "AppShell": AppShellMacro.self,
-    "APIClient": APIClientMacro.self
+    "APIClient": APIClientMacro.self,
+    "Persistable": PersistableMacro.self,
+    "PrimaryKey": PrimaryKeyMacro.self,
+    "Indexed": IndexedMacro.self,
+    "Unique": UniqueMacro.self,
+    "ForeignKey": ForeignKeyMacro.self,
+    "CreatedAt": CreatedAtMacro.self,
+    "UpdatedAt": UpdatedAtMacro.self,
+    "NotPersisted": NotPersistedMacro.self,
+    "Default": DefaultMacro.self
 ]
 
 @MainActor
@@ -103,26 +112,6 @@ private let cases: [SnapshotCase] = [
         @AppShell
         struct MiniShell {
             enum Tab: CaseIterable { case home }
-        }
-        """,
-        macros: archeryMacros
-    ),
-    SnapshotCase(
-        name: "ArcheryMacros/Repository/repo_basic",
-        source: """
-        @Repository
-        class UserRepository {
-            func profile(id: Int) async throws -> String { "ok" }
-        }
-        """,
-        macros: archeryMacros
-    ),
-    SnapshotCase(
-        name: "ArcheryMacros/Repository/repo_sync_warning",
-        source: """
-        @Repository
-        class SyncRepository {
-            func profile(id: Int) -> String { "ok" }
         }
         """,
         macros: archeryMacros

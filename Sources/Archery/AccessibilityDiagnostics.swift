@@ -312,14 +312,14 @@ public struct DynamicTypeValidator {
         containerWidth: CGFloat,
         font: Font
     ) -> AccessibilityDiagnostic? {
-        #if canImport(UIKit)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         let maxCategory = UIContentSizeCategory.accessibilityExtraExtraExtraLarge
         let metrics = UIFontMetrics.default
         let baseSize: CGFloat = 17
         let scaledSize = metrics.scaledValue(for: baseSize, compatibleWith: UITraitCollection(preferredContentSizeCategory: maxCategory))
-        
+
         let estimatedWidth = CGFloat(text.count) * scaledSize * 0.6
-        
+
         if estimatedWidth > containerWidth {
             return AccessibilityDiagnostic(
                 severity: .warning,
@@ -329,7 +329,7 @@ public struct DynamicTypeValidator {
             )
         }
         #endif
-        
+
         return nil
     }
 }

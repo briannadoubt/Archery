@@ -3,6 +3,9 @@ import Foundation
 import GRDB
 import XCTest
 
+// Disambiguate from GRDB.PersistenceContainer
+typealias DBContainer = Archery.PersistenceContainer
+
 // MARK: - Test Model
 
 /// A simple test record for GRDB operations
@@ -35,8 +38,8 @@ struct TestPlayer: Codable, Identifiable, Hashable, FetchableRecord, MutablePers
 
 // MARK: - Test Migrations
 
-private let testMigrations = GRDBMigrationRunner {
-    GRDBMigration(id: "v1_create_test_players") { db in
+private let testMigrations = MigrationRunner {
+    Migration(id: "v1_create_test_players") { db in
         try db.create(table: "test_players") { t in
             t.autoIncrementedPrimaryKey("id")
             t.column("name", .text).notNull()
@@ -46,22 +49,22 @@ private let testMigrations = GRDBMigrationRunner {
         }
     }
 
-    GRDBMigration(id: "v2_add_team_index") { db in
+    Migration(id: "v2_add_team_index") { db in
         try db.create(index: "test_players_team_idx", on: "test_players", columns: ["team"])
     }
 }
 
-// MARK: - GRDBContainer Tests
+// MARK: - DBContainer Tests
 
-final class GRDBContainerTests: XCTestCase {
+final class DBContainerTests: XCTestCase {
 
     func testInMemoryDatabaseCreation() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
         XCTAssertNotNil(container.writer)
     }
 
     func testReadWriteOperations() async throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
         // Run migrations first
         try testMigrations.run(on: container)
@@ -86,7 +89,7 @@ final class GRDBContainerTests: XCTestCase {
     }
 
     func testEnvContainerIntegration() throws {
-        let grdbContainer = try GRDBContainer.inMemory()
+        let grdbContainer = try DBContainer.inMemory()
         let envContainer = EnvContainer()
 
         envContainer.registerGRDB(grdbContainer)
@@ -98,10 +101,10 @@ final class GRDBContainerTests: XCTestCase {
 
 // MARK: - GRDBMigration Tests
 
-final class GRDBMigrationTests: XCTestCase {
+final class MigrationTests: XCTestCase {
 
     func testMigrationRunner() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
         // Run migrations
         try testMigrations.run(on: container)
@@ -125,7 +128,7 @@ final class GRDBMigrationTests: XCTestCase {
     }
 
     func testHasPendingMigrations() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
         // Before running, should have pending migrations
         let hasPendingBefore = try testMigrations.hasPendingMigrations(on: container.writer)
@@ -140,10 +143,10 @@ final class GRDBMigrationTests: XCTestCase {
     }
 
     func testMigrationHelpers() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
         // Test createTable helper
-        let createMigration = GRDBMigration.createTable(id: "create_items", for: TestPlayer.self) { t in
+        let createMigration = Migration.createTable(id: "create_items", for: TestPlayer.self) { t in
             t.autoIncrementedPrimaryKey("id")
             t.column("name", .text).notNull()
             t.column("score", .integer).notNull()
@@ -151,7 +154,7 @@ final class GRDBMigrationTests: XCTestCase {
             t.column("created_at", .datetime).notNull()
         }
 
-        let runner = GRDBMigrationRunner([createMigration])
+        let runner = MigrationRunner([createMigration])
         try runner.run(on: container)
 
         let tableExists = try container.writer.read { db in
@@ -161,18 +164,18 @@ final class GRDBMigrationTests: XCTestCase {
     }
 
     func testAddColumnMigration() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
         // First create a simple table
-        let migrations = GRDBMigrationRunner {
-            GRDBMigration(id: "v1_create") { db in
+        let migrations = MigrationRunner {
+            Migration(id: "v1_create") { db in
                 try db.create(table: "items") { t in
                     t.autoIncrementedPrimaryKey("id")
                     t.column("name", .text).notNull()
                 }
             }
 
-            GRDBMigration.addColumn(
+            Migration.addColumn(
                 id: "v2_add_description",
                 table: "items",
                 column: "description",
@@ -194,17 +197,17 @@ final class GRDBMigrationTests: XCTestCase {
     }
 
     func testCreateIndexMigration() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
-        let migrations = GRDBMigrationRunner {
-            GRDBMigration(id: "v1_create") { db in
+        let migrations = MigrationRunner {
+            Migration(id: "v1_create") { db in
                 try db.create(table: "items") { t in
                     t.autoIncrementedPrimaryKey("id")
                     t.column("category", .text).notNull()
                 }
             }
 
-            GRDBMigration.createIndex(
+            Migration.createIndex(
                 id: "v2_category_index",
                 table: "items",
                 columns: ["category"]
@@ -222,10 +225,10 @@ final class GRDBMigrationTests: XCTestCase {
     }
 
     func testRawSQLMigration() throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
 
-        let migrations = GRDBMigrationRunner {
-            GRDBMigration.sql(id: "v1_create_view", """
+        let migrations = MigrationRunner {
+            Migration.sql(id: "v1_create_view", """
                 CREATE TABLE raw_items (id INTEGER PRIMARY KEY, value TEXT);
                 CREATE VIEW items_view AS SELECT * FROM raw_items WHERE value IS NOT NULL;
             """)
@@ -248,17 +251,17 @@ final class GRDBMigrationTests: XCTestCase {
     }
 }
 
-// MARK: - GRDBError Tests
+// MARK: - PersistenceError Tests
 
-final class GRDBErrorTests: XCTestCase {
+final class PersistenceErrorTests: XCTestCase {
 
     func testErrorNormalization() {
         // Test notFound
-        let notFoundError = GRDBError.notFound
+        let notFoundError = PersistenceError.notFound
         XCTAssertEqual(notFoundError, .notFound)
 
         // Test constraintViolation
-        let constraintError = GRDBError.constraintViolation("UNIQUE constraint failed")
+        let constraintError = PersistenceError.constraintViolation("UNIQUE constraint failed")
         if case .constraintViolation(let msg) = constraintError {
             XCTAssertEqual(msg, "UNIQUE constraint failed")
         } else {
@@ -266,10 +269,10 @@ final class GRDBErrorTests: XCTestCase {
         }
     }
 
-    func testNormalizeGRDBError() {
+    func testNormalizePersistenceError() {
         // Test with a generic error
         struct TestError: Error {}
-        let normalized = normalizeGRDBError(TestError())
+        let normalized = normalizePersistenceError(TestError())
 
         if case .unknown = normalized {
             // Expected
@@ -278,9 +281,9 @@ final class GRDBErrorTests: XCTestCase {
         }
     }
 
-    func testGRDBSourceError() {
-        let underlying = GRDBError.queryFailed("Test query failed")
-        let sourceError = GRDBSourceError(
+    func testPersistenceSourceError() {
+        let underlying = PersistenceError.queryFailed("Test query failed")
+        let sourceError = PersistenceSourceError(
             underlying,
             function: "testFunction",
             file: "TestFile.swift",
@@ -300,10 +303,10 @@ final class GRDBErrorTests: XCTestCase {
 
 final class GRDBCRUDTests: XCTestCase {
 
-    var container: GRDBContainer!
+    var container: DBContainer!
 
     override func setUp() async throws {
-        container = try GRDBContainer.inMemory()
+        container = try DBContainer.inMemory()
         try testMigrations.run(on: container)
     }
 
@@ -313,16 +316,18 @@ final class GRDBCRUDTests: XCTestCase {
 
     func testInsertAndFetch() async throws {
         // Insert
-        var player = TestPlayer(name: "Bob", score: 50, team: "Red", createdAt: Date())
-        player = try await container.write { db in
-            try player.inserted(db)
+        let player = try await container.write { db in
+            var p = TestPlayer(name: "Bob", score: 50, team: "Red", createdAt: Date())
+            try p.insert(db)
+            return p
         }
 
         XCTAssertNotNil(player.id)
 
         // Fetch by ID
+        let playerId = player.id!
         let fetched = try await container.read { db in
-            try TestPlayer.fetchOne(db, id: player.id!)
+            try TestPlayer.fetchOne(db, id: playerId)
         }
 
         XCTAssertEqual(fetched?.name, "Bob")
@@ -350,23 +355,25 @@ final class GRDBCRUDTests: XCTestCase {
 
     func testUpdate() async throws {
         // Insert
-        var player = try await container.write { db in
+        let insertedPlayer = try await container.write { db in
             var p = TestPlayer(name: "Alice", score: 100, team: "Blue", createdAt: Date())
             try p.insert(db)
             return p
         }
 
-        // Update
-        player.score = 150
-        player.team = "Green"
+        // Update - create updated copy and update in closure
+        let playerId = insertedPlayer.id!
+        var playerToUpdate = insertedPlayer
+        playerToUpdate.score = 150
+        playerToUpdate.team = "Green"
 
-        try await container.write { db in
-            try player.update(db)
+        try await container.write { [playerToUpdate] db in
+            try playerToUpdate.update(db)
         }
 
         // Verify
         let updated = try await container.read { db in
-            try TestPlayer.fetchOne(db, id: player.id!)
+            try TestPlayer.fetchOne(db, id: playerId)
         }
 
         XCTAssertEqual(updated?.score, 150)
@@ -462,19 +469,20 @@ final class GRDBCRUDTests: XCTestCase {
 
     func testUpsert() async throws {
         // Insert initial
-        var player = try await container.write { db in
+        let insertedPlayer = try await container.write { db in
             var p = TestPlayer(name: "Alice", score: 100, team: "Blue", createdAt: Date())
             try p.insert(db)
             return p
         }
 
         // Upsert with same ID (update)
-        player.score = 200
-        let upserted = try await container.write { db in
-            try player.saved(db)
+        var playerToUpsert = insertedPlayer
+        playerToUpsert.score = 200
+        let upserted = try await container.write { [playerToUpsert] db in
+            try playerToUpsert.saved(db)
         }
 
-        XCTAssertEqual(upserted.id, player.id)
+        XCTAssertEqual(upserted.id, insertedPlayer.id)
 
         // Verify updated
         let count = try await container.read { db in
@@ -482,8 +490,9 @@ final class GRDBCRUDTests: XCTestCase {
         }
         XCTAssertEqual(count, 1) // Still only one record
 
+        let playerId = insertedPlayer.id!
         let fetched = try await container.read { db in
-            try TestPlayer.fetchOne(db, id: player.id!)
+            try TestPlayer.fetchOne(db, id: playerId)
         }
         XCTAssertEqual(fetched?.score, 200)
     }
@@ -494,7 +503,7 @@ final class GRDBCRUDTests: XCTestCase {
 final class GRDBConcurrencyTests: XCTestCase {
 
     func testConcurrentReads() async throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
         try testMigrations.run(on: container)
 
         // Insert test data
@@ -526,7 +535,7 @@ final class GRDBConcurrencyTests: XCTestCase {
     }
 
     func testSequentialWrites() async throws {
-        let container = try GRDBContainer.inMemory()
+        let container = try DBContainer.inMemory()
         try testMigrations.run(on: container)
 
         // Perform sequential writes

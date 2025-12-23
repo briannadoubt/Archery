@@ -1,8 +1,8 @@
 import SwiftUI
 
 public struct SyncStatusView: View {
-    @ObservedObject var coordinator: SyncCoordinator
-    @StateObject private var connectivity = ConnectivityMonitor.shared
+    var coordinator: SyncCoordinator
+    private var connectivity = ConnectivityMonitor.shared
     
     public init(coordinator: SyncCoordinator) {
         self.coordinator = coordinator
@@ -97,7 +97,7 @@ public struct SyncStatusView: View {
 }
 
 public struct SyncDiagnosticsView: View {
-    @ObservedObject var coordinator: SyncCoordinator
+    var coordinator: SyncCoordinator
     @State private var showingDetails = false
     
     public init(coordinator: SyncCoordinator) {
@@ -261,7 +261,7 @@ public struct SyncDiagnosticsView: View {
 }
 
 public struct MutationQueueView: View {
-    @ObservedObject var queue: MutationQueue
+    var queue: MutationQueue
     @State private var showingFailed = false
     
     public init(queue: MutationQueue) {

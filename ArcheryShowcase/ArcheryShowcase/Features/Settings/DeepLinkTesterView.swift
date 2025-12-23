@@ -8,7 +8,9 @@ struct DeepLinkTesterView: View {
         Form {
             Section("Test URL Path") {
                 TextField("Enter path (e.g., tasks/list)", text: $urlText)
+                    #if os(iOS)
                     .textInputAutocapitalization(.never)
+                    #endif
                     .autocorrectionDisabled()
 
                 Button("Test Route") {
@@ -30,7 +32,6 @@ struct DeepLinkTesterView: View {
                 Group {
                     Text("dashboard/main, dashboard/stats, dashboard/insights")
                     Text("tasks/list, tasks/create, tasks/{id}")
-                    Text("forms/list, forms/registration, forms/contact")
                     Text("settings/main, settings/profile, settings/preferences")
                 }
                 .font(.caption.monospaced())
@@ -47,8 +48,6 @@ struct DeepLinkTesterView: View {
             matchedRoute = "TasksRoute.\(route)"
         } else if let route = DashboardRoute.fromURL(path: path, query: [:]) {
             matchedRoute = "DashboardRoute.\(route)"
-        } else if let route = FormsRoute.fromURL(path: path, query: [:]) {
-            matchedRoute = "FormsRoute.\(route)"
         } else if let route = SettingsRoute.fromURL(path: path, query: [:]) {
             matchedRoute = "SettingsRoute.\(route)"
         } else {

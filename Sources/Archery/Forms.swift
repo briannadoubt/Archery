@@ -27,7 +27,7 @@ public macro HelpText(_ text: String) = #externalMacro(module: "ArcheryMacros", 
 public macro Email() = #externalMacro(module: "ArcheryMacros", type: "EmailMacro")
 
 @attached(peer)
-public macro URL() = #externalMacro(module: "ArcheryMacros", type: "URLMacro")
+public macro URL() = #externalMacro(module: "ArcheryMacros", type: "FormURLMacro")
 
 @attached(peer)
 public macro Phone() = #externalMacro(module: "ArcheryMacros", type: "PhoneMacro")

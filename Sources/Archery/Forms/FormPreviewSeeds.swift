@@ -120,7 +120,7 @@ public struct FormPreviewSeeds {
     
     @MainActor
     public static func allFieldTypesForm() -> FormContainer {
-        let fields: [any FormFieldProtocol] = [
+        var fields: [any FormFieldProtocol] = [
             TextField(
                 id: "text",
                 label: "Text Field",
@@ -148,18 +148,28 @@ public struct FormPreviewSeeds {
                 value: 25,
                 placeholder: "Enter your age",
                 range: 0...120
-            ),
+            )
+        ]
+
+        #if !os(tvOS) && !os(watchOS)
+        fields.append(
             DateField(
                 id: "birthDate",
                 label: "Birth Date",
                 value: Date(),
                 displayedComponents: [.date]
-            ),
+            )
+        )
+        #endif
+
+        fields.append(
             BooleanField(
                 id: "subscribe",
                 label: "Subscribe to newsletter",
                 value: false
-            ),
+            )
+        )
+        fields.append(
             TextAreaField(
                 id: "bio",
                 label: "Biography",
@@ -167,8 +177,8 @@ public struct FormPreviewSeeds {
                 placeholder: "Tell us about yourself",
                 maxLength: 500
             )
-        ]
-        
+        )
+
         return FormContainer(fields: fields)
     }
     

@@ -133,7 +133,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
     @Environment(\.databaseContainer) private var container
     @Environment(\.queryNetworkCoordinator) private var networkCoordinator
     @Environment(\.querySourceRegistry) private var registry
-    @StateObject private var queryState: ArrayQueryStateObject<Element>
+    @State private var queryState: ArrayQueryStateObject<Element>
 
     // Direct initialization values (nil if using keypath resolver)
     private let directRequest: QueryBuilder<Element>?
@@ -152,7 +152,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
         self.directCachePolicy = .localOnly
         self.directRefreshAction = nil
         self.resolver = nil
-        self._queryState = StateObject(wrappedValue: ArrayQueryStateObject<Element>())
+        self._queryState = State(initialValue: ArrayQueryStateObject<Element>())
     }
 
     /// Create a query with configurable cache policy and optional network refresh
@@ -169,7 +169,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
         self.directCachePolicy = cachePolicy
         self.directRefreshAction = refresh.map { AnyQueryRefreshAction($0) }
         self.resolver = nil
-        self._queryState = StateObject(wrappedValue: ArrayQueryStateObject<Element>())
+        self._queryState = State(initialValue: ArrayQueryStateObject<Element>())
     }
 
     // MARK: - Keypath Initializers (Shorthand - Element.Sources)
@@ -198,7 +198,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
         self.directCachePolicy = .localOnly
         self.directRefreshAction = nil
         self.resolver = AnyQuerySourceResolver(keyPath: keyPath)
-        self._queryState = StateObject(wrappedValue: ArrayQueryStateObject<Element>())
+        self._queryState = State(initialValue: ArrayQueryStateObject<Element>())
     }
 
     /// Create a query from a parameterized keypath using the model's associated Sources type
@@ -227,7 +227,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
         self.directCachePolicy = .localOnly
         self.directRefreshAction = nil
         self.resolver = AnyQuerySourceResolver(keyPath: keyPath, param: param)
-        self._queryState = StateObject(wrappedValue: ArrayQueryStateObject<Element>())
+        self._queryState = State(initialValue: ArrayQueryStateObject<Element>())
     }
 
     // MARK: - Keypath Initializers (Explicit Provider)
@@ -248,7 +248,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
         self.directCachePolicy = .localOnly
         self.directRefreshAction = nil
         self.resolver = AnyQuerySourceResolver(keyPath: keyPath)
-        self._queryState = StateObject(wrappedValue: ArrayQueryStateObject<Element>())
+        self._queryState = State(initialValue: ArrayQueryStateObject<Element>())
     }
 
     /// Create a query from a parameterized keypath on an explicit provider type
@@ -264,7 +264,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
         self.directCachePolicy = .localOnly
         self.directRefreshAction = nil
         self.resolver = AnyQuerySourceResolver(keyPath: keyPath, param: param)
-        self._queryState = StateObject(wrappedValue: ArrayQueryStateObject<Element>())
+        self._queryState = State(initialValue: ArrayQueryStateObject<Element>())
     }
 
     /// The current query results
@@ -318,6 +318,7 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
 
             guard let resolved = resolved else {
                 // Provider not registered yet - skip this update
+                print("[Query] WARNING: Provider not registered in QuerySourceRegistry - query will not observe")
                 return
             }
 
@@ -351,44 +352,72 @@ public struct Query<Element: FetchableRecord & TableRecord & Sendable>: DynamicP
     }
 }
 
-// MARK: - @QueryOne Property Wrapper for Single Records
+// MARK: - @QueryOne Property Wrapper for Single Records (with Editing Support)
 
-/// Property wrapper for observing a single GRDB record in SwiftUI views
+/// Property wrapper for observing and editing a single database record.
+///
+/// `@QueryOne` provides:
+/// - Live observation of a single record
+/// - Editable bindings via `$record.propertyName`
+/// - Change tracking (`$record.isDirty`)
+/// - Save/reset/delete operations
+///
+/// ```swift
+/// struct TaskEditView: View {
+///     @QueryOne var task: TaskItem?
+///
+///     init(taskId: String) {
+///         _task = QueryOne(TaskItem.find(taskId))
+///     }
+///
+///     var body: some View {
+///         if task != nil {
+///             Form {
+///                 TextField("Title", text: $task.title.or(""))
+///                 Button("Save") { Task { try? await $task.save() } }
+///             }
+///             .disabled(!$task.isDirty)
+///         }
+///     }
+/// }
+/// ```
 @propertyWrapper
-public struct QueryOne<Element: FetchableRecord & TableRecord & Sendable>: DynamicProperty {
+public struct QueryOne<Element: MutablePersistableRecord & FetchableRecord & TableRecord & Sendable & Encodable>: DynamicProperty {
     @Environment(\.databaseContainer) private var container
-    @StateObject private var queryState: SingleQueryStateObject<Element>
+    @Environment(\.databaseWriter) private var writer
+    @State private var state: SingleEditableQueryState<Element>
 
     private let request: SingleQueryBuilder<Element>
 
-    /// Create a query for observing a single record
+    /// Create a query for observing and editing a single record
     public init(_ request: SingleQueryBuilder<Element>) {
         self.request = request
-        self._queryState = StateObject(wrappedValue: SingleQueryStateObject<Element>())
+        self._state = State(initialValue: SingleEditableQueryState<Element>())
     }
 
-    /// The current record (or nil if not found)
+    /// The current record (editing value if modified, otherwise original)
     @MainActor
     public var wrappedValue: Element? {
-        queryState.value
+        state.editingValue ?? state.originalValue
     }
 
-    /// Access to query state (loading, error, refresh)
+    /// Projection providing property bindings and operations
     @MainActor
-    public var projectedValue: SingleQueryProjection<Element> {
-        SingleQueryProjection(state: queryState, request: request, container: container)
+    public var projectedValue: SingleQueryOneProjection<Element> {
+        SingleQueryOneProjection(state: state, writer: writer)
     }
 
     /// Called by SwiftUI when the view updates
     public mutating func update() {
         guard let container = container else { return }
-        let state = queryState
+        let s = state
         let req = request
         MainActor.assumeIsolated {
-            state.startObservation(req, on: container)
+            s.startObservation(req, on: container)
         }
     }
 }
+
 
 // MARK: - @QueryCount Property Wrapper for Counts
 
@@ -396,14 +425,14 @@ public struct QueryOne<Element: FetchableRecord & TableRecord & Sendable>: Dynam
 @propertyWrapper
 public struct QueryCount<Record: FetchableRecord & TableRecord & Sendable>: DynamicProperty {
     @Environment(\.databaseContainer) private var container
-    @StateObject private var queryState: CountQueryStateObject
+    @State private var queryState: CountQueryStateObject
 
     private let request: CountQueryBuilder<Record>
 
     /// Create a query for observing a count
     public init(_ request: CountQueryBuilder<Record>) {
         self.request = request
-        self._queryState = StateObject(wrappedValue: CountQueryStateObject())
+        self._queryState = State(initialValue: CountQueryStateObject())
     }
 
     /// The current count
@@ -429,23 +458,30 @@ public struct QueryCount<Record: FetchableRecord & TableRecord & Sendable>: Dyna
     }
 }
 
-// MARK: - ObservableObject State Wrappers (for @StateObject compatibility)
+// MARK: - Observable State Wrappers
 
 @MainActor
-final class ArrayQueryStateObject<Element: FetchableRecord & TableRecord & Sendable>: ObservableObject {
-    @Published private(set) var value: [Element] = []
-    @Published private(set) var state: QueryLoadState = .idle
-    @Published private(set) var lastError: Error?
-    @Published private(set) var isRefreshing: Bool = false
-    @Published private(set) var refreshError: Error?
+@Observable
+final class ArrayQueryStateObject<Element: FetchableRecord & TableRecord & Sendable> {
+    private(set) var value: [Element] = []
+    private(set) var state: QueryLoadState = .idle
+    private(set) var lastError: Error?
+    private(set) var isRefreshing: Bool = false
+    private(set) var refreshError: Error?
 
+    @ObservationIgnored
     private var cancellable: AnyDatabaseCancellable?
+    @ObservationIgnored
     private var isStarted = false
 
     // Resolved source info (for keypath-based queries)
     // These are populated when a keypath query is resolved from the registry
+    // Marked @ObservationIgnored to prevent infinite update loops
+    @ObservationIgnored
     var resolvedRequest: QueryBuilder<Element>?
+    @ObservationIgnored
     var resolvedCachePolicy: QueryCachePolicy?
+    @ObservationIgnored
     var resolvedRefreshAction: AnyQueryRefreshAction<Element>?
 
     nonisolated init() {}
@@ -456,6 +492,7 @@ final class ArrayQueryStateObject<Element: FetchableRecord & TableRecord & Senda
     ) where Request.Element == Element {
         guard !isStarted else { return }
         isStarted = true
+        print("[Query] Starting observation for \(Element.self)")
 
         let observation = request.makeObservation()
 
@@ -468,12 +505,14 @@ final class ArrayQueryStateObject<Element: FetchableRecord & TableRecord & Senda
             in: container.writer,
             scheduling: .async(onQueue: .main),
             onError: { [weak self] error in
+                print("[Query] Error for \(Element.self): \(error)")
                 Task { @MainActor in
                     self?.state = .failure(normalizePersistenceError(error))
                     self?.lastError = error
                 }
             },
             onChange: { [weak self] newValue in
+                print("[Query] Received \(newValue.count) \(Element.self) items")
                 Task { @MainActor in
                     self?.value = newValue
                     self?.state = .success
@@ -511,15 +550,29 @@ final class ArrayQueryStateObject<Element: FetchableRecord & TableRecord & Senda
 }
 
 @MainActor
-final class SingleQueryStateObject<Element: FetchableRecord & Sendable>: ObservableObject {
-    @Published private(set) var value: Element?
-    @Published private(set) var state: QueryLoadState = .idle
-    @Published private(set) var lastError: Error?
+@Observable
+final class SingleEditableQueryState<Element: MutablePersistableRecord & FetchableRecord & Sendable & Encodable> {
+    var originalValue: Element?
+    var editingValue: Element?
+    private(set) var loadState: QueryLoadState = .idle
+    private(set) var lastError: Error?
+    var isSaving = false
+    var saveError: Error?
 
+    @ObservationIgnored
     private var cancellable: AnyDatabaseCancellable?
+    @ObservationIgnored
     private var isStarted = false
 
     nonisolated init() {}
+
+    var isDirty: Bool {
+        guard let editing = editingValue, let original = originalValue else { return false }
+        let encoder = JSONEncoder()
+        guard let editData = try? encoder.encode(editing),
+              let origData = try? encoder.encode(original) else { return false }
+        return editData != origData
+    }
 
     func startObservation<Request: SingleQueryRequest>(
         _ request: Request,
@@ -530,9 +583,8 @@ final class SingleQueryStateObject<Element: FetchableRecord & Sendable>: Observa
 
         let observation = request.makeObservation()
 
-        // Defer state change to avoid "publishing changes from within view updates"
         Task { @MainActor [weak self] in
-            self?.state = .loading
+            self?.loadState = .loading
         }
 
         cancellable = observation.start(
@@ -540,18 +592,27 @@ final class SingleQueryStateObject<Element: FetchableRecord & Sendable>: Observa
             scheduling: .async(onQueue: .main),
             onError: { [weak self] error in
                 Task { @MainActor in
-                    self?.state = .failure(normalizePersistenceError(error))
+                    self?.loadState = .failure(normalizePersistenceError(error))
                     self?.lastError = error
                 }
             },
             onChange: { [weak self] newValue in
                 Task { @MainActor in
-                    self?.value = newValue
-                    self?.state = .success
+                    self?.originalValue = newValue
+                    // Only set editing value if not already editing
+                    if self?.editingValue == nil {
+                        self?.editingValue = newValue
+                    }
+                    self?.loadState = .success
                     self?.lastError = nil
                 }
             }
         )
+    }
+
+    func reset() {
+        editingValue = originalValue
+        saveError = nil
     }
 
     func cancel() {
@@ -562,12 +623,15 @@ final class SingleQueryStateObject<Element: FetchableRecord & Sendable>: Observa
 }
 
 @MainActor
-final class CountQueryStateObject: ObservableObject {
-    @Published private(set) var value: Int = 0
-    @Published private(set) var state: QueryLoadState = .idle
-    @Published private(set) var lastError: Error?
+@Observable
+final class CountQueryStateObject {
+    private(set) var value: Int = 0
+    private(set) var state: QueryLoadState = .idle
+    private(set) var lastError: Error?
 
+    @ObservationIgnored
     private var cancellable: AnyDatabaseCancellable?
+    @ObservationIgnored
     private var isStarted = false
 
     nonisolated init() {}
@@ -779,41 +843,104 @@ public struct QueryProjection<Element: FetchableRecord & TableRecord & Sendable>
     }
 }
 
-/// Projected value for single record queries
+/// Projected value for @QueryOne providing property bindings and operations
 @MainActor
-public struct SingleQueryProjection<Element: FetchableRecord & TableRecord & Sendable> {
-    let state: SingleQueryStateObject<Element>
-    let request: SingleQueryBuilder<Element>
-    let container: PersistenceContainer?
+@dynamicMemberLookup
+public struct SingleQueryOneProjection<Element: MutablePersistableRecord & FetchableRecord & TableRecord & Sendable & Encodable> {
+    private let state: SingleEditableQueryState<Element>
+    private let writer: PersistenceWriter?
+
+    init(state: SingleEditableQueryState<Element>, writer: PersistenceWriter?) {
+        self.state = state
+        self.writer = writer
+    }
+
+    // MARK: - State
 
     /// Current load state
-    public var loadState: QueryLoadState {
-        state.state
-    }
+    public var loadState: QueryLoadState { state.loadState }
 
     /// Whether the query is currently loading
-    public var isLoading: Bool {
-        state.state.isLoading
-    }
+    public var isLoading: Bool { state.loadState.isLoading }
 
     /// Whether the query has completed successfully
-    public var isSuccess: Bool {
-        state.state.isSuccess
-    }
+    public var isSuccess: Bool { state.loadState.isSuccess }
 
     /// Whether the query has failed
-    public var hasError: Bool {
-        state.state.isFailure
-    }
+    public var hasError: Bool { state.loadState.isFailure }
 
     /// The error if the query failed
-    public var error: PersistenceError? {
-        state.state.error
+    public var error: PersistenceError? { state.loadState.error }
+
+    /// Whether the record has unsaved changes
+    public var isDirty: Bool { state.isDirty }
+
+    /// Whether a save operation is in progress
+    public var isSaving: Bool { state.isSaving }
+
+    /// Most recent save error
+    public var saveError: Error? { state.saveError }
+
+    // MARK: - Property Bindings via Dynamic Member Lookup
+
+    /// Access record properties as optional bindings
+    /// Returns nil if no record is loaded
+    public subscript<Value>(dynamicMember keyPath: WritableKeyPath<Element, Value>) -> Binding<Value>? {
+        guard state.editingValue != nil else { return nil }
+        return Binding(
+            get: { state.editingValue![keyPath: keyPath] },
+            set: { state.editingValue![keyPath: keyPath] = $0 }
+        )
     }
 
-    /// User-friendly error message
-    public var errorMessage: String? {
-        error?.errorDescription
+    // MARK: - Operations
+
+    /// Save changes to the database
+    public func save() async throws {
+        guard let writer, let record = state.editingValue else {
+            throw QueryOneError.noWriter
+        }
+        state.isSaving = true
+        state.saveError = nil
+        defer { state.isSaving = false }
+
+        do {
+            try await writer.update(record)
+            state.originalValue = record
+        } catch {
+            state.saveError = error
+            throw error
+        }
+    }
+
+    /// Reset to original values, discarding edits
+    public func reset() {
+        state.reset()
+    }
+
+    /// Delete the record from the database
+    public func delete() async throws {
+        guard let writer, let record = state.editingValue else {
+            throw QueryOneError.noWriter
+        }
+        state.isSaving = true
+        defer { state.isSaving = false }
+        _ = try await writer.delete(record)
+    }
+}
+
+/// Errors for @QueryOne operations
+public enum QueryOneError: LocalizedError {
+    case noWriter
+    case noRecord
+
+    public var errorDescription: String? {
+        switch self {
+        case .noWriter:
+            return "No database writer available. Ensure the view has a database container in its environment."
+        case .noRecord:
+            return "No record loaded to perform this operation."
+        }
     }
 }
 

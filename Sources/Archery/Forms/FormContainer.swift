@@ -5,13 +5,14 @@ import Combine
 // MARK: - Form Container
 
 @MainActor
-public final class FormContainer: ObservableObject {
-    @Published public private(set) var fields: [any FormFieldProtocol] = []
-    @Published public private(set) var isValid = false
-    @Published public private(set) var isSubmitting = false
-    @Published public private(set) var isDirty = false
-    @Published public private(set) var errors: [ValidationError] = []
-    @Published public var focusedFieldId: String?
+@Observable
+public final class FormContainer {
+    public private(set) var fields: [any FormFieldProtocol] = []
+    public private(set) var isValid = false
+    public private(set) var isSubmitting = false
+    public private(set) var isDirty = false
+    public private(set) var errors: [ValidationError] = []
+    public var focusedFieldId: String?
     
     private var cancellables = Set<AnyCancellable>()
     private let onSubmit: () async throws -> Void
@@ -187,10 +188,11 @@ public enum FormError: LocalizedError {
 
 // MARK: - Focus State Manager
 
-public final class FocusStateManager: ObservableObject {
-    @Published public var focusedFieldId: String?
-    @Published public var keyboardHeight: CGFloat = 0
-    @Published public var isKeyboardVisible = false
+@Observable
+public final class FocusStateManager {
+    public var focusedFieldId: String?
+    public var keyboardHeight: CGFloat = 0
+    public var isKeyboardVisible = false
     
     private var observers: [NSObjectProtocol] = []
     
@@ -199,9 +201,9 @@ public final class FocusStateManager: ObservableObject {
     }
     
     private func setupKeyboardObservers() {
-        #if canImport(UIKit)
+        #if os(iOS)
         let notificationCenter = NotificationCenter.default
-        
+
         observers.append(
             notificationCenter.addObserver(
                 forName: UIResponder.keyboardWillShowNotification,
@@ -214,7 +216,7 @@ public final class FocusStateManager: ObservableObject {
                 }
             }
         )
-        
+
         observers.append(
             notificationCenter.addObserver(
                 forName: UIResponder.keyboardWillHideNotification,
@@ -251,6 +253,7 @@ public struct KeyboardToolbar: ViewModifier {
     let hasNext: Bool
     
     public func body(content: Content) -> some View {
+        #if os(iOS)
         content
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -259,19 +262,22 @@ public struct KeyboardToolbar: ViewModifier {
                             Image(systemName: "chevron.up")
                         }
                         .disabled(!hasPrevious)
-                        
+
                         Button(action: onNext) {
                             Image(systemName: "chevron.down")
                         }
                         .disabled(!hasNext)
-                        
+
                         Spacer()
-                        
+
                         Button("Done", action: onDone)
                             .fontWeight(.medium)
                     }
                 }
             }
+        #else
+        content
+        #endif
     }
 }
 

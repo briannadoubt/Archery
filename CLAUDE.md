@@ -16,7 +16,7 @@ Anytime you update the library code, like adding or fixing a feature, make sure 
 ## Current Implementation Status
 Based on UPGRADE_PLAN.md, the following components are DONE:
 - KeyValueStore (Section 1)
-- Repository (Section 2)
+- APIClient + Query (Section 2) - replaces deprecated @Repository
 - ObservableViewModel (Section 3)
 - ViewModelBound (Section 4)
 - AppShell (Section 5)
@@ -41,12 +41,11 @@ Based on UPGRADE_PLAN.md, the following components are DONE:
 
 ## Core Macros
 1. **@KeyValueStore**: Codable-backed async/throwing get/set with default values
-2. **@Repository**: Generate protocol + live/mock implementations with DI
-3. **@ObservableViewModel**: MainActor-bound ViewModels with lifecycle management
-4. **@ViewModelBound**: DI-aware View binding with automatic repository injection
-5. **@AppShell**: Root navigation structure with TabView + NavigationStacks
-6. **@APIClient**: Async/await networking with retry/backoff and caching
-7. **@DesignTokens**: Design system token generation from Figma/Style Dictionary
+2. **@ObservableViewModel**: MainActor-bound ViewModels with lifecycle management
+3. **@ViewModelBound**: DI-aware View binding with automatic ViewModel injection
+4. **@AppShell**: Root navigation structure with TabView + NavigationStacks
+5. **@APIClient**: Async/await networking with retry/backoff and caching
+6. **@DesignTokens**: Design system token generation from Figma/Style Dictionary
 
 ## Development Workflow
 

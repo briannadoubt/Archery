@@ -1,22 +1,44 @@
 import Foundation
 import SwiftUI
 import Archery
+import AppIntents
 
-// MARK: - Persistent Task Model
+// MARK: - Task Model
 
-/// TaskItem adapted for database persistence
-/// Uses the same structure as the app's TaskItem but with database conformances
-@Persistable(table: "tasks")
-struct PersistentTask: Codable, Identifiable, Hashable, Sendable, FetchableRecord, PersistableRecord {
-    var id: String
+/// Primary task model for the app - stored in database with full enum support.
+///
+/// Uses GRDB's `DatabaseValueConvertible` to store enums directly:
+/// - `status: TaskStatus` stored as TEXT in SQLite
+/// - `priority: TaskPriority` stored as INTEGER in SQLite
+///
+/// The `@Persistable` macro generates:
+/// - Members: Columns enum, databaseTableName
+/// - Conformances via extension: Identifiable, Hashable (no Sendable in App Intents mode)
+/// - App Intents: AppEntity, EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+///
+/// `Codable`, `FetchableRecord`, `PersistableRecord` must be declared on the struct
+/// because PersistableRecord requires Encodable which needs to be visible at definition.
+///
+/// Usage with `@Query`:
+/// ```swift
+/// @Query(TaskItem.all()) var tasks: [TaskItem]
+/// ```
+@Persistable(
+    table: "tasks",
+    displayName: "Task",
+    titleProperty: "title",
+    shortcuts: false  // Disabled - using ShowcaseShortcuts instead
+)
+struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
+    @PrimaryKey var id: String
     var title: String
     var taskDescription: String?
-    var status: String  // Stored as string, converted to TaskStatus
-    var priority: Int   // Stored as int, converted to TaskPriority
-    var dueDate: Date?
-    var createdAt: Date
-    var tags: String    // JSON-encoded array
-    var projectId: String?
+    @Indexed var status: TaskStatus
+    @ColumnType(.integer) var priority: TaskPriority
+    @Indexed var dueDate: Date?
+    @CreatedAt var createdAt: Date
+    @Default("[]") var tags: String    // JSON-encoded array
+    @ForeignKey(PersistentProject.self) @Indexed var projectId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -30,46 +52,99 @@ struct PersistentTask: Codable, Identifiable, Hashable, Sendable, FetchableRecor
         case projectId = "project_id"
     }
 
-    // Convert from app's TaskItem
-    init(from taskItem: TaskItem) {
-        self.id = taskItem.id
-        self.title = taskItem.title
-        self.taskDescription = taskItem.description
-        self.status = taskItem.status.rawValue
-        self.priority = taskItem.priority.rawValue
-        self.dueDate = taskItem.dueDate
-        self.createdAt = taskItem.createdAt
-        self.tags = (try? JSONEncoder().encode(taskItem.tags)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        self.projectId = taskItem.projectId
+    // MARK: - Initializers
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        taskDescription: String? = nil,
+        status: TaskStatus = .todo,
+        priority: TaskPriority = .medium,
+        dueDate: Date? = nil,
+        createdAt: Date = Date(),
+        tags: [String] = [],
+        projectId: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.taskDescription = taskDescription
+        self.status = status
+        self.priority = priority
+        self.dueDate = dueDate
+        self.createdAt = createdAt
+        self.tags = (try? JSONEncoder().encode(tags)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        self.projectId = projectId
     }
 
-    // Convert to app's TaskItem
-    func toTaskItem() -> TaskItem {
-        let decodedTags: [String] = (try? JSONDecoder().decode([String].self, from: Data(tags.utf8))) ?? []
-        return TaskItem(
-            id: id,
-            title: title,
-            description: taskDescription,
-            status: TaskStatus(rawValue: status) ?? .todo,
-            priority: TaskPriority(rawValue: priority) ?? .medium,
-            dueDate: dueDate,
-            tags: decodedTags,
-            projectId: projectId,
-            createdAt: createdAt
-        )
+    // MARK: - Computed Properties
+
+    /// Whether the task is marked as completed
+    var isCompleted: Bool { status == .completed }
+
+    /// Decoded tags array from JSON storage
+    var decodedTags: [String] {
+        (try? JSONDecoder().decode([String].self, from: Data(tags.utf8))) ?? []
+    }
+
+    /// Section title for grouping in lists (by due date or completion)
+    var sectionTitle: String {
+        if isCompleted {
+            return "Completed"
+        } else if let dueDate = dueDate {
+            let calendar = Calendar.current
+            if calendar.isDateInToday(dueDate) {
+                return "Today"
+            } else if calendar.isDateInTomorrow(dueDate) {
+                return "Tomorrow"
+            } else if dueDate < Date() {
+                return "Overdue"
+            } else {
+                return "Upcoming"
+            }
+        } else {
+            return "No Due Date"
+        }
+    }
+
+    // MARK: - Tag Helpers
+
+    /// Set tags from an array (encodes to JSON)
+    mutating func setTags(_ newTags: [String]) {
+        tags = (try? JSONEncoder().encode(newTags)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    }
+
+    /// Add a tag
+    mutating func addTag(_ tag: String) {
+        var current = decodedTags
+        if !current.contains(tag) {
+            current.append(tag)
+            setTags(current)
+        }
+    }
+
+    /// Remove a tag
+    mutating func removeTag(_ tag: String) {
+        var current = decodedTags
+        current.removeAll { $0 == tag }
+        setTags(current)
     }
 }
 
-// MARK: - Persistent Project Model
+// MARK: - Project Model
 
-@Persistable(table: "projects")
-struct PersistentProject: Codable, Identifiable, Hashable, Sendable, FetchableRecord, PersistableRecord {
-    var id: String
+@Persistable(
+    table: "projects",
+    displayName: "Project",
+    titleProperty: "name",
+    shortcuts: false  // Disabled - using ShowcaseShortcuts instead
+)
+struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
+    @PrimaryKey var id: String
     var name: String
     var projectDescription: String?
     var color: String
     var icon: String
-    var createdAt: Date
+    @CreatedAt var createdAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -104,195 +179,53 @@ struct PersistentProject: Codable, Identifiable, Hashable, Sendable, FetchableRe
     }
 }
 
-// MARK: - App Database Container
-
-/// Main database container for the ArcheryShowcase app
-@MainActor
-final class AppDatabase: ObservableObject {
-    static let shared = AppDatabase()
-
-    private(set) var container: PersistenceContainer?
-    @Published var isReady = false
-    @Published var error: Error?
-
-    private init() {}
-
-    /// Initialize the database
-    func setup() async {
-        guard container == nil else { return }
-
-        do {
-            // Use file-based database for persistence
-            let dbURL = AppDatabase.databaseURL
-            container = try PersistenceContainer.file(at: dbURL)
-
-            // Run migrations
-            try appMigrations.run(on: container!)
-
-            // Seed demo data if empty
-            try await seedDemoDataIfNeeded()
-
-            isReady = true
-        } catch {
-            self.error = error
-            print("Database setup failed: \(error)")
-        }
-    }
-
-    /// Create an in-memory database for previews
-    static func preview() -> AppDatabase {
-        let db = AppDatabase()
-        Task { @MainActor in
-            do {
-                db.container = try PersistenceContainer.inMemory()
-                try appMigrations.run(on: db.container!)
-                try await db.seedDemoData()
-                db.isReady = true
-            } catch {
-                db.error = error
-            }
-        }
-        return db
-    }
-
-    private static var databaseURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appDir = appSupport.appendingPathComponent("ArcheryShowcase")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        return appDir.appendingPathComponent("app.sqlite")
-    }
-
-    // MARK: - Writers
-
-    var writer: PersistenceWriter? {
-        guard let container else { return nil }
-        return PersistenceWriter(container: container)
-    }
-}
-
-// MARK: - Migrations
-
-private let appMigrations = MigrationRunner {
-    Migration(id: "v1_create_tasks") { db in
-        try db.create(table: "tasks") { t in
-            t.primaryKey("id", .text)
-            t.column("title", .text).notNull()
-            t.column("description", .text)
-            t.column("status", .text).notNull().defaults(to: "todo")
-            t.column("priority", .integer).notNull().defaults(to: 1)
-            t.column("due_date", .datetime)
-            t.column("created_at", .datetime).notNull()
-            t.column("tags", .text).notNull().defaults(to: "[]")
-            t.column("project_id", .text)
-        }
-
-        // Index for common queries
-        try db.create(index: "tasks_status_idx", on: "tasks", columns: ["status"])
-        try db.create(index: "tasks_due_date_idx", on: "tasks", columns: ["due_date"])
-        try db.create(index: "tasks_project_id_idx", on: "tasks", columns: ["project_id"])
-    }
-
-    Migration(id: "v1_create_projects") { db in
-        try db.create(table: "projects") { t in
-            t.primaryKey("id", .text)
-            t.column("name", .text).notNull()
-            t.column("description", .text)
-            t.column("color", .text).notNull()
-            t.column("icon", .text).notNull()
-            t.column("created_at", .datetime).notNull()
-        }
-    }
-}
-
-// MARK: - Demo Data Seeding
-
-extension AppDatabase {
-    private func seedDemoDataIfNeeded() async throws {
-        guard let container else { return }
-
-        let taskCount = try await container.read { db in
-            try PersistentTask.fetchCount(db)
-        }
-
-        if taskCount == 0 {
-            try await seedDemoData()
-        }
-    }
-
-    func seedDemoData() async throws {
-        guard let container else { return }
-
-        try await container.write { db in
-            // Seed projects
-            let projects = [
-                PersistentProject(id: "proj-1", name: "Mobile App", projectDescription: "iOS and Android development", color: "blue", icon: "iphone"),
-                PersistentProject(id: "proj-2", name: "Backend API", projectDescription: "Server infrastructure", color: "green", icon: "server.rack"),
-                PersistentProject(id: "proj-3", name: "Design System", projectDescription: "UI/UX components", color: "purple", icon: "paintbrush"),
-            ]
-
-            for project in projects {
-                try project.insert(db)
-            }
-
-            // Seed tasks
-            let tasks = [
-                PersistentTask(from: TaskItem(id: "task-1", title: "Review pull request", description: "Check the latest changes for the auth module", status: .inProgress, priority: .high, dueDate: Date().addingTimeInterval(3600), tags: ["code-review", "urgent"], projectId: "proj-1")),
-                PersistentTask(from: TaskItem(id: "task-2", title: "Update API documentation", description: "Add examples for new endpoints", status: .todo, priority: .medium, dueDate: Date().addingTimeInterval(86400), tags: ["docs"], projectId: "proj-2")),
-                PersistentTask(from: TaskItem(id: "task-3", title: "Fix login bug", description: "Handle edge case for social login timeout", status: .todo, priority: .urgent, dueDate: Date(), tags: ["bug", "auth"], projectId: "proj-1")),
-                PersistentTask(from: TaskItem(id: "task-4", title: "Design system audit", description: "Review color tokens for accessibility", status: .inProgress, priority: .medium, tags: ["design", "a11y"], projectId: "proj-3")),
-                PersistentTask(from: TaskItem(id: "task-5", title: "Weekly team sync", description: "Sprint planning meeting", status: .completed, priority: .low, dueDate: Date().addingTimeInterval(-86400), tags: ["meeting"])),
-                PersistentTask(from: TaskItem(id: "task-6", title: "Performance optimization", description: "Improve app launch time by 30%", status: .todo, priority: .high, dueDate: Date().addingTimeInterval(172800), tags: ["performance"], projectId: "proj-1")),
-                PersistentTask(from: TaskItem(id: "task-7", title: "Write unit tests", description: "Increase code coverage to 80%", status: .todo, priority: .medium, dueDate: Date().addingTimeInterval(259200), tags: ["testing"], projectId: "proj-2")),
-                PersistentTask(from: TaskItem(id: "task-8", title: "Setup CI/CD pipeline", description: "Automate deployment process", status: .completed, priority: .high, tags: ["devops"], projectId: "proj-2")),
-            ]
-
-            for task in tasks {
-                try task.insert(db)
-            }
-        }
-    }
-
-    /// Clear all data (for testing/reset)
-    func clearAllData() async throws {
-        guard let container else { return }
-
-        try await container.write { db in
-            try PersistentTask.deleteAll(db)
-            try PersistentProject.deleteAll(db)
-        }
-    }
-}
-
 // MARK: - Query Builders for SwiftUI
 
-extension PersistentTask {
+extension TaskItem {
     /// All tasks ordered by due date
-    static func allByDueDate() -> QueryBuilder<PersistentTask> {
-        PersistentTask.all().order(by: Columns.dueDate, ascending: true)
+    static func allByDueDate() -> QueryBuilder<TaskItem> {
+        TaskItem.all().order(by: Columns.dueDate, ascending: true)
     }
 
     /// Tasks filtered by status
-    static func withStatus(_ status: TaskStatus) -> QueryBuilder<PersistentTask> {
-        PersistentTask.all().filter(Columns.status == status.rawValue)
+    static func withStatus(_ status: TaskStatus) -> QueryBuilder<TaskItem> {
+        TaskItem.all().filter(Columns.status == status)
     }
 
     /// Tasks for a specific project
-    static func forProject(_ projectId: String) -> QueryBuilder<PersistentTask> {
-        PersistentTask.all().filter(Columns.projectId == projectId)
+    static func forProject(_ projectId: String) -> QueryBuilder<TaskItem> {
+        TaskItem.all().filter(Columns.projectId == projectId)
     }
 
     /// Incomplete tasks (not completed or archived)
-    static func incomplete() -> QueryBuilder<PersistentTask> {
-        PersistentTask.all()
-            .filter(Columns.status != TaskStatus.completed.rawValue)
-            .filter(Columns.status != TaskStatus.archived.rawValue)
+    static func incomplete() -> QueryBuilder<TaskItem> {
+        TaskItem.all()
+            .filter(Columns.status != TaskStatus.completed)
+            .filter(Columns.status != TaskStatus.archived)
     }
 
     /// Overdue tasks
-    static func overdue() -> QueryBuilder<PersistentTask> {
-        PersistentTask.all()
-            .filter(Columns.status != TaskStatus.completed.rawValue)
+    static func overdue() -> QueryBuilder<TaskItem> {
+        TaskItem.all()
+            .filter(Columns.status != TaskStatus.completed)
             .filter(Columns.dueDate < Date())
+    }
+
+    /// High priority tasks
+    static func highPriority() -> QueryBuilder<TaskItem> {
+        TaskItem.all()
+            .filter(Columns.priority >= TaskPriority.high)
+            .order(by: Columns.priority, ascending: false)
+    }
+
+    /// Tasks due today
+    static func dueToday() -> QueryBuilder<TaskItem> {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        return TaskItem.all()
+            .filter(Columns.dueDate >= startOfDay)
+            .filter(Columns.dueDate < endOfDay)
     }
 }
 
@@ -303,22 +236,35 @@ extension PersistentProject {
     }
 }
 
-// MARK: - Environment Key
+// MARK: - Query Sources
 
-private struct AppDatabaseKey: EnvironmentKey {
-    static let defaultValue: AppDatabase? = nil
-}
+extension TaskItem: HasQuerySources {
+    @QuerySources
+    struct Sources: Sendable {
+        /// All tasks (unordered)
+        var all: QuerySource<TaskItem> {
+            QuerySource(TaskItem.all())
+        }
 
-extension EnvironmentValues {
-    var appDatabase: AppDatabase? {
-        get { self[AppDatabaseKey.self] }
-        set { self[AppDatabaseKey.self] = newValue }
+        /// All tasks ordered by creation date (newest first)
+        var byCreatedAt: QuerySource<TaskItem> {
+            QuerySource(TaskItem.all().order(by: Columns.createdAt, ascending: false))
+        }
+
+        /// Recent tasks (last 20, newest first)
+        var recent: QuerySource<TaskItem> {
+            QuerySource(TaskItem.all().order(by: Columns.createdAt, ascending: false).limit(20))
+        }
     }
 }
 
-extension View {
-    func appDatabase(_ database: AppDatabase) -> some View {
-        environment(\.appDatabase, database)
-            .databaseContainer(database.container ?? (try! PersistenceContainer.inMemory()))
+extension PersistentProject: HasQuerySources {
+    @QuerySources
+    struct Sources: Sendable {
+        /// All projects
+        var all: QuerySource<PersistentProject> {
+            QuerySource(PersistentProject.all())
+        }
     }
 }
+

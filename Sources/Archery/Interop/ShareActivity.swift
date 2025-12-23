@@ -29,7 +29,7 @@ public struct ShareSheet: ViewModifier {
     }
     
     public func body(content: Content) -> some View {
-        #if canImport(UIKit)
+        #if os(iOS) || os(visionOS)
         content
             .sheet(isPresented: $isPresented) {
                 ShareActivityViewController(
@@ -74,38 +74,38 @@ public struct ShareSheet: ViewModifier {
 
 // MARK: - iOS/iPadOS Share Activity
 
-#if canImport(UIKit)
+#if os(iOS) || os(visionOS)
 
 /// UIKit activity view controller wrapper for SwiftUI
 public struct ShareActivityViewController: UIViewControllerRepresentable {
     let activityItems: [Any]
     let excludedActivityTypes: [ActivityType]?
     let completion: ((Bool) -> Void)?
-    
+
     public func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(
             activityItems: activityItems,
             applicationActivities: nil
         )
-        
+
         if let excluded = excludedActivityTypes {
             controller.excludedActivityTypes = excluded.compactMap { $0.uiActivityType }
         }
-        
+
         controller.completionWithItemsHandler = { _, completed, _, _ in
             completion?(completed)
         }
-        
+
         // iPad configuration
         if let popover = controller.popoverPresentationController {
             popover.sourceView = UIView()
             popover.sourceRect = .zero
             popover.permittedArrowDirections = []
         }
-        
+
         return controller
     }
-    
+
     public func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
         // No updates needed
     }
@@ -155,7 +155,7 @@ public enum ActivityType {
     case markupAsPDF
     case custom(String)
     
-    #if canImport(UIKit)
+    #if os(iOS) || os(visionOS)
     var uiActivityType: UIActivity.ActivityType? {
         switch self {
         case .message: return .message
@@ -263,7 +263,7 @@ public struct DocumentPicker: ViewModifier {
     let onCompletion: (Result<[URL], Error>) -> Void
     
     public func body(content: Content) -> some View {
-        #if canImport(UIKit)
+        #if os(iOS) || os(visionOS)
         content
             .sheet(isPresented: $isPresented) {
                 DocumentPickerViewController(
@@ -284,7 +284,7 @@ public struct DocumentPicker: ViewModifier {
         content
         #endif
     }
-    
+
     #if canImport(AppKit)
     private func showMacDocumentPicker() {
         let panel = NSOpenPanel()
@@ -306,18 +306,18 @@ public struct DocumentPicker: ViewModifier {
     #endif
 }
 
-#if canImport(UIKit)
+#if os(iOS) || os(visionOS)
 
 /// UIKit document picker wrapper
 public struct DocumentPickerViewController: UIViewControllerRepresentable {
     let allowedContentTypes: [UTType]
     let allowsMultipleSelection: Bool
     let onCompletion: (Result<[URL], Error>) -> Void
-    
+
     public func makeCoordinator() -> Coordinator {
         Coordinator(onCompletion: onCompletion)
     }
-    
+
     public func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(
             forOpeningContentTypes: allowedContentTypes,
@@ -327,22 +327,22 @@ public struct DocumentPickerViewController: UIViewControllerRepresentable {
         picker.allowsMultipleSelection = allowsMultipleSelection
         return picker
     }
-    
+
     public func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {
         // No updates needed
     }
-    
+
     public class Coordinator: NSObject, UIDocumentPickerDelegate {
         let onCompletion: (Result<[URL], Error>) -> Void
-        
+
         init(onCompletion: @escaping (Result<[URL], Error>) -> Void) {
             self.onCompletion = onCompletion
         }
-        
+
         public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             onCompletion(.success(urls))
         }
-        
+
         public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
             onCompletion(.failure(DocumentPickerError.cancelled))
         }
@@ -361,7 +361,7 @@ public struct ImagePicker: ViewModifier {
     let onCompletion: (Result<PlatformImage, Error>) -> Void
     
     public func body(content: Content) -> some View {
-        #if canImport(UIKit)
+        #if os(iOS)
         content
             .sheet(isPresented: $isPresented) {
                 ImagePickerViewController(
@@ -382,7 +382,7 @@ public enum ImageSourceType {
     case photoLibrary
     case savedPhotosAlbum
     
-    #if canImport(UIKit)
+    #if os(iOS)
     var uiSourceType: UIImagePickerController.SourceType {
         switch self {
         case .camera: return .camera
@@ -393,18 +393,18 @@ public enum ImageSourceType {
     #endif
 }
 
-#if canImport(UIKit)
+#if os(iOS)
 
 /// UIKit image picker wrapper
 public struct ImagePickerViewController: UIViewControllerRepresentable {
     let sourceType: UIImagePickerController.SourceType
     let allowsEditing: Bool
     let onCompletion: (Result<UIImage, Error>) -> Void
-    
+
     public func makeCoordinator() -> Coordinator {
         Coordinator(onCompletion: onCompletion)
     }
-    
+
     public func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = sourceType
@@ -412,18 +412,18 @@ public struct ImagePickerViewController: UIViewControllerRepresentable {
         picker.delegate = context.coordinator
         return picker
     }
-    
+
     public func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {
         // No updates needed
     }
-    
+
     public class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onCompletion: (Result<UIImage, Error>) -> Void
-        
+
         init(onCompletion: @escaping (Result<UIImage, Error>) -> Void) {
             self.onCompletion = onCompletion
         }
-        
+
         public func imagePickerController(
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
@@ -434,7 +434,7 @@ public struct ImagePickerViewController: UIViewControllerRepresentable {
                 onCompletion(.failure(ImagePickerError.noImageSelected))
             }
         }
-        
+
         public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             onCompletion(.failure(ImagePickerError.cancelled))
         }

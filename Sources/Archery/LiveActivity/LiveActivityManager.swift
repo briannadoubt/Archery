@@ -18,8 +18,9 @@ public protocol LiveActivityManaging {
 
 @available(iOS 16.1, *)
 @MainActor
-public class LiveActivityManager<Attributes: ActivityAttributes>: ObservableObject, LiveActivityManaging {
-    @Published public private(set) var activities: [String: Activity<Attributes>] = [:]
+@Observable
+public class LiveActivityManager<Attributes: ActivityAttributes>: LiveActivityManaging {
+    public private(set) var activities: [String: Activity<Attributes>] = [:]
     private let staleTimeout: TimeInterval
     private let allowsMultiple: Bool
     
@@ -158,8 +159,9 @@ public struct LiveActivityFixture<Attributes: ActivityAttributes> {
 #if DEBUG
 @available(iOS 16.1, *)
 @MainActor
-public class MockLiveActivityManager<Attributes: ActivityAttributes>: ObservableObject, LiveActivityManaging {
-    @Published public var activities: [String: MockActivity<Attributes>] = [:]
+@Observable
+public class MockLiveActivityManager<Attributes: ActivityAttributes>: LiveActivityManaging {
+    public var activities: [String: MockActivity<Attributes>] = [:]
     private var nextId = 0
     
     public init() {}

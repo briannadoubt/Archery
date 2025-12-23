@@ -52,7 +52,8 @@ public protocol NavigationHandle: AnyObject {
 ///
 /// Subclassed by generated per-feature handles.
 @MainActor
-open class BaseNavigationHandle: NavigationHandle, ObservableObject {
+@Observable
+open class BaseNavigationHandle: NavigationHandle {
     /// Reference to the coordinator (weak to avoid retain cycles)
     public weak var coordinator: (any NavigationCoordinatorProtocol)?
 

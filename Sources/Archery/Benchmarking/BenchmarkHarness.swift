@@ -1,6 +1,17 @@
 import Foundation
+#if !os(watchOS)
 import QuartzCore
+#endif
 import os.signpost
+
+// Helper function for timing that works across all platforms
+private func currentTime() -> Double {
+    #if os(watchOS)
+    return CFAbsoluteTimeGetCurrent()
+    #else
+    return currentTime()
+    #endif
+}
 
 // MARK: - Benchmark Harness
 
@@ -54,11 +65,11 @@ public final class BenchmarkHarness {
             
             // Time measurement
             os_signpost(.begin, log: signpostLog, name: "Benchmark", signpostID: signpostID)
-            let start = CACurrentMediaTime()
+            let start = currentTime()
             
             _ = try block()
             
-            let end = CACurrentMediaTime()
+            let end = currentTime()
             os_signpost(.end, log: signpostLog, name: "Benchmark", signpostID: signpostID)
             
             // Memory after
@@ -106,11 +117,11 @@ public final class BenchmarkHarness {
             await setUp?()
             
             let memBefore = currentMemoryUsage()
-            let start = CACurrentMediaTime()
+            let start = currentTime()
             
             _ = try await block()
             
-            let end = CACurrentMediaTime()
+            let end = currentTime()
             let memAfter = currentMemoryUsage()
             
             measurements.append(end - start)

@@ -5,7 +5,7 @@ import StoreKit
 
 /// Customizable paywall view with product offerings
 public struct PaywallView: View {
-    @StateObject private var store = StoreKitManager.shared
+    @State private var store = StoreKitManager.shared
     @State private var selectedProduct: Product?
     @State private var isPurchasing = false
     @State private var showingError = false
@@ -379,7 +379,7 @@ public struct PaywallConfiguration {
 
 /// Compact upsell prompt for inline display
 public struct MiniUpsellView: View {
-    @StateObject private var store = StoreKitManager.shared
+    @State private var store = StoreKitManager.shared
     @State private var showingPaywall = false
     
     let configuration: MiniUpsellConfiguration
@@ -455,7 +455,7 @@ public struct MiniUpsellConfiguration {
 
 /// View modifier that shows content based on entitlements
 public struct EntitlementGated: ViewModifier {
-    @StateObject private var store = StoreKitManager.shared
+    @State private var store = StoreKitManager.shared
     let entitlement: Entitlement
     let fallback: AnyView?
     
@@ -515,7 +515,7 @@ public struct EntitlementLockedView: View {
 
 /// Shows current subscription status and management options
 public struct SubscriptionStatusView: View {
-    @StateObject private var store = StoreKitManager.shared
+    @State private var store = StoreKitManager.shared
     @State private var showingManageSubscription = false
 
     public init() {}
@@ -630,7 +630,7 @@ struct ManageSubscriptionView: View {
 
 /// View modifier that shows content based on EntitlementRequirement
 public struct RequirementGated: ViewModifier {
-    @StateObject private var store = StoreKitManager.shared
+    @State private var store = StoreKitManager.shared
     let requirement: EntitlementRequirement
     let behavior: GatedTabBehavior
     let autoPaywall: Bool
@@ -722,7 +722,7 @@ public struct RequirementLockedView: View {
 
 /// Tab item view that handles gated behavior
 public struct GatedTabItem<Content: View>: View {
-    @StateObject private var store = StoreKitManager.shared
+    @State private var store = StoreKitManager.shared
     @State private var showingPaywall = false
 
     let requirement: EntitlementRequirement

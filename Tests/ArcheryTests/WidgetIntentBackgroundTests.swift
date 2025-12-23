@@ -328,29 +328,5 @@ final class BackgroundTaskTests: XCTestCase {
     #endif
 }
 
-final class SharedModelMacroTests: XCTestCase {
-    
-    func testSharedModelMacroGeneration() throws {
-        let macro = SharedModelMacro()
-        
-        _ = """
-        @SharedModel(widget: true, intent: true, liveActivity: true)
-        struct TestModel {
-            let name: String
-            let value: Int
-        }
-        """
-        
-        XCTAssertNotNil(macro)
-    }
-    
-    func testSharedModelConfiguration() throws {
-        var config = SharedModelConfig()
-        XCTAssertTrue(config.supportsWidget)
-        XCTAssertTrue(config.supportsIntent)
-        XCTAssertFalse(config.supportsLiveActivity)
-        
-        config.supportsLiveActivity = true
-        XCTAssertTrue(config.supportsLiveActivity)
-    }
-}
+// SharedModelMacro was removed - its functionality is now part of @Persistable
+// when displayName parameter is provided

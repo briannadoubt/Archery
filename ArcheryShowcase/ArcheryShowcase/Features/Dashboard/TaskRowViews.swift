@@ -69,74 +69,26 @@ struct InteractiveTaskRow: View {
     var onDelete: () -> Void
     var onTap: () -> Void
 
-    @State private var offset: CGFloat = 0
-    @State private var isSwiping = false
-
     var body: some View {
-        ZStack(alignment: .trailing) {
-            // Delete background
-            DeleteBackground(onDelete: onDelete)
-
-            // Main content
-            TaskRowContent(
-                task: task,
-                onToggleComplete: onToggleComplete,
-                onTap: onTap
-            )
-            .offset(x: offset)
-            .gesture(swipeGesture)
-            .onTapGesture { resetSwipeIfNeeded() }
-        }
-        .frame(height: 70)
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if value.translation.width < 0 {
-                    offset = max(value.translation.width, -80)
-                }
-            }
-            .onEnded { value in
-                withAnimation(.spring(response: 0.3)) {
-                    if value.translation.width < -50 {
-                        offset = -80
-                        isSwiping = true
-                    } else {
-                        offset = 0
-                        isSwiping = false
-                    }
-                }
-            }
-    }
-
-    private func resetSwipeIfNeeded() {
-        if isSwiping {
-            withAnimation(.spring(response: 0.3)) {
-                offset = 0
-                isSwiping = false
+        TaskRowContent(
+            task: task,
+            onToggleComplete: onToggleComplete,
+            onTap: onTap
+        )
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
             }
         }
-    }
-}
-
-// MARK: - Delete Background
-
-private struct DeleteBackground: View {
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack {
-            Spacer()
-            Button(action: onDelete) {
-                Image(systemName: "trash.fill")
-                    .foregroundStyle(.white)
-                    .frame(width: 60)
+        .swipeActions(edge: .leading) {
+            Button(action: onToggleComplete) {
+                Label(
+                    task.isCompleted ? "Undo" : "Done",
+                    systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                )
             }
+            .tint(task.isCompleted ? .gray : .green)
         }
-        .frame(maxHeight: .infinity)
-        .background(Color.red)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

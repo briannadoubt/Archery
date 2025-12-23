@@ -21,7 +21,9 @@ struct SubscriptionView: View {
             .padding()
         }
         .navigationTitle("Premium")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
 
@@ -48,7 +50,11 @@ struct FeatureRow: View {
             Spacer()
         }
         .padding()
+        #if os(macOS)
+        .background(Color(NSColor.controlBackgroundColor))
+        #else
         .background(Color(.secondarySystemBackground))
+        #endif
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

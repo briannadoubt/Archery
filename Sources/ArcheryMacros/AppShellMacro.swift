@@ -21,6 +21,39 @@ enum AppShellDiagnostic: String, DiagnosticMessage {
 }
 
 public enum AppShellMacro: MemberMacro {
+    // MARK: - Configuration Parsing
+
+    struct Config {
+        var schemaTypes: [String] = []  // e.g., ["TaskItem", "Project"]
+    }
+
+    static func parseConfig(from node: AttributeSyntax) -> Config {
+        var config = Config()
+
+        guard let arguments = node.arguments?.as(LabeledExprListSyntax.self) else {
+            return config
+        }
+
+        for argument in arguments {
+            let label = argument.label?.text
+
+            if label == "schema" {
+                // Parse array literal: [Cat.self, Dog.self, ...]
+                if let arrayExpr = argument.expression.as(ArrayExprSyntax.self) {
+                    for element in arrayExpr.elements {
+                        // Each element is Type.self - extract the type name
+                        let expr = element.expression.trimmedDescription
+                        if expr.hasSuffix(".self") {
+                            config.schemaTypes.append(String(expr.dropLast(5)))
+                        }
+                    }
+                }
+            }
+        }
+
+        return config
+    }
+
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -32,6 +65,7 @@ public enum AppShellMacro: MemberMacro {
         }
 
         let structName = structDecl.name.text
+        let config = parseConfig(from: node)
 
         guard let tabEnum = structDecl.memberBlock.members.compactMap({ $0.decl.as(EnumDeclSyntax.self) }).first(where: { $0.name.text == "Tab" }) else {
             throw DiagnosticsError(diagnostics: [diagnostic(for: declaration, kind: .missingTabsEnum)])
@@ -83,13 +117,8 @@ public enum AppShellMacro: MemberMacro {
             return isStatic && hasName
         }
 
-        // Check for static database property (for GRDB integration)
-        let hasDatabase = structDecl.memberBlock.members.contains { member in
-            guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { return false }
-            let isStatic = varDecl.modifiers.contains { $0.name.tokenKind == .keyword(.static) }
-            let hasName = varDecl.bindings.contains { $0.pattern.trimmedDescription == "database" }
-            return isStatic && hasName
-        }
+        // Only generate database when schema is provided (explicit opt-in)
+        let useGeneratedDatabase = !config.schemaTypes.isEmpty
 
         // Check for static themeManager property
         let hasThemeManager = structDecl.memberBlock.members.contains { member in
@@ -408,7 +437,7 @@ public enum AppShellMacro: MemberMacro {
 /// - Full-screen presentations
 /// - Deep link handling via onOpenURL
 \(access)struct ShellView: SwiftUI.View {
-    @SwiftUI.StateObject private var coordinator: ShellNavigationCoordinator
+    @SwiftUI.State private var coordinator: ShellNavigationCoordinator
     private var container: EnvContainer
 
 \(routeEnums)
@@ -427,7 +456,7 @@ public enum AppShellMacro: MemberMacro {
         \(hasRegisterDeps ? "Self.registerDependencies(into: &working)" : "")
         patch?(&working)
         self.container = working
-        self._coordinator = SwiftUI.StateObject(wrappedValue: ShellNavigationCoordinator(container: working))
+        self._coordinator = SwiftUI.State(initialValue: ShellNavigationCoordinator(container: working))
 
         // Configure analytics providers and framework-level auto-tracking
         Self.__configureAnalytics()
@@ -475,7 +504,7 @@ public enum AppShellMacro: MemberMacro {
         #endif
         .environment(\\.navigationHandle, coordinator.makeHandle(for: .tab(0)))
         .environment(\\.archeryContainer, container)
-        .environmentObject(coordinator)
+        .environment(coordinator)
         .onOpenURL { url in
             _ = coordinator.handle(url: url)
         }
@@ -636,21 +665,18 @@ public enum AppShellMacro: MemberMacro {
 
         // MARK: - Generated App Infrastructure
 
-        // Generate StateObjects if not defined by user
+        // Generate state properties
         let stateObjects: String
-        if hasDatabase || hasThemeManager {
-            var objects: [String] = []
-            if hasDatabase {
-                objects.append("    @SwiftUI.StateObject private var __database = \(structName).database")
-            }
-            if hasThemeManager {
-                objects.append("    @SwiftUI.StateObject private var __themeManager = \(structName).themeManager")
-            }
-            objects.append("    @SwiftUI.StateObject private var __store = StoreKitManager.shared")
-            stateObjects = objects.joined(separator: "\n")
-        } else {
-            stateObjects = "    @SwiftUI.StateObject private var __store = StoreKitManager.shared"
+        var objects: [String] = []
+        if useGeneratedDatabase {
+            // Use @State with @Observable GeneratedAppDatabase
+            objects.append("    @SwiftUI.State private var __database = GeneratedAppDatabase.shared")
         }
+        if hasThemeManager {
+            objects.append("    @SwiftUI.State private var __themeManager = \(structName).themeManager")
+        }
+        objects.append("    @SwiftUI.State private var __store = StoreKitManager.shared")
+        stateObjects = objects.joined(separator: "\n")
 
         // Generate init if not defined by user
         let generatedInit: String
@@ -677,14 +703,13 @@ public enum AppShellMacro: MemberMacro {
         let generatedBody: String
         if !hasBody {
             let shellContent: String
-            if hasDatabase {
+            if useGeneratedDatabase {
                 // Database loading/error handling
                 shellContent = """
             SwiftUI.Group {
                 if __database.isReady, let container = __database.container {
                     ShellView()
                         .databaseContainer(container)
-                        .environment(\\.appDatabase, __database)
                 } else if let error = __database.error {
                     SwiftUI.ContentUnavailableView {
                         SwiftUI.Label("Database Error", systemImage: "exclamationmark.triangle")
@@ -711,14 +736,14 @@ public enum AppShellMacro: MemberMacro {
             if hasThemeManager {
                 environmentObjects = """
 
-            .environmentObject(__themeManager)
-            .environmentObject(__store)
+            .environment(__themeManager)
+            .environment(__store)
             .preferredColorScheme(__themeManager.currentTheme.colorScheme)
 """
             } else {
                 environmentObjects = """
 
-            .environmentObject(__store)
+            .environment(__store)
 """
             }
 
@@ -738,11 +763,135 @@ public enum AppShellMacro: MemberMacro {
             generatedBody = ""
         }
 
+        // Check for static seedDemoData function
+        let hasSeedDemoData = structDecl.memberBlock.members.contains { member in
+            guard let fn = member.decl.as(FunctionDeclSyntax.self) else { return false }
+            let isStatic = fn.modifiers.contains { $0.name.tokenKind == .keyword(.static) }
+            return isStatic && fn.name.text == "seedDemoData"
+        }
+
+        // Generate the database class if using new pattern
+        let generatedDatabaseClass: String
+        if useGeneratedDatabase {
+            // Generate registration calls for each schema type
+            let schemaRegistrations = config.schemaTypes.map { type in
+                "            MigrationRegistry.shared.register(\(type).self)"
+            }.joined(separator: "\n")
+
+            // Generate query source registrations for schema types
+            let querySourceCalls = config.schemaTypes.map { type in
+                "            if \(type).self is any HasQuerySources.Type { QuerySourceRegistry.shared.register(\(type).Sources()) }"
+            }.joined(separator: "\n")
+
+            // Generate clearAllData delete calls for each schema type
+            let clearAllDataCalls = config.schemaTypes.map { type in
+                "                try \(type).deleteAll(db)"
+            }.joined(separator: "\n")
+
+            // Generate seeding hook call if seedDemoData exists
+            let seedingCall = hasSeedDemoData ? """
+
+            // Seed demo data if provided
+            try await \(structName).seedDemoData(container: container!)
+""" : ""
+
+            let previewSeedingCall = hasSeedDemoData ? """
+
+                // Seed demo data
+                try await \(structName).seedDemoData(container: db.container!)
+""" : ""
+
+            generatedDatabaseClass = """
+
+// MARK: - Generated App Database
+
+/// Auto-generated database container using @Observable pattern.
+/// Schema: \(config.schemaTypes.joined(separator: ", "))
+@MainActor
+@Observable
+\(access)final class GeneratedAppDatabase: AppDatabaseProtocol {
+    \(access)static let shared = GeneratedAppDatabase()
+
+    \(access)private(set) var container: PersistenceContainer?
+    \(access)var isReady = false
+    \(access)var error: Error?
+
+    private init() {}
+
+    \(access)func setup() async {
+        guard container == nil else { return }
+
+        do {
+            // Register schema types with MigrationRegistry
+\(schemaRegistrations)
+
+            container = try PersistenceContainer.file(at: Self.defaultURL)
+            PersistenceContainer.current = container
+
+            // Run migrations for registered types
+            let migrations = MigrationRegistry.shared.allMigrations()
+            let runner = MigrationRunner(migrations)
+            try runner.run(on: container!)\(seedingCall)
+
+            // Register query sources for schema types
+\(querySourceCalls)
+
+            isReady = true
+        } catch {
+            self.error = error
+        }
+    }
+
+    /// Clear all data from the database
+    \(access)func clearAllData() async throws {
+        guard let container else { return }
+        try await container.write { db in
+\(clearAllDataCalls)
+        }
+    }
+
+    \(access)static func preview() -> GeneratedAppDatabase {
+        let db = GeneratedAppDatabase()
+        Task { @MainActor in
+            do {
+                // Register schema types
+\(schemaRegistrations)
+
+                db.container = try PersistenceContainer.inMemory()
+                PersistenceContainer.current = db.container
+                let migrations = MigrationRegistry.shared.allMigrations()
+                let runner = MigrationRunner(migrations)
+                try runner.run(on: db.container!)\(previewSeedingCall)
+
+                // Register query sources
+\(querySourceCalls)
+
+                db.isReady = true
+            } catch {
+                db.error = error
+            }
+        }
+        return db
+    }
+
+    private static var defaultURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.archery.app"
+        let appDir = appSupport.appendingPathComponent(bundleId)
+        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
+        return appDir.appendingPathComponent("database.sqlite")
+    }
+}
+"""
+        } else {
+            generatedDatabaseClass = ""
+        }
+
         // Combine app infrastructure
         let appInfrastructure = """
 // MARK: - Generated App Infrastructure
 
-\(stateObjects)\(generatedInit)\(generatedBody)
+\(stateObjects)\(generatedInit)\(generatedBody)\(generatedDatabaseClass)
 """
 
         var members: [DeclSyntax] = [
@@ -751,7 +900,7 @@ public enum AppShellMacro: MemberMacro {
         ]
 
         // Add app infrastructure if we generated anything
-        if !hasBody || !hasInit {
+        if !hasBody || !hasInit || useGeneratedDatabase {
             members.append(DeclSyntax(stringLiteral: appInfrastructure))
         }
 
@@ -1083,8 +1232,8 @@ private func generateNavigationHandleProtocol(
 }
 
 /// Environment key for \(protocolName)
-\(access)struct \(protocolName)Key: @preconcurrency EnvironmentKey {
-    @MainActor \(access)static let defaultValue: (any \(protocolName))? = nil
+\(access)struct \(protocolName)Key: EnvironmentKey {
+    nonisolated(unsafe) \(access)static let defaultValue: (any \(protocolName))? = nil
 }
 
 \(access)extension EnvironmentValues {

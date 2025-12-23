@@ -33,6 +33,11 @@ let package = Package(
             name: "RouteValidationPlugin",
             targets: ["RouteValidationPlugin"]
         ),
+        // Build tool plugin for generating design tokens from JSON
+        .plugin(
+            name: "DesignTokensPlugin",
+            targets: ["DesignTokensPlugin"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest"),
@@ -69,7 +74,10 @@ let package = Package(
                 "Performance/PerformanceSuite.swift",
                 "Documentation/DocGeneratorCLI.swift"
             ],
-            swiftSettings: warningFlags
+            swiftSettings: warningFlags,
+            plugins: [
+                .plugin(name: "DesignTokensPlugin")
+            ]
         ),
 
         // A client of the library, which is able to use the macro in its own code.
@@ -127,6 +135,24 @@ let package = Package(
                 .target(name: "route-validator")
             ],
             path: "Plugins/RouteValidationPlugin"
+        ),
+
+        // Design tokens generator CLI tool (used by DesignTokensPlugin)
+        .executableTarget(
+            name: "design-tokens-generator",
+            dependencies: [],
+            path: "Sources/DesignTokensGenerator",
+            swiftSettings: warningFlags
+        ),
+
+        // Build tool plugin for generating design tokens from JSON
+        .plugin(
+            name: "DesignTokensPlugin",
+            capability: .buildTool(),
+            dependencies: [
+                .target(name: "design-tokens-generator")
+            ],
+            path: "Plugins/DesignTokensPlugin"
         ),
     ],
     swiftLanguageModes: [.v6]

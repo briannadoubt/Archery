@@ -3,14 +3,15 @@ import Combine
 import SwiftUI
 
 @MainActor
-public final class SyncCoordinator: ObservableObject {
-    @Published public private(set) var syncState: SyncState = .idle
-    @Published public private(set) var lastSyncTime: Date?
-    @Published public private(set) var pendingChanges: Int = 0
-    @Published public private(set) var syncProgress: Double = 0
-    @Published public private(set) var conflicts: [ConflictRecord] = []
-    @Published public private(set) var metrics: SyncMetrics
-    @Published public private(set) var cachedDiagnosticsReport: SyncDiagnosticsReport?
+@Observable
+public final class SyncCoordinator {
+    public private(set) var syncState: SyncState = .idle
+    public private(set) var lastSyncTime: Date?
+    public private(set) var pendingChanges: Int = 0
+    public private(set) var syncProgress: Double = 0
+    public private(set) var conflicts: [ConflictRecord] = []
+    public private(set) var metrics: SyncMetrics
+    public private(set) var cachedDiagnosticsReport: SyncDiagnosticsReport?
 
     private let mutationQueue: MutationQueue
     private let connectivity: ConnectivityMonitor
@@ -40,22 +41,31 @@ public final class SyncCoordinator: ObservableObject {
     }
     
     private func setupBindings() {
-        mutationQueue.$pendingMutations
-            .map { $0.count }
-            .assign(to: &$pendingChanges)
-        
-        connectivity.$isConnected
-            .sink { [weak self] isConnected in
-                if !isConnected {
-                    self?.syncState = .offline
-                } else if self?.syncState == .offline {
-                    self?.syncState = .idle
-                    Task { [weak self] in
-                        await self?.sync()
-                    }
-                }
+        // Observe mutation queue changes
+        Task { [weak self] in
+            while let self = self {
+                self.pendingChanges = self.mutationQueue.pendingMutations.count
+                try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5s
             }
-            .store(in: &cancellables)
+        }
+
+        // Observe connectivity changes
+        Task { [weak self] in
+            var lastConnected = self?.connectivity.isConnected ?? true
+            while let self = self {
+                let isConnected = self.connectivity.isConnected
+                if isConnected != lastConnected {
+                    if !isConnected {
+                        self.syncState = .offline
+                    } else if self.syncState == .offline {
+                        self.syncState = .idle
+                        await self.sync()
+                    }
+                    lastConnected = isConnected
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5s
+            }
+        }
     }
     
     private func startMonitoring() {

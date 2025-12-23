@@ -5,22 +5,17 @@ import SwiftSyntaxMacros
 struct ArcheryPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         KeyValueStoreMacro.self,
-        RepositoryMacro.self,
         ObservableViewModelMacro.self,
         ViewModelBoundMacro.self,
         AppShellMacro.self,
         APIClientMacro.self,
         CacheMacro.self,
-        DesignTokensMacro.self,
-        PersistenceGatewayMacro.self,
         LocalizableMacro.self,
-        SharedModelMacro.self,
         AnalyticsEventMacro.self,
         FeatureFlagMacro.self,
         AuthenticatedMacro.self,
         FormMacro.self,
         ConfigurationMacro.self,
-        IntentEntityMacro.self,
         IntentEnumMacro.self,
         RouteMacro.self,
         // GRDB persistence macros
@@ -44,6 +39,26 @@ struct ArcheryPlugin: CompilerPlugin {
         // Platform scene macros
         WindowSceneMacro.self,
         ImmersiveSpaceMacro.self,
-        SettingsSceneMacro.self
+        SettingsSceneMacro.self,
+        // Form field attribute macros
+        RequiredMacro.self,
+        LabelMacro.self,
+        PlaceholderMacro.self,
+        HelpTextMacro.self,
+        EmailMacro.self,
+        FormURLMacro.self,
+        PhoneMacro.self,
+        MinLengthMacro.self,
+        MaxLengthMacro.self,
+        // Schema attribute macros for @Persistable
+        PrimaryKeyMacro.self,
+        IndexedMacro.self,
+        UniqueMacro.self,
+        ForeignKeyMacro.self,
+        CreatedAtMacro.self,
+        UpdatedAtMacro.self,
+        NotPersistedMacro.self,
+        DefaultMacro.self,
+        ColumnTypeMacro.self
     ]
 }

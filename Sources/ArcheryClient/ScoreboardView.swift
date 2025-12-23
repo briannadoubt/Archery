@@ -19,48 +19,25 @@ struct Player: Identifiable, Equatable, Codable {
     }
 }
 
-@Repository
-class LeaderboardRepository {
-    private let api: LeaderboardAPIProtocol
-
-    init(api: LeaderboardAPIProtocol = LeaderboardAPILive()) {
-        self.api = api
-    }
-
-    func topPlayers() async throws -> [Player] {
-        try await api.leaderboard()
-    }
-}
-
 @MainActor
 @ObservableViewModel
 final class ScoreboardViewModel: Resettable {
-    nonisolated(unsafe) private let repo: LeaderboardRepositoryProtocol
-    private let cache: LeaderboardCache.Gateway?
+    nonisolated(unsafe) private let api: LeaderboardAPIProtocol
     var leaderboard: LoadState<[Player]> = .idle
 
     convenience init() {
-        self.init(repo: LeaderboardRepositoryLive(), cache: LeaderboardCache.Gateway.diskCache())
+        self.init(api: LeaderboardAPILive())
     }
 
-    init(repo: LeaderboardRepositoryProtocol, cache: LeaderboardCache.Gateway? = nil) {
-        self.repo = repo
-        self.cache = cache
+    init(api: LeaderboardAPIProtocol) {
+        self.api = api
     }
 
     func load() async {
-        if case .idle = leaderboard, let cache {
-            if let cachedPlayers = try? await cache.players() {
-                leaderboard = .success(cachedPlayers)
-            }
-        }
-
         beginLoading(\.leaderboard)
         do {
-            let players = try await repo.topPlayers()
+            let players = try await api.leaderboard()
             endSuccess(\.leaderboard, value: players)
-            try? await cache?.set(.players(players))
-            try? await cache?.set(.lastUpdated(Date()))
         } catch {
             endFailure(\.leaderboard, error: mapToAppError(error))
         }
@@ -193,38 +170,30 @@ extension ScoreboardView {
         case networkStub
     }
 
-    /// Builds an EnvContainer seeded with a mock repo + VM for previews or host embedding.
+    /// Builds an EnvContainer seeded with a mock API + VM for previews or host embedding.
     static func makePreviewContainer(_ scenario: DemoScenario = .success) -> EnvContainer {
         let container = previewContainer()
-        let repo: LeaderboardRepositoryProtocol
-        let cache: LeaderboardCache.Gateway
+        let api: LeaderboardAPIProtocol
 
         switch scenario {
         case .success:
-            let mockRepo = MockLeaderboardRepository()
-            mockRepo.topPlayersHandler = {
+            let mockAPI = MockLeaderboardAPI()
+            mockAPI.leaderboardHandler = {
                 [
                     Player(name: "Robin", score: 88),
                     Player(name: "Marin", score: 76),
                     Player(name: "Quinn", score: 64)
                 ]
             }
-            repo = mockRepo
-            cache = LeaderboardCache.Gateway.preview([
-                Player(name: "Robin", score: 88),
-                Player(name: "Marin", score: 76),
-                Player(name: "Quinn", score: 64)
-            ])
+            api = mockAPI
         case .empty:
-            let mockRepo = MockLeaderboardRepository()
-            mockRepo.topPlayersHandler = { [] }
-            repo = mockRepo
-            cache = LeaderboardCache.Gateway.preview([])
+            let mockAPI = MockLeaderboardAPI()
+            mockAPI.leaderboardHandler = { [] }
+            api = mockAPI
         case .error:
-            let mockRepo = MockLeaderboardRepository()
-            mockRepo.topPlayersHandler = { throw URLError(.badServerResponse) }
-            repo = mockRepo
-            cache = LeaderboardCache.Gateway.preview([])
+            let mockAPI = MockLeaderboardAPI()
+            mockAPI.leaderboardHandler = { throw URLError(.badServerResponse) }
+            api = mockAPI
         case .networkStub:
             let stubAPI = MockLeaderboardAPI()
             stubAPI.leaderboardHandler = {
@@ -232,12 +201,11 @@ extension ScoreboardView {
                     .makeDecoder()
                     .decode([Player].self, from: LeaderboardAPI.Fixtures.success)
             }
-            repo = LeaderboardRepositoryLive(baseFactory: { LeaderboardRepository(api: stubAPI) })
-            cache = LeaderboardCache.Gateway.preview([])
+            api = stubAPI
         }
 
-        container.register(repo as LeaderboardRepositoryProtocol)
-        container.registerFactory { ScoreboardViewModel(repo: repo, cache: cache) }
+        container.register(api as LeaderboardAPIProtocol)
+        container.registerFactory { ScoreboardViewModel(api: api) }
         return container
     }
 

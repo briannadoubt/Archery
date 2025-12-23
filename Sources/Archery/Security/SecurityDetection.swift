@@ -249,10 +249,11 @@ public final class SecurityDetection: @unchecked Sendable {
 }
 
 @MainActor
-public class SecurityMonitor: ObservableObject {
-    @Published public private(set) var threats: Set<SecurityThreat> = []
-    @Published public private(set) var isSecure: Bool = true
-    @Published public private(set) var lastCheckDate: Date?
+@Observable
+public class SecurityMonitor {
+    public private(set) var threats: Set<SecurityThreat> = []
+    public private(set) var isSecure: Bool = true
+    public private(set) var lastCheckDate: Date?
 
     private let detection = SecurityDetection.shared
     private var checkTimer: Timer?

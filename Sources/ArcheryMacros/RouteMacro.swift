@@ -335,6 +335,7 @@ public struct RouteMacro: MemberMacro, ExtensionMacro {
 
             var style: PresentationConfig.Style = .push
             var detents: [String] = ["large"]
+            var windowId: String?
             var interactiveDismissDisabled = false
 
             if let args = attrSyntax.arguments?.as(LabeledExprListSyntax.self) {
@@ -343,9 +344,27 @@ public struct RouteMacro: MemberMacro, ExtensionMacro {
 
                     if label == nil || label == "_" {
                         // First unlabeled argument is the style
+                        // Could be .sheet, .fullScreen, or .window(id: "...")
                         if let memberAccess = arg.expression.as(MemberAccessExprSyntax.self) {
                             let styleName = memberAccess.declName.baseName.text
                             style = PresentationConfig.Style(rawValue: styleName) ?? .push
+                        } else if let funcCall = arg.expression.as(FunctionCallExprSyntax.self) {
+                            // Handle .window(id: "...")
+                            if let memberAccess = funcCall.calledExpression.as(MemberAccessExprSyntax.self) {
+                                let styleName = memberAccess.declName.baseName.text
+                                style = PresentationConfig.Style(rawValue: styleName) ?? .push
+
+                                // Extract window ID if present
+                                if styleName == "window" {
+                                    for funcArg in funcCall.arguments {
+                                        if funcArg.label?.text == "id",
+                                           let stringLiteral = funcArg.expression.as(StringLiteralExprSyntax.self),
+                                           let segment = stringLiteral.segments.first?.as(StringSegmentSyntax.self) {
+                                            windowId = segment.content.text
+                                        }
+                                    }
+                                }
+                            }
                         }
                     } else if label == "detents" {
                         // Array of detents
@@ -356,6 +375,12 @@ public struct RouteMacro: MemberMacro, ExtensionMacro {
                                     detents.append(memberAccess.declName.baseName.text)
                                 }
                             }
+                        }
+                    } else if label == "id" {
+                        // Window ID: @presents(.window, id: "preferences")
+                        if let stringLiteral = arg.expression.as(StringLiteralExprSyntax.self),
+                           let segment = stringLiteral.segments.first?.as(StringSegmentSyntax.self) {
+                            windowId = segment.content.text
                         }
                     } else if label == "interactiveDismissDisabled" {
                         if let boolLiteral = arg.expression.as(BooleanLiteralExprSyntax.self) {
@@ -368,6 +393,7 @@ public struct RouteMacro: MemberMacro, ExtensionMacro {
             return PresentationConfig(
                 style: style,
                 detents: detents,
+                windowId: windowId,
                 interactiveDismissDisabled: interactiveDismissDisabled
             )
         }
@@ -545,11 +571,13 @@ private struct PresentationConfig {
 
     let style: Style
     let detents: [String]  // For sheet: ["medium", "large"]
+    let windowId: String?  // For window: the window ID
     let interactiveDismissDisabled: Bool
 
-    init(style: Style, detents: [String] = ["large"], interactiveDismissDisabled: Bool = false) {
+    init(style: Style, detents: [String] = ["large"], windowId: String? = nil, interactiveDismissDisabled: Bool = false) {
         self.style = style
         self.detents = detents
+        self.windowId = windowId
         self.interactiveDismissDisabled = interactiveDismissDisabled
     }
 
@@ -563,7 +591,9 @@ private struct PresentationConfig {
             return ".sheet(detents: [\(detentList)])"
         case .fullScreen: return ".fullScreen"
         case .popover: return ".popover(edge: .top)"
-        case .window: return ".window(id: \"default\")"
+        case .window:
+            let id = windowId ?? "default"
+            return ".window(id: \"\(id)\")"
         }
     }
 

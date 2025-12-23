@@ -292,28 +292,22 @@ class TaskForm: ObservableObject {
     }
 }
 
-// MARK: - Repositories
+// MARK: - API Clients
 
-@Repository
-class ProjectRepository: DataRepository {
-    typealias Model = Project
-    
-    private let networkManager = NetworkManager.shared
-    private let cache = ProjectCache()
-    
-    func fetch(id: UUID) async throws -> Project {
-        // Try cache first
-        if let cached = cache.get(id: id) {
-            return cached
-        }
-        
-        // Fetch from network
-        let project = try await networkManager.get("/projects/\(id.uuidString)", type: Project.self)
-        cache.set(project, id: id)
-        return project
+@APIClient
+class ProjectsAPI {
+    func fetchProject(id: UUID) async throws -> Project {
+        // Mock data for demo
+        return Project(
+            name: "Mobile App Redesign",
+            description: "Complete overhaul of the mobile application UI/UX",
+            taskCount: 24,
+            progress: 0.65,
+            memberCount: 5
+        )
     }
-    
-    func fetchAll() async throws -> [Project] {
+
+    func fetchProjects() async throws -> [Project] {
         // Mock data for demo
         return [
             Project(
@@ -346,36 +340,27 @@ class ProjectRepository: DataRepository {
             )
         ]
     }
-    
-    func save(_ model: Project) async throws {
-        cache.set(model, id: model.id)
-        try await networkManager.post("/projects", body: model)
+
+    func saveProject(_ project: Project) async throws {
+        // Implementation
     }
-    
-    func delete(id: UUID) async throws {
-        cache.remove(id: id)
-        try await networkManager.delete("/projects/\(id.uuidString)")
+
+    func deleteProject(id: UUID) async throws {
+        // Implementation
     }
 }
 
-@Repository
-class TaskRepository: DataRepository {
-    typealias Model = Task
-    
-    private let networkManager = NetworkManager.shared
-    private let cache = TaskCache()
-    
-    func fetch(id: UUID) async throws -> Task {
-        if let cached = cache.get(id: id) {
-            return cached
-        }
-        
-        let task = try await networkManager.get("/tasks/\(id.uuidString)", type: Task.self)
-        cache.set(task, id: id)
-        return task
+@APIClient
+class TasksAPI {
+    func fetchTask(id: UUID) async throws -> Task {
+        return Task(
+            title: "Design new login screen",
+            description: "Create wireframes and mockups for the new login experience",
+            priority: .high
+        )
     }
-    
-    func fetchAll() async throws -> [Task] {
+
+    func fetchTasks() async throws -> [Task] {
         // Mock data for demo
         return [
             Task(
@@ -405,56 +390,50 @@ class TaskRepository: DataRepository {
             )
         ]
     }
-    
-    func save(_ model: Task) async throws {
-        cache.set(model, id: model.id)
-        try await networkManager.post("/tasks", body: model)
+
+    func saveTask(_ task: Task) async throws {
+        // Implementation
     }
-    
-    func delete(id: UUID) async throws {
-        cache.remove(id: id)
-        try await networkManager.delete("/tasks/\(id.uuidString)")
+
+    func deleteTask(id: UUID) async throws {
+        // Implementation
     }
 }
 
-@Repository
-class UserRepository: DataRepository {
-    typealias Model = User
-    
-    func fetch(id: UUID) async throws -> User {
+@APIClient
+class UsersAPI {
+    func fetchUser(id: UUID) async throws -> User {
         return User(username: "demo", email: "demo@archery.com", name: "Demo User")
     }
-    
-    func fetchAll() async throws -> [User] {
-        return [fetch(id: UUID())]
+
+    func fetchUsers() async throws -> [User] {
+        return [try await fetchUser(id: UUID())]
     }
-    
-    func save(_ model: User) async throws {
+
+    func saveUser(_ user: User) async throws {
         // Implementation
     }
-    
-    func delete(id: UUID) async throws {
+
+    func deleteUser(id: UUID) async throws {
         // Implementation
     }
 }
 
-@Repository
-class SettingsRepository: DataRepository {
-    typealias Model = Setting
-    
-    func fetch(id: UUID) async throws -> Setting {
+@APIClient
+class SettingsAPI {
+    func fetchSetting(id: UUID) async throws -> Setting {
         return Setting(key: "demo", value: "value")
     }
-    
-    func fetchAll() async throws -> [Setting] {
+
+    func fetchSettings() async throws -> [Setting] {
         return []
     }
-    
-    func save(_ model: Setting) async throws {
+
+    func saveSetting(_ setting: Setting) async throws {
         // Implementation
     }
-    
-    func delete(id: UUID) async throws {
+
+    func deleteSetting(id: UUID) async throws {
         // Implementation
     }
 }

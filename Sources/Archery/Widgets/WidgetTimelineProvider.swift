@@ -1,11 +1,11 @@
 import Foundation
-import WidgetKit
 import SwiftUI
 import AppIntents
 
-public typealias ArcheryIntent = WidgetConfigurationIntent
+#if canImport(WidgetKit) && !os(tvOS)
+import WidgetKit
 
-#if canImport(WidgetKit)
+public typealias ArcheryIntent = WidgetConfigurationIntent
 
 // MARK: - Enhanced Widget Timeline Provider
 
@@ -375,6 +375,7 @@ public final class WidgetAnalytics {
             } else {
                 return "large"
             }
+        #if !os(visionOS)
         case .accessoryCircular:
             if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
                 return "accessory_circular"
@@ -393,6 +394,7 @@ public final class WidgetAnalytics {
             } else {
                 return "small"
             }
+        #endif
         @unknown default:
             return "unknown"
         }

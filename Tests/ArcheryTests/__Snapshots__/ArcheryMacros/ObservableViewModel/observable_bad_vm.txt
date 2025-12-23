@@ -1,7 +1,4 @@
 class BadVM {}
 
-extension BadVM: Observation.Observable {
-}
-
 extension BadVM: ArcheryLoadable {
 }

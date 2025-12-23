@@ -1,4 +1,6 @@
+#if os(iOS) || os(macOS)
 @preconcurrency import BackgroundTasks
+#endif
 import Foundation
 import Combine
 
@@ -29,7 +31,7 @@ public final class BackgroundTaskScheduler: BackgroundTaskScheduling, @unchecked
             registeredIdentifiers.insert(identifier)
         }
         
-        #if os(iOS) || os(tvOS)
+        #if os(iOS)
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: identifier,
             using: nil
@@ -54,12 +56,12 @@ public final class BackgroundTaskScheduler: BackgroundTaskScheduling, @unchecked
             throw BackgroundTaskError.unregisteredIdentifier(identifier)
         }
         
-        #if os(iOS) || os(tvOS)
+        #if os(iOS)
         let request = BGProcessingTaskRequest(identifier: identifier)
         request.earliestBeginDate = date
         request.requiresNetworkConnectivity = false
         request.requiresExternalPower = false
-        
+
         try BGTaskScheduler.shared.submit(request)
         #else
         if let date = date {
@@ -79,19 +81,19 @@ public final class BackgroundTaskScheduler: BackgroundTaskScheduling, @unchecked
             throw BackgroundTaskError.unregisteredIdentifier(identifier)
         }
         
-        #if os(iOS) || os(tvOS)
+        #if os(iOS)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
         #endif
     }
     
     public func cancelAll() {
-        #if os(iOS) || os(tvOS)
+        #if os(iOS)
         BGTaskScheduler.shared.cancelAllTaskRequests()
         #endif
     }
     
     public func getPendingTasks() async -> [String] {
-        #if os(iOS) || os(tvOS)
+        #if os(iOS)
         return await withCheckedContinuation { continuation in
             BGTaskScheduler.shared.getPendingTaskRequests { requests in
                 let identifiers = requests.map { $0.identifier }

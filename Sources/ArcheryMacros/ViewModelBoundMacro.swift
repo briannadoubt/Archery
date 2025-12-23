@@ -39,9 +39,10 @@ public enum ViewModelBoundMacro: MemberMacro {
         let isPublic = structDecl.modifiers.contains { $0.name.tokenKind == .keyword(.public) }
         let access = isPublic ? "public " : ""
 
+        // Use @State with @Observable holder
         let storage = """
 @SwiftUI.Environment(\\.archeryContainer) private var __archeryEnv
-@SwiftUI.\(config.useStateObject ? "StateObject" : "ObservedObject") private var vmHolder = \(holderName)(factory: { \(config.typeName)() })
+@SwiftUI.State private var vmHolder = \(holderName)(factory: { \(config.typeName)() })
 """
 
         let computed = """
@@ -68,10 +69,11 @@ var vm: \(config.typeName) { vmHolder.value(container: __archeryEnv) }
 }
 """
 
+        // Use @Observable for the holder class - fileprivate allows @Observable synthesis to work
         let holder = """
-@MainActor private final class \(holderName): ObservableObject {
-    private var cached: \(config.typeName)?
-    private let factory: @MainActor () -> \(config.typeName)
+@MainActor @Observable fileprivate final class \(holderName) {
+    fileprivate var cached: \(config.typeName)?
+    fileprivate let factory: @MainActor () -> \(config.typeName)
     init(factory: @escaping @MainActor () -> \(config.typeName) = { \(config.typeName)() }) {
         self.factory = factory
     }
@@ -150,7 +152,6 @@ struct \(viewName)PreviewModifier: SwiftUI.PreviewModifier {
 
     private static func extractConfig(from node: AttributeSyntax) -> ViewModelConfig? {
         var typeName: String?
-        var useStateObject = true
         var autoLoad = true
 
         if let generic = node.attributeName.as(IdentifierTypeSyntax.self)?.genericArgumentClause?.arguments.first?.argument {
@@ -160,20 +161,14 @@ struct \(viewName)PreviewModifier: SwiftUI.PreviewModifier {
         if let args = node.arguments?.as(LabeledExprListSyntax.self) {
             for (index, arg) in args.enumerated() {
                 let label = arg.label?.text
-                let value = arg.expression.trimmedDescription
 
                 if label == nil && typeName == nil && index == 0 {
-                    typeName = cleanedTypeName(value)
+                    typeName = cleanedTypeName(arg.expression.trimmedDescription)
                     continue
                 }
 
                 if label == "type", typeName == nil {
-                    typeName = cleanedTypeName(value)
-                    continue
-                }
-
-                if label == "useStateObject" {
-                    useStateObject = parseBool(arg.expression) ?? true
+                    typeName = cleanedTypeName(arg.expression.trimmedDescription)
                     continue
                 }
 
@@ -186,7 +181,7 @@ struct \(viewName)PreviewModifier: SwiftUI.PreviewModifier {
 
         guard let typeName else { return nil }
 
-        return .init(typeName: typeName, useStateObject: useStateObject, autoLoad: autoLoad)
+        return .init(typeName: typeName, autoLoad: autoLoad)
     }
 
     private static func diagnostic(for node: some SyntaxProtocol, kind: ViewModelBoundDiagnostic) -> Diagnostic {
@@ -211,7 +206,6 @@ struct \(viewName)PreviewModifier: SwiftUI.PreviewModifier {
 
 private struct ViewModelConfig {
     let typeName: String
-    let useStateObject: Bool
     let autoLoad: Bool
 }
 

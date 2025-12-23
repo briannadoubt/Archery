@@ -4,15 +4,16 @@ import Combine
 import SwiftUI
 
 @MainActor
-public final class ConnectivityMonitor: ObservableObject {
+@Observable
+public final class ConnectivityMonitor {
     public static let shared = ConnectivityMonitor()
-    
-    @Published public private(set) var isConnected = true
-    @Published public private(set) var connectionType: ConnectionType = .unknown
-    @Published public private(set) var isExpensive = false
-    @Published public private(set) var isConstrained = false
-    @Published public private(set) var lastStatusChange: Date?
-    @Published public private(set) var connectionQuality: ConnectionQuality = .good
+
+    public private(set) var isConnected = true
+    public private(set) var connectionType: ConnectionType = .unknown
+    public private(set) var isExpensive = false
+    public private(set) var isConstrained = false
+    public private(set) var lastStatusChange: Date?
+    public private(set) var connectionQuality: ConnectionQuality = .good
     
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.archery.connectivity")
@@ -152,11 +153,10 @@ public final class ConnectivityMonitor: ObservableObject {
     
     public func waitForConnection() async {
         guard !isConnected else { return }
-        
-        for await value in $isConnected.values {
-            if value {
-                break
-            }
+
+        // Poll for connection status
+        while !isConnected {
+            try? await Task.sleep(nanoseconds: 100_000_000) // Check every 0.1s
         }
     }
     
@@ -166,7 +166,7 @@ public final class ConnectivityMonitor: ObservableObject {
 }
 
 public struct ConnectivityView: View {
-    @StateObject private var monitor = ConnectivityMonitor.shared
+    private var monitor = ConnectivityMonitor.shared
     
     public init() {}
     
@@ -249,7 +249,7 @@ public struct ConnectivityView: View {
 }
 
 public struct OfflineIndicator: View {
-    @StateObject private var monitor = ConnectivityMonitor.shared
+    private var monitor = ConnectivityMonitor.shared
     @State private var showDetails = false
     
     public init() {}
@@ -327,10 +327,15 @@ public extension View {
 }
 
 struct OfflineCapableModifier: ViewModifier {
-    @StateObject private var monitor = ConnectivityMonitor.shared
+    private var monitor = ConnectivityMonitor.shared
     let showIndicator: Bool
     let customMessage: String?
-    
+
+    init(showIndicator: Bool, customMessage: String?) {
+        self.showIndicator = showIndicator
+        self.customMessage = customMessage
+    }
+
     func body(content: Content) -> some View {
         VStack(spacing: 0) {
             if showIndicator && !monitor.isConnected {
@@ -355,7 +360,7 @@ struct OfflineCapableModifier: ViewModifier {
 }
 
 struct RequiresConnectionModifier: ViewModifier {
-    @StateObject private var monitor = ConnectivityMonitor.shared
+    private var monitor = ConnectivityMonitor.shared
     
     func body(content: Content) -> some View {
         if monitor.isConnected {

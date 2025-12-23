@@ -6,8 +6,18 @@ import SwiftSyntaxMacrosTestSupport
 import XCTest
 
 #if canImport(ArcheryMacros)
-private let persistableMacros: [String: Macro.Type] = ["Persistable": PersistableMacro.self]
-private let repositoryMacros: [String: Macro.Type] = ["GRDBRepository": GRDBRepositoryMacro.self]
+private let persistableMacros: [String: Macro.Type] = [
+    "Persistable": PersistableMacro.self,
+    "PrimaryKey": PrimaryKeyMacro.self,
+    "Indexed": IndexedMacro.self,
+    "Unique": UniqueMacro.self,
+    "ForeignKey": ForeignKeyMacro.self,
+    "CreatedAt": CreatedAtMacro.self,
+    "UpdatedAt": UpdatedAtMacro.self,
+    "NotPersisted": NotPersistedMacro.self,
+    "Default": DefaultMacro.self
+]
+private let repositoryMacros: [String: Macro.Type] = ["DatabaseRepository": DatabaseRepositoryMacro.self]
 #endif
 
 @MainActor
@@ -49,6 +59,49 @@ final class GRDBMacroTests: XCTestCase {
             extension Task {}
             """,
             expandedSource: snapshot("ArcheryMacros/GRDB/persistable_default_table"),
+            macros: persistableMacros,
+            indentationWidth: .spaces(4)
+        )
+        #endif
+    }
+
+    func testPersistableWithSchemaAttributes() throws {
+        #if canImport(ArcheryMacros)
+        // Test that @Persistable with schema attributes generates createTableMigration
+        // This test verifies the new auto-migration feature
+        assertMacroExpansion(
+            """
+            @Persistable(table: "tasks")
+            struct Task: Codable, FetchableRecord, PersistableRecord {
+                @PrimaryKey var id: String
+                var title: String
+                @Indexed var status: String
+                @Indexed var dueDate: Date?
+                @CreatedAt var createdAt: Date
+                @UpdatedAt var updatedAt: Date
+                @NotPersisted var isSelected: Bool = false
+            }
+            """,
+            expandedSource: snapshot("ArcheryMacros/GRDB/persistable_schema_attrs"),
+            macros: persistableMacros,
+            indentationWidth: .spaces(4)
+        )
+        #endif
+    }
+
+    func testPersistableWithForeignKey() throws {
+        #if canImport(ArcheryMacros)
+        assertMacroExpansion(
+            """
+            @Persistable(table: "comments")
+            struct Comment: Codable, FetchableRecord, PersistableRecord {
+                @PrimaryKey var id: String
+                var content: String
+                @ForeignKey(Post.self) @Indexed var postId: String?
+                @CreatedAt var createdAt: Date
+            }
+            """,
+            expandedSource: snapshot("ArcheryMacros/GRDB/persistable_foreign_key"),
             macros: persistableMacros,
             indentationWidth: .spaces(4)
         )

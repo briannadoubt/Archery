@@ -2,8 +2,8 @@ import SwiftUI
 import Archery
 
 struct DashboardActivityView: View {
-    @Query(PersistentTask.all().order(by: PersistentTask.Columns.createdAt, ascending: false).limit(20))
-    var recentTasks: [PersistentTask]
+    @Query(\.recent)
+    var recentTasks: [TaskItem]
 
     var body: some View {
         List {
@@ -18,14 +18,14 @@ struct DashboardActivityView: View {
 }
 
 private struct ActivityRow: View {
-    let task: PersistentTask
+    let task: TaskItem
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(task.title)
                 .fontWeight(.medium)
             HStack {
-                Text(task.status.capitalized)
+                Text(task.status.title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()

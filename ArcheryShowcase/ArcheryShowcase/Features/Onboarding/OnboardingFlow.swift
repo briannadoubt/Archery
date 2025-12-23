@@ -27,8 +27,10 @@ struct OnboardingFlow: View {
                     color: .purple
                 )
             }
+            #if os(iOS) || os(visionOS)
             .tabViewStyle(.page)
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            #endif
 
             Button("Get Started") {
                 dismiss()

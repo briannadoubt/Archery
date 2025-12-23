@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import AppIntents
 import Archery
+import GRDB
 
 // MARK: - User Models
 
@@ -47,115 +48,47 @@ enum SubscriptionTier: String, Codable {
 
 // AppTheme is defined in DesignTokens.swift
 
-// MARK: - Task Models
+// MARK: - Task Enums
 
-@IntentEntity(displayName: "Task")
-struct TaskItem: AppEntity, Identifiable, Codable, Sendable {
-    let id: String
-    let title: String
-    let description: String?
-    let status: TaskStatus
-    let priority: TaskPriority
-    let dueDate: Date?
-    let createdAt: Date
-    let tags: [String]
-
-    // Project excluded from Sendable struct - use projectId for relationships
-    var projectId: String?
-
-    var isCompleted: Bool { status == .completed }
-
-    init(
-        id: String = UUID().uuidString,
-        title: String,
-        description: String? = nil,
-        status: TaskStatus = .todo,
-        priority: TaskPriority = .medium,
-        dueDate: Date? = nil,
-        tags: [String] = [],
-        projectId: String? = nil,
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.title = title
-        self.description = description
-        self.status = status
-        self.priority = priority
-        self.dueDate = dueDate
-        self.tags = tags
-        self.projectId = projectId
-        self.createdAt = createdAt
-    }
-
-    // Legacy init for compatibility
-    init(
-        id: String = UUID().uuidString,
-        title: String,
-        description: String? = nil,
-        status: TaskStatus = .todo,
-        priority: TaskPriority = .medium,
-        dueDate: Date? = nil,
-        tags: [String] = [],
-        project: Project?,
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.title = title
-        self.description = description
-        self.status = status
-        self.priority = priority
-        self.dueDate = dueDate
-        self.tags = tags
-        self.projectId = project?.id
-        self.createdAt = createdAt
-    }
-    
-    var sectionTitle: String {
-        if isCompleted {
-            return "Completed"
-        } else if let dueDate = dueDate {
-            let calendar = Calendar.current
-            if calendar.isDateInToday(dueDate) {
-                return "Today"
-            } else if calendar.isDateInTomorrow(dueDate) {
-                return "Tomorrow"
-            } else if dueDate < Date() {
-                return "Overdue"
-            } else {
-                return "Upcoming"
-            }
-        } else {
-            return "No Due Date"
-        }
-    }
-}
-
-// MARK: - TaskItem EntityQuery (required for AppEntity)
-
-struct TaskItemQuery: EntityQuery, Sendable {
-    func entities(for identifiers: [String]) async throws -> [TaskItem] {
-        TaskItem.mockTasks.filter { identifiers.contains($0.id) }
-    }
-
-    func suggestedEntities() async throws -> [TaskItem] {
-        Array(TaskItem.mockTasks.prefix(5))
-    }
-}
-
-extension TaskItem {
-    static var defaultQuery: TaskItemQuery { TaskItemQuery() }
-}
+// TaskItem is defined in AppDatabase.swift with full persistence support
 
 @IntentEnum(displayName: "Status")
-enum TaskStatus: String, AppEnum, Codable, CaseIterable, Sendable {
+enum TaskStatus: String, AppEnum, Codable, CaseIterable, Sendable, DatabaseValueConvertible {
     case todo
     case inProgress
     case completed
     case archived
+
+    var title: String {
+        switch self {
+        case .todo: return "To Do"
+        case .inProgress: return "In Progress"
+        case .completed: return "Completed"
+        case .archived: return "Archived"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .todo: return "circle"
+        case .inProgress: return "clock"
+        case .completed: return "checkmark.circle.fill"
+        case .archived: return "archivebox"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .todo: return .secondary
+        case .inProgress: return .blue
+        case .completed: return .green
+        case .archived: return .gray
+        }
+    }
 }
 
 @IntentEnum(displayName: "Priority")
-enum TaskPriority: Int, AppEnum, Codable, CaseIterable, Sendable {
+enum TaskPriority: Int, AppEnum, Codable, CaseIterable, Sendable, DatabaseValueConvertible {
     case low = 0
     case medium = 1
     case high = 2
@@ -378,12 +311,12 @@ extension User {
 
 extension TaskItem {
     static let mockTasks: [TaskItem] = [
-        TaskItem(id: "1", title: "Review pull request", description: "Check the latest changes", status: .inProgress, priority: .high, dueDate: Date().addingTimeInterval(3600), tags: ["work", "urgent"]),
-        TaskItem(id: "2", title: "Update documentation", description: "Add examples for new APIs", status: .todo, priority: .medium, dueDate: Date().addingTimeInterval(86400), tags: ["docs"]),
-        TaskItem(id: "3", title: "Fix login bug", description: "Handle edge case for social login", status: .todo, priority: .urgent, dueDate: Date(), tags: ["bug", "auth"]),
-        TaskItem(id: "4", title: "Design system update", description: "Refresh color tokens", status: .inProgress, priority: .medium, tags: ["design"]),
+        TaskItem(id: "1", title: "Review pull request", taskDescription: "Check the latest changes", status: .inProgress, priority: .high, dueDate: Date().addingTimeInterval(3600), tags: ["work", "urgent"]),
+        TaskItem(id: "2", title: "Update documentation", taskDescription: "Add examples for new APIs", status: .todo, priority: .medium, dueDate: Date().addingTimeInterval(86400), tags: ["docs"]),
+        TaskItem(id: "3", title: "Fix login bug", taskDescription: "Handle edge case for social login", status: .todo, priority: .urgent, dueDate: Date(), tags: ["bug", "auth"]),
+        TaskItem(id: "4", title: "Design system update", taskDescription: "Refresh color tokens", status: .inProgress, priority: .medium, tags: ["design"]),
         TaskItem(id: "5", title: "Weekly team sync", status: .completed, priority: .low, dueDate: Date().addingTimeInterval(-86400)),
-        TaskItem(id: "6", title: "Performance optimization", description: "Improve app launch time", status: .todo, priority: .high, dueDate: Date().addingTimeInterval(172800), tags: ["performance"]),
+        TaskItem(id: "6", title: "Performance optimization", taskDescription: "Improve app launch time", status: .todo, priority: .high, dueDate: Date().addingTimeInterval(172800), tags: ["performance"]),
     ]
 }
 

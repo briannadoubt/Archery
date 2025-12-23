@@ -248,7 +248,7 @@ extension Recipe {
         description: "Implement infinite scrolling lists with automatic loading and error handling.",
         shortDescription: "Infinite scroll with pagination",
         problem: "You need to display large datasets efficiently with smooth scrolling and automatic loading of more content.",
-        solution: "Use @Repository for data fetching, @ObservableViewModel for state management, and SwiftUI's onAppear for pagination triggers.",
+        solution: "Use @APIClient for data fetching, @ObservableViewModel for state management, and SwiftUI's onAppear for pagination triggers.",
         steps: [
             Step(
                 title: "Create Paginated Repository",
@@ -1120,65 +1120,30 @@ extension Recipe {
             )
         ],
         completeExample: """
-        // Complete offline sync implementation
-        @Repository(cachingStrategy: .offline, syncStrategy: .automatic)
-        class OfflineTaskRepository: DataRepository {
-            typealias Model = Task
-            
-            private let syncManager = SyncManager()
-            private let networkMonitor = NetworkMonitor.shared
-            
-            func fetch(id: UUID) async throws -> Task {
-                if networkMonitor.isConnected {
-                    return try await fetchFromServer(id: id)
-                } else {
-                    return try await fetchFromLocal(id: id)
-                }
-            }
-            
-            func save(_ model: Task) async throws {
-                if networkMonitor.isConnected {
-                    try await saveToServer(model)
-                    try await saveToLocal(model)
-                } else {
-                    try await saveOffline(model)
-                }
-            }
+        // Complete offline sync implementation using @APIClient + @Query
+        @APIClient
+        class TasksAPI {
+            func fetchTask(id: UUID) async throws -> Task { ... }
+            func saveTask(_ task: Task) async throws -> Task { ... }
         }
-        
-        @ViewModelBound(TaskListViewModel.self)
+
+        // View uses @Query with cache policy for offline support
         struct OfflineTaskListView: View {
-            @StateObject private var syncManager = SyncManager.shared
-            
+            @Query(
+                Task.all(),
+                cachePolicy: .staleWhileRevalidate(staleAfter: .minutes(5)),
+                refresh: .fromAPI(TasksAPI.live()) { api in
+                    try await api.fetchTasks()
+                }
+            )
+            var tasks: [Task]
+
             var body: some View {
-                List(viewModel.tasks) { task in
+                List(tasks) { task in
                     TaskRowView(task: task)
-                        .swipeActions {
-                            Button("Delete") {
-                                Task {
-                                    try await viewModel.deleteTask(task.id)
-                                }
-                            }
-                            .tint(.red)
-                        }
                 }
-                .navigationTitle("Tasks")
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        SyncStatusView(status: syncManager.syncStatus)
-                    }
-                    
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Sync") {
-                            Task { await syncManager.forcSync() }
-                        }
-                        .disabled(syncManager.syncStatus == .syncing)
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    if syncManager.conflictCount > 0 {
-                        ConflictsBannerView(count: syncManager.conflictCount)
-                    }
+                .refreshable {
+                    await $tasks.refresh()
                 }
             }
         }
@@ -3075,7 +3040,7 @@ extension ExampleProject {
         
         **Presentation Layer**: SwiftUI views bound to ViewModels using @ViewModelBound
         **Business Logic Layer**: ViewModels with @ObservableViewModel for state management  
-        **Data Layer**: Repositories with @Repository for CRUD operations
+        **Data Layer**: @APIClient for networking, @Query for reactive data access
         **Infrastructure Layer**: Networking, storage, analytics, and system integration
         
         Key architectural patterns:

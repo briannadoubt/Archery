@@ -1,5 +1,5 @@
 import SwiftUI
-#if canImport(UIKit)
+#if os(iOS) || os(tvOS) || os(visionOS)
 import UIKit
 #elseif canImport(AppKit)
 import AppKit
@@ -9,8 +9,8 @@ import AppKit
 
 /// Bridge for hosting SwiftUI views in UIKit/AppKit
 public struct HostingBridge {
-    
-    #if canImport(UIKit)
+
+    #if os(iOS) || os(tvOS) || os(visionOS)
 
     // MARK: - UIKit Hosting
 
@@ -227,19 +227,22 @@ public struct EdgeInsets: Sendable {
 
 // MARK: - Platform Types
 
-#if canImport(UIKit)
+#if os(iOS) || os(tvOS) || os(visionOS)
 public typealias PlatformColor = UIColor
 public typealias PlatformView = UIView
 public typealias PlatformViewController = UIViewController
-#elseif canImport(AppKit)
+#elseif os(macOS)
 public typealias PlatformColor = NSColor
 public typealias PlatformView = NSView
 public typealias PlatformViewController = NSViewController
+#elseif os(watchOS)
+// watchOS uses SwiftUI Color since there's no traditional UIKit/AppKit hosting
+public typealias PlatformColor = Color
 #endif
 
 // MARK: - Custom Hosting Controller
 
-#if canImport(UIKit)
+#if os(iOS) || os(tvOS) || os(visionOS)
 
 /// Enhanced UIHostingController with additional functionality
 public class ArcheryHostingController<Content: View>: UIHostingController<Content> {
@@ -262,9 +265,11 @@ public class ArcheryHostingController<Content: View>: UIHostingController<Conten
         }
         
         // Tab bar configuration
+        #if !os(tvOS)
         if configuration.tabBarHidden {
             hidesBottomBarWhenPushed = true
         }
+        #endif
     }
     
     public override func viewDidLoad() {
@@ -300,7 +305,7 @@ public class ArcheryHostingController<Content: View>: UIHostingController<Conten
 
 // MARK: - UIKit View Representable
 
-#if canImport(UIKit)
+#if os(iOS) || os(tvOS) || os(visionOS)
 
 /// Wrapper to use UIKit views in SwiftUI
 public struct UIKitViewRepresentable<ViewType: UIView>: UIViewRepresentable {

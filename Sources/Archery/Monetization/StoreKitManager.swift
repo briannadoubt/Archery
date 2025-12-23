@@ -6,17 +6,20 @@ import SwiftUI
 
 /// Manages StoreKit 2 products, purchases, and entitlements
 @MainActor
-public final class StoreKitManager: ObservableObject {
+@Observable
+public final class StoreKitManager {
     public static let shared = StoreKitManager()
-    
-    @Published public private(set) var products: [Product] = []
-    @Published public private(set) var purchasedProductIDs: Set<String> = []
-    @Published public private(set) var subscriptionStatus: SubscriptionStatus = .none
-    @Published public private(set) var entitlements: Set<Entitlement> = []
-    @Published public private(set) var isLoading = false
-    @Published public private(set) var error: StoreKitError?
-    
-    private var updateListenerTask: Task<Void, Never>?
+
+    public private(set) var products: [Product] = []
+    public private(set) var purchasedProductIDs: Set<String> = []
+    public private(set) var subscriptionStatus: SubscriptionStatus = .none
+    public private(set) var entitlements: Set<Entitlement> = []
+    public private(set) var isLoading = false
+    public private(set) var error: StoreKitError?
+
+    @ObservationIgnored
+    private nonisolated(unsafe) var updateListenerTask: Task<Void, Never>?
+    @ObservationIgnored
     private let productIdentifiers: Set<String>
     
     public init(productIdentifiers: Set<String> = []) {
@@ -61,28 +64,45 @@ public final class StoreKitManager: ObservableObject {
     }
     
     // MARK: - Purchase
-    
+
+    #if os(visionOS)
+    /// Purchase a product - On visionOS, purchases must be completed through the App Store
+    @discardableResult
+    public func purchase(_ product: Product) async -> StoreKit.Transaction? {
+        // On visionOS, in-app purchases are not supported directly
+        // Users must complete purchases through the App Store app
+        error = .purchaseUnavailable
+        return nil
+    }
+
+    /// Purchase a product with offer - On visionOS, purchases must be completed through the App Store
+    @discardableResult
+    public func purchaseWithOffer(_ product: Product) async -> StoreKit.Transaction? {
+        error = .purchaseUnavailable
+        return nil
+    }
+    #else
     /// Purchase a product
     @discardableResult
     public func purchase(_ product: Product) async -> StoreKit.Transaction? {
         do {
             let result = try await product.purchase()
-            
+
             switch result {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
                 await updatePurchasedProducts()
                 await transaction.finish()
                 return transaction
-                
+
             case .userCancelled:
                 error = .purchaseCancelled
                 return nil
-                
+
             case .pending:
                 error = .purchasePending
                 return nil
-                
+
             @unknown default:
                 error = .unknownError
                 return nil
@@ -92,7 +112,7 @@ public final class StoreKitManager: ObservableObject {
             return nil
         }
     }
-    
+
     /// Purchase a product (promotional offers require server-side signature generation)
     @discardableResult
     public func purchaseWithOffer(_ product: Product) async -> StoreKit.Transaction? {
@@ -100,6 +120,7 @@ public final class StoreKitManager: ObservableObject {
         // This is a placeholder - actual implementation needs server integration
         return await purchase(product)
     }
+    #endif
     
     // MARK: - Restore Purchases
     
@@ -174,8 +195,41 @@ public final class StoreKitManager: ObservableObject {
     
     /// Check if user has a specific entitlement
     public func hasEntitlement(_ entitlement: Entitlement) -> Bool {
-        entitlements.contains(entitlement)
+        entitlements.contains(entitlement) || debugEntitlements.contains(entitlement)
     }
+
+    // MARK: - Debug Entitlements
+
+    #if DEBUG
+    /// Debug entitlements for testing - only available in DEBUG builds
+    private var debugEntitlements: Set<Entitlement> = []
+
+    /// Grant an entitlement for testing purposes (DEBUG only)
+    public func grantDebugEntitlement(_ entitlement: Entitlement) {
+        debugEntitlements.insert(entitlement)
+        print("🧪 Granted debug entitlement: \(entitlement)")
+    }
+
+    /// Revoke a debug entitlement (DEBUG only)
+    public func revokeDebugEntitlement(_ entitlement: Entitlement) {
+        debugEntitlements.remove(entitlement)
+        print("🧪 Revoked debug entitlement: \(entitlement)")
+    }
+
+    /// Grant all entitlements for testing (DEBUG only)
+    public func grantAllDebugEntitlements() {
+        debugEntitlements = Set(Entitlement.allCases)
+        print("🧪 Granted all debug entitlements")
+    }
+
+    /// Clear all debug entitlements (DEBUG only)
+    public func clearDebugEntitlements() {
+        debugEntitlements.removeAll()
+        print("🧪 Cleared all debug entitlements")
+    }
+    #else
+    private let debugEntitlements: Set<Entitlement> = []
+    #endif
     
     // MARK: - Transaction Updates
 
@@ -376,10 +430,11 @@ public enum StoreKitError: LocalizedError {
     case purchaseFailed(Error)
     case purchaseCancelled
     case purchasePending
+    case purchaseUnavailable
     case restoreFailed(Error)
     case transactionVerificationFailed
     case unknownError
-    
+
     public var errorDescription: String? {
         switch self {
         case .failedToLoadProducts:
@@ -390,6 +445,8 @@ public enum StoreKitError: LocalizedError {
             return "Purchase was cancelled"
         case .purchasePending:
             return "Purchase is pending approval"
+        case .purchaseUnavailable:
+            return "In-app purchases are not available on this device"
         case .restoreFailed:
             return "Failed to restore purchases"
         case .transactionVerificationFailed:
@@ -398,7 +455,7 @@ public enum StoreKitError: LocalizedError {
             return "An unknown error occurred"
         }
     }
-    
+
     public var recoverySuggestion: String? {
         switch self {
         case .failedToLoadProducts:
@@ -407,6 +464,8 @@ public enum StoreKitError: LocalizedError {
             return "Please check your payment method and try again"
         case .transactionVerificationFailed:
             return "Please contact support if this persists"
+        case .purchaseUnavailable:
+            return "Please complete your purchase through the App Store app"
         default:
             return nil
         }

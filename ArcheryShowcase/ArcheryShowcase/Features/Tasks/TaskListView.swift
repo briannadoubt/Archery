@@ -5,46 +5,22 @@ import Archery
 
 struct TaskListView: View {
     // Reactive query - automatically updates when database changes
-    @Query(PersistentTask.all().order(by: PersistentTask.Columns.createdAt, ascending: false))
-    var persistentTasks: [PersistentTask]
+    @Query(\.byCreatedAt)
+    var tasks: [TaskItem]
 
     @Environment(\.databaseWriter) private var writer
-    @Environment(\.appDatabase) private var database
     @Environment(\.navigationHandle) private var nav
 
-    @State private var searchText = ""
-    @State private var selectedFilter: TaskFilter = .all
+    // ViewModel using @ObservableViewModel for debounced search
+    @State private var viewModel = TaskSearchViewModel()
     @State private var showError: Error?
 
-    // Convert to TaskItem for display and apply filters
+    // Feature flag: cached to avoid observation loops
+    @State private var isCompactMode: Bool = false
+
+    // Filtered tasks computed via ViewModel
     var filteredTasks: [TaskItem] {
-        var result = persistentTasks.map { $0.toTaskItem() }
-
-        // Apply filter
-        switch selectedFilter {
-        case .all:
-            break
-        case .today:
-            result = result.filter { Calendar.current.isDateInToday($0.dueDate ?? .distantPast) }
-        case .upcoming:
-            result = result.filter {
-                guard let dueDate = $0.dueDate else { return false }
-                return dueDate > Date() && !Calendar.current.isDateInToday(dueDate)
-            }
-        case .completed:
-            result = result.filter { $0.isCompleted }
-        case .incomplete:
-            result = result.filter { !$0.isCompleted }
-        case .high:
-            result = result.filter { $0.priority == .high || $0.priority == .urgent }
-        }
-
-        // Apply search
-        if !searchText.isEmpty {
-            result = result.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        }
-
-        return result
+        viewModel.filteredTasks
     }
 
     var body: some View {
@@ -55,9 +31,9 @@ struct TaskListView: View {
                     ForEach(TaskFilter.allCases, id: \.self) { filter in
                         FilterChip(
                             title: filter.title,
-                            isSelected: selectedFilter == filter
+                            isSelected: viewModel.selectedFilter == filter
                         ) {
-                            selectedFilter = filter
+                            viewModel.selectedFilter = filter
                         }
                     }
                 }
@@ -67,7 +43,7 @@ struct TaskListView: View {
             .padding(.vertical, 8)
 
             // Loading state
-            if $persistentTasks.isLoading {
+            if $tasks.isLoading {
                 HStack {
                     Spacer()
                     ProgressView("Loading tasks...")
@@ -76,9 +52,15 @@ struct TaskListView: View {
                 .listRowSeparator(.hidden)
             }
 
-            // Tasks
+            // Tasks - uses compact mode when feature flag enabled
             ForEach(filteredTasks) { task in
-                TaskRowView(task: task)
+                Group {
+                    if isCompactMode {
+                        CompactTaskRowView(task: task)
+                    } else {
+                        TaskRowView(task: task)
+                    }
+                }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             Task { await deleteTask(task) }
@@ -99,13 +81,26 @@ struct TaskListView: View {
                     }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
-        .searchable(text: $searchText, prompt: "Search tasks")
+        #endif
+        .searchable(text: $viewModel.searchText, prompt: "Search tasks")
         .navigationTitle("Tasks")
+        .onChange(of: tasks) { _, newTasks in
+            viewModel.updateTasks(newTasks)
+        }
+        .onAppear {
+            viewModel.updateTasks(tasks)
+            viewModel.onAppear()
+            isCompactMode = FeatureFlagManager.shared.isEnabled(for: AppFeatureFlags.CompactListViewFlag.self)
+        }
+        .onDisappear {
+            viewModel.onDisappear()
+        }
         .navigationBarTitleDisplayMode(.large)
         .trackScreen("Tasks")
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     nav?.navigate(to: TasksRoute.newTask, style: .sheet())
                 } label: {
@@ -114,7 +109,7 @@ struct TaskListView: View {
             }
         }
         .overlay {
-            if !$persistentTasks.isLoading && filteredTasks.isEmpty {
+            if !$tasks.isLoading && filteredTasks.isEmpty {
                 ContentUnavailableView(
                     "No Tasks",
                     systemImage: "checklist",
@@ -136,23 +131,10 @@ struct TaskListView: View {
 
     // MARK: - Database Operations
 
-    private func createTask(_ task: TaskItem) async {
-        guard let writer else { return }
-        do {
-            let persistentTask = PersistentTask(from: task)
-            _ = try await writer.insert(persistentTask)
-            // Analytics: entity_created auto-tracked by @DatabaseRepository
-        } catch {
-            showError = error
-            // Analytics: error_occurred auto-tracked by ArcheryErrorTracker
-        }
-    }
-
     private func deleteTask(_ task: TaskItem) async {
         guard let writer else { return }
         do {
-            _ = try await writer.delete(PersistentTask.self, id: task.id)
-            // Analytics: entity_deleted auto-tracked by @DatabaseRepository
+            _ = try await writer.delete(TaskItem.self, id: task.id)
         } catch {
             showError = error
         }
@@ -161,20 +143,9 @@ struct TaskListView: View {
     private func toggleTaskCompletion(_ task: TaskItem) async {
         guard let writer else { return }
         do {
-            let newStatus: TaskStatus = task.isCompleted ? .todo : .completed
-            let updatedTask = TaskItem(
-                id: task.id,
-                title: task.title,
-                description: task.description,
-                status: newStatus,
-                priority: task.priority,
-                dueDate: task.dueDate,
-                tags: task.tags,
-                projectId: task.projectId,
-                createdAt: task.createdAt
-            )
-            let persistentTask = PersistentTask(from: updatedTask)
-            try await writer.update(persistentTask)
+            var updatedTask = task
+            updatedTask.status = task.isCompleted ? .todo : .completed
+            try await writer.update(updatedTask)
         } catch {
             showError = error
         }
@@ -216,7 +187,7 @@ struct TaskRowView: View {
                     .strikethrough(task.isCompleted)
                     .foregroundStyle(task.isCompleted ? .secondary : .primary)
 
-                if let description = task.description {
+                if let description = task.taskDescription {
                     Text(description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -241,9 +212,10 @@ struct TaskRowView: View {
             Spacer()
 
             // Tags
-            if !task.tags.isEmpty {
+            let tags = task.decodedTags
+            if !tags.isEmpty {
                 HStack(spacing: 4) {
-                    ForEach(task.tags.prefix(2), id: \.self) { tag in
+                    ForEach(tags.prefix(2), id: \.self) { tag in
                         Text(tag)
                             .font(.caption2)
                             .padding(.horizontal, 6)
@@ -258,57 +230,103 @@ struct TaskRowView: View {
     }
 }
 
+// MARK: - Compact Task Row View (Feature Flag)
+
+/// Condensed task row shown when "Compact List View" feature flag is enabled.
+struct CompactTaskRowView: View {
+    let task: TaskItem
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(task.isCompleted ? .green : .secondary)
+                .font(.body)
+
+            Text(task.title)
+                .font(.subheadline)
+                .strikethrough(task.isCompleted)
+                .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if task.priority != .medium {
+                Image(systemName: task.priority.icon)
+                    .font(.caption)
+                    .foregroundStyle(task.priority.color)
+            }
+
+            if let dueDate = task.dueDate {
+                Text(dueDate.formatted(.dateTime.month(.abbreviated).day()))
+                    .font(.caption2)
+                    .foregroundStyle(dueDate < Date() ? .red : .secondary)
+            }
+        }
+    }
+}
+
 // MARK: - Task Creation View
 
+/// Task creation view using @Form-backed TaskFormData for validation.
 struct TaskCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.databaseWriter) private var writer
 
     var onSave: ((TaskItem) -> Void)?
 
-    @State private var title = ""
-    @State private var description = ""
-    @State private var priority: TaskPriority = .medium
-    @State private var dueDate: Date?
+    // Form data with @Form macro validation
+    @State private var formData = TaskFormData()
     @State private var hasDueDate = false
-    @State private var tags = ""
+    @State private var showValidationError = false
 
     var body: some View {
         Form {
             Section {
-                TextField("Title", text: $title)
+                TextField("Title", text: $formData.title)
 
-                TextField("Description", text: $description, axis: .vertical)
+                TextField("Description", text: $formData.taskDescription, axis: .vertical)
                     .lineLimit(3...6)
+            } footer: {
+                if showValidationError && !formData.canSave {
+                    Text("Title is required")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
             }
 
             Section("Priority") {
-                Picker("Priority", selection: $priority) {
+                Picker("Priority", selection: $formData.priority) {
                     ForEach(TaskPriority.allCases, id: \.self) { priority in
                         Label(priority.title, systemImage: priority.icon)
-                            .tag(priority)
+                            .tag(priority.rawValue)
                     }
                 }
                 .pickerStyle(.segmented)
             }
 
             Section("Due Date") {
-                Toggle("Set due date", isOn: $hasDueDate)
+                Toggle("Set due date", isOn: $hasDueDate.animation())
 
                 if hasDueDate {
                     DatePicker(
                         "Due Date",
                         selection: Binding(
-                            get: { dueDate ?? Date() },
-                            set: { dueDate = $0 }
+                            get: { formData.dueDate ?? Date() },
+                            set: { formData.dueDate = $0 }
                         ),
                         displayedComponents: [.date, .hourAndMinute]
                     )
                 }
             }
 
-            Section("Tags") {
-                TextField("Tags (comma separated)", text: $tags)
+            Section {
+                TextField("Tags (comma separated)", text: $formData.tags)
+            } header: {
+                Text("Tags")
+            } footer: {
+                Text("Validated with @Form macro - Title required, max 200 chars")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("New Task")
@@ -321,37 +339,50 @@ struct TaskCreationView: View {
                 Button("Save") {
                     saveTask()
                 }
-                .disabled(title.isEmpty)
+                .disabled(!formData.canSave)
+            }
+        }
+        .onChange(of: hasDueDate) { _, newValue in
+            if !newValue {
+                formData.dueDate = nil
+            } else if formData.dueDate == nil {
+                formData.dueDate = Date()
             }
         }
     }
 
     private func saveTask() {
-        let tagList = tags
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        // Validate using @Form-generated method
+        guard formData.validate() else {
+            showValidationError = true
+            return
+        }
 
-        let task = TaskItem(
-            title: title,
-            description: description.isEmpty ? nil : description,
-            status: .todo,
-            priority: priority,
-            dueDate: hasDueDate ? dueDate : nil,
-            tags: tagList
-        )
+        // Convert form data to TaskItem
+        let task = formData.toTaskItem()
 
         // If callback provided, use it; otherwise save directly
         if let onSave {
             onSave(task)
+            dismiss()
         } else {
+            // Save directly to database
             Task {
-                guard let writer else { return }
-                let persistentTask = PersistentTask(from: task)
-                _ = try? await writer.insert(persistentTask)
+                guard let writer else {
+                    print("[TaskCreationView] ERROR: No database writer available!")
+                    return
+                }
+                do {
+                    _ = try await writer.insert(task)
+                    print("[TaskCreationView] Task saved successfully: \(task.title)")
+                } catch {
+                    print("[TaskCreationView] Save error: \(error)")
+                }
+                await MainActor.run {
+                    dismiss()
+                }
             }
         }
-        dismiss()
     }
 }
 

@@ -9,11 +9,12 @@ import AppKit
 // MARK: - Memory Warning Manager
 
 @MainActor
-public final class MemoryWarningManager: ObservableObject {
+@Observable
+public final class MemoryWarningManager {
     public static let shared = MemoryWarningManager()
-    
-    @Published public private(set) var currentPressure: MemoryPressure = .normal
-    @Published public private(set) var memoryUsage: MemoryUsage = .init()
+
+    public private(set) var currentPressure: MemoryPressure = .normal
+    public private(set) var memoryUsage: MemoryUsage = .init()
     
     private var cancellables = Set<AnyCancellable>()
     private let loadShedders: NSHashTable<AnyObject> = .weakObjects()
@@ -54,7 +55,7 @@ public final class MemoryWarningManager: ObservableObject {
     // MARK: - Memory Warning Observers
     
     private func setupMemoryWarningObservers() {
-        #if canImport(UIKit)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
             .sink { [weak self] _ in
                 self?.handleMemoryWarning()
@@ -364,7 +365,8 @@ public class LoadSheddingRepository: LoadShedding {
 // MARK: - ViewModel with Load Shedding
 
 @MainActor
-open class LoadSheddingViewModel: ObservableObject, LoadShedding {
+@Observable
+open class LoadSheddingViewModel: LoadShedding {
     private var loadTask: Task<Void, Never>?
     private var debounceTimers: [String: Timer] = [:]
 

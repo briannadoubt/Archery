@@ -55,13 +55,6 @@ enum TasksRoute: NavigationRoute {
     case auditLog
 }
 
-@Route(path: "forms")
-enum FormsRoute: NavigationRoute {
-    case root
-    case validation
-    case builder
-}
-
 @Route(path: "insights", requires: .premium)
 enum InsightsRoute: NavigationRoute {
     case root
@@ -102,6 +95,20 @@ enum SettingsRoute: NavigationRoute {
 
     @presents(.sheet, detents: [.large])
     case premiumPaywall
+
+    // MARK: - Window Routes (macOS, iPadOS, visionOS)
+    //
+    // These routes are presented in separate windows using @presents(.window, id: "...").
+    // On unsupported platforms (tvOS, watchOS), these fall back to push navigation.
+
+    @presents(.window, id: "preferences")
+    case preferences
+
+    @presents(.window, id: "macro-explorer")
+    case macroExplorer
+
+    @presents(.window, id: "quick-entry")
+    case quickEntry
 }
 
 // MARK: - Task Creation Flow

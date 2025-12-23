@@ -69,66 +69,10 @@ extension MacroDocumentation {
             Issue(issue: "Values not persisting", solution: "Ensure your types conform to Codable or use primitive types"),
             Issue(issue: "App group sharing not working", solution: "Verify suiteName matches your App Group identifier")
         ],
-        relatedMacros: ["Repository"],
+        relatedMacros: ["APIClient"],
         category: .data
     )
-    
-    static let repository = MacroDocumentation(
-        name: "Repository",
-        description: "Generates repository pattern implementation with protocol and live/mock variants.",
-        shortDescription: "Repository pattern with DI support",
-        overview: "The @Repository macro generates a complete repository implementation including protocol definition, live implementation, mock implementation, and dependency injection registration.",
-        usage: """
-        @Repository
-        class UserRepository: DataRepository {
-            typealias Model = User
-            
-            // Implementation methods are generated
-        }
-        """,
-        parameters: [
-            Parameter(name: "mockData", type: "String?", description: "Path to JSON file with mock data", defaultValue: "nil"),
-            Parameter(name: "cachingStrategy", type: "CachingStrategy", description: "Caching behavior", defaultValue: ".memory"),
-            Parameter(name: "networkTimeout", type: "TimeInterval", description: "Network request timeout", defaultValue: "30.0")
-        ],
-        generatedCode: [
-            "Protocol with CRUD operations",
-            "Live implementation with networking",
-            "Mock implementation for testing",
-            "Caching layer with configurable strategies",
-            "Error handling and retry logic"
-        ],
-        examples: [
-            Example(
-                title: "Basic Repository",
-                code: """
-                @Repository
-                class TaskRepository: DataRepository {
-                    typealias Model = Task
-                }
-                
-                // Usage
-                let repository = TaskRepository()
-                let tasks = try await repository.fetchAll()
-                try await repository.save(newTask)
-                """,
-                explanation: "Creates a repository with full CRUD operations for Task entities."
-            )
-        ],
-        bestPractices: [
-            "Define clear Model types with Identifiable and Codable",
-            "Use specific repository per aggregate root",
-            "Implement custom business logic in extensions",
-            "Use mock repositories in tests"
-        ],
-        commonIssues: [
-            Issue(issue: "Network requests failing", solution: "Check NetworkManager configuration and API endpoints"),
-            Issue(issue: "Mock data not loading", solution: "Verify mock JSON file path and structure matches Model type")
-        ],
-        relatedMacros: ["KeyValueStore", "ObservableViewModel"],
-        category: .data
-    )
-    
+
     static let observableViewModel = MacroDocumentation(
         name: "ObservableViewModel",
         description: "Generates MainActor-bound ViewModels with lifecycle management and dependency injection.",

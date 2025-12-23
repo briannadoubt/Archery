@@ -3,53 +3,14 @@ class NoLoadVM: Resettable {
     @ObservationTracked
     var items: LoadState<[String]> = .idle
 
-    #if canImport(Observation)
-    @ObservationIgnored
-    private let _$observationRegistrar = Observation.ObservationRegistrar()
-    #endif
-
-    #if canImport(Observation)
-    func access<Member>(keyPath: KeyPath<NoLoadVM, Member>) {
-        _$observationRegistrar.access(self, keyPath: keyPath)
-    }
-
-    func withMutation<Member, MutationResult>(
-        keyPath: KeyPath<NoLoadVM, Member>,
-        _ mutation: () throws -> MutationResult
-    ) rethrows -> MutationResult {
-        try _$observationRegistrar.withMutation(of: self, keyPath: keyPath, mutation)
-    }
-
-    func willSet<Member>(_ keyPath: KeyPath<NoLoadVM, Member>) {
-        _$observationRegistrar.willSet(self, keyPath: keyPath)
-    }
-
-    func didSet<Member>(_ keyPath: KeyPath<NoLoadVM, Member>) {
-        _$observationRegistrar.didSet(self, keyPath: keyPath)
-    }
-
-    private func shouldNotifyObservers<Member>(_ lhs: Member, _ rhs: Member) -> Bool {
-        true
-    }
-    private func shouldNotifyObservers<Member: Equatable>(_ lhs: Member, _ rhs: Member) -> Bool {
-        lhs != rhs
-    }
-    private func shouldNotifyObservers<Member: AnyObject>(_ lhs: Member, _ rhs: Member) -> Bool {
-        lhs !== rhs
-    }
-    private func shouldNotifyObservers<Member: Equatable & AnyObject>(_ lhs: Member, _ rhs: Member) -> Bool {
-        lhs != rhs
-    }
-    #endif
-
     @MainActor
     private var __archeryCancelables: [CancelableTask] = []
 
     @MainActor
-    private var __archeryDebounceTasks: [AnyHashable: Task<Void, Never>] = [:]
+    private var __archeryDebounceTasks: [AnyHashable: _Concurrency.Task<Void, Never>] = [:]
 
     @MainActor
-    private var __archeryThrottleTasks: [AnyHashable: Task<Void, Never>] = [:]
+    private var __archeryThrottleTasks: [AnyHashable: _Concurrency.Task<Void, Never>] = [:]
 
     @MainActor
     func track(_ task: CancelableTask) {
@@ -72,7 +33,7 @@ class NoLoadVM: Resettable {
     @MainActor
     func onAppear() {
         cancelTrackedTasks()
-        let task = Task { @MainActor in
+        let task = _Concurrency.Task { @MainActor in
             await load()
         }
         track(CancelableTask {
@@ -92,9 +53,9 @@ class NoLoadVM: Resettable {
         action: @escaping @Sendable () async -> Void
     ) {
         __archeryDebounceTasks[id]?.cancel()
-        let task = Task { @MainActor in
-            try? await Task.sleep(for: dueTime)
-            guard !Task.isCancelled else {
+        let task = _Concurrency.Task { @MainActor in
+            try? await _Concurrency.Task.sleep(for: dueTime)
+            guard !_Concurrency.Task.isCancelled else {
                 return
             }
             await action()
@@ -115,12 +76,12 @@ class NoLoadVM: Resettable {
             return
         }
 
-        let task = Task { @MainActor in
+        let task = _Concurrency.Task { @MainActor in
             defer {
                 __archeryThrottleTasks[id] = nil
             }
             await action()
-            try? await Task.sleep(for: interval)
+            try? await _Concurrency.Task.sleep(for: interval)
         }
 
         __archeryThrottleTasks[id] = task
@@ -152,9 +113,6 @@ class NoLoadVM: Resettable {
     @MainActor
     func load() async {
     }
-}
-
-extension NoLoadVM: Observation.Observable {
 }
 
 extension NoLoadVM: ArcheryLoadable {

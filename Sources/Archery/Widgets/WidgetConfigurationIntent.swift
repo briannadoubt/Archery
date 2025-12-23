@@ -1,32 +1,36 @@
 import AppIntents
+#if canImport(WidgetKit) && !os(tvOS)
 import WidgetKit
+#endif
 
 // MARK: - Widget Configuration Intent
 
 /// Base configuration intent for widgets
+#if canImport(WidgetKit) && !os(tvOS)
 @available(iOS 16.0, macOS 13.0, watchOS 9.0, *)
 public struct WidgetConfigurationIntent: AppIntent {
     public static nonisolated(unsafe) var title: LocalizedStringResource = "Widget Configuration"
     public static nonisolated(unsafe) var description = IntentDescription("Configure widget settings")
-    
+
     // Add any configuration parameters here
     public var showHeader: Bool
     public var refreshInterval: Int
-    
+
     public func perform() async throws -> some IntentResult {
         return .result()
     }
-    
+
     public init() {
         self.showHeader = true
         self.refreshInterval = 15
     }
-    
+
     public init(showHeader: Bool, refreshInterval: Int) {
         self.showHeader = showHeader
         self.refreshInterval = refreshInterval
     }
 }
+#endif
 
 // MARK: - Data Repository Protocol
 

@@ -24,16 +24,17 @@ public protocol FormFieldProtocol: Identifiable {
 // MARK: - Form Field Implementation
 
 @MainActor
-public class FormField<T>: @preconcurrency FormFieldProtocol, Identifiable, ObservableObject {
+@Observable
+public class FormField<T>: @preconcurrency FormFieldProtocol, Identifiable {
     public let id: String
     public let label: String
-    @Published public var value: T
+    public var value: T
     public let placeholder: String?
     public let helpText: String?
     public let isRequired: Bool
-    @Published public var isEnabled: Bool = true
-    @Published public var isFocused: Bool = false
-    @Published public var errors: [ValidationError] = []
+    public var isEnabled: Bool = true
+    public var isFocused: Bool = false
+    public var errors: [ValidationError] = []
     public let validators: [any Validator<T>]
     
     private let defaultValue: T
@@ -104,14 +105,14 @@ import UIKit
 #endif
 
 public class TextField: FormField<String> {
-    #if canImport(UIKit)
+    #if os(iOS) || os(tvOS) || os(visionOS)
     public let keyboardType: UIKeyboardType
     public let textContentType: UITextContentType?
     public let autocapitalization: TextInputAutocapitalization
     #endif
     public let autocorrectionDisabled: Bool
 
-    #if canImport(UIKit)
+    #if os(iOS) || os(tvOS) || os(visionOS)
     public init(
         id: String,
         label: String,
@@ -174,7 +175,7 @@ public final class EmailField: TextField {
         placeholder: String? = "Enter your email",
         isRequired: Bool = true
     ) {
-        #if canImport(UIKit)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         super.init(
             id: id,
             label: label,
@@ -239,7 +240,7 @@ public final class PasswordField: TextField {
             ))
         }
 
-        #if canImport(UIKit)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         super.init(
             id: id,
             label: label,
@@ -308,10 +309,11 @@ public final class NumberField: FormField<Double?> {
     }
 }
 
+#if !os(tvOS) && !os(watchOS)
 public final class DateField: FormField<Date?> {
     public let dateRange: ClosedRange<Date>?
     public let displayedComponents: DatePickerComponents
-    
+
     public init(
         id: String,
         label: String,
@@ -325,12 +327,12 @@ public final class DateField: FormField<Date?> {
     ) {
         self.dateRange = dateRange
         self.displayedComponents = displayedComponents
-        
+
         var allValidators = validators
         if let dateRange = dateRange {
             allValidators.append(DateRangeValidator(range: dateRange))
         }
-        
+
         super.init(
             id: id,
             label: label,
@@ -342,6 +344,7 @@ public final class DateField: FormField<Date?> {
         )
     }
 }
+#endif
 
 public final class BooleanField: FormField<Bool> {
     public init(

@@ -49,16 +49,17 @@ struct NewTaskSheet: View {
     }
 
     private func createTask() {
+        // Create TaskItem directly (no TaskItem conversion needed!)
         let task = TaskItem(
             title: title,
-            description: description.isEmpty ? nil : description,
+            taskDescription: description.isEmpty ? nil : description,
             status: .todo,
             priority: priority,
             dueDate: hasDueDate ? dueDate : nil
         )
         Task {
             guard let writer else { return }
-            _ = try? await writer.insert(PersistentTask(from: task))
+            _ = try? await writer.insert(task)
         }
         dismiss()
     }
@@ -85,7 +86,7 @@ struct TaskDetailSheet: View {
         self.onSave = onSave
         self.onDelete = onDelete
         _title = State(initialValue: task.title)
-        _description = State(initialValue: task.description ?? "")
+        _description = State(initialValue: task.taskDescription ?? "")
         _priority = State(initialValue: task.priority)
         _status = State(initialValue: task.status)
         _hasDueDate = State(initialValue: task.dueDate != nil)
@@ -160,16 +161,17 @@ struct TaskDetailSheet: View {
     }
 
     private func saveTask() {
+        // Create updated TaskItem directly
         let updated = TaskItem(
             id: task.id,
             title: title,
-            description: description.isEmpty ? nil : description,
+            taskDescription: description.isEmpty ? nil : description,
             status: status,
             priority: priority,
             dueDate: hasDueDate ? dueDate : nil,
-            tags: task.tags,
-            projectId: task.projectId,
-            createdAt: task.createdAt
+            createdAt: task.createdAt,
+            tags: task.decodedTags,
+            projectId: task.projectId
         )
         onSave(updated)
         dismiss()

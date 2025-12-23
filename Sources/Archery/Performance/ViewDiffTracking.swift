@@ -4,11 +4,12 @@ import os.log
 
 // MARK: - View Diff Tracker
 
-public final class ViewDiffTracker: ObservableObject, @unchecked Sendable {
+@Observable
+public final class ViewDiffTracker: @unchecked Sendable {
     public static let shared = ViewDiffTracker()
-    
-    @Published public private(set) var renderStats: RenderStatistics = .init()
-    @Published public private(set) var isTracking: Bool = false
+
+    public private(set) var renderStats: RenderStatistics = .init()
+    public private(set) var isTracking: Bool = false
     
     private var renderEvents: [RenderEvent] = []
     private let queue = DispatchQueue(label: "com.archery.viewdiff")
@@ -314,7 +315,7 @@ public extension View {
 // MARK: - Debug View for Render Stats
 
 public struct RenderStatsView: View {
-    @ObservedObject private var tracker = ViewDiffTracker.shared
+    private var tracker = ViewDiffTracker.shared
     
     public init() {}
     

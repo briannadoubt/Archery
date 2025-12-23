@@ -35,11 +35,12 @@ public enum AnalyticsError: LocalizedError {
 // MARK: - Analytics Manager
 
 @MainActor
-public final class AnalyticsManager: ObservableObject {
+@Observable
+public final class AnalyticsManager {
     public static let shared = AnalyticsManager()
-    
-    @Published public private(set) var isEnabled: Bool = true
-    @Published public private(set) var debugMode: Bool = false
+
+    public private(set) var isEnabled: Bool = true
+    public private(set) var debugMode: Bool = false
     
     private var providers: [any AnalyticsProvider] = []
     private let queue = DispatchQueue(label: "com.archery.analytics", qos: .background)

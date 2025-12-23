@@ -58,10 +58,11 @@ public struct CorrelationContext: Sendable {
 // MARK: - Context Propagation
 
 @MainActor
-public final class ContextPropagator: ObservableObject {
+@Observable
+public final class ContextPropagator {
     public static let shared = ContextPropagator()
-    
-    @Published public private(set) var currentContext: CorrelationContext
+
+    public private(set) var currentContext: CorrelationContext
     private var contextStack: [CorrelationContext] = []
     
     private init() {

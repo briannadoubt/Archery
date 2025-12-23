@@ -39,9 +39,6 @@ Automatically binds Views to ViewModels with dependency injection.
 ### @ObservableViewModel
 Creates ViewModels with lifecycle management and MainActor enforcement.
 
-### @Repository
-Generates repository protocols with live/mock implementations.
-
 ### @KeyValueStore
 Type-safe key-value storage with namespacing and defaults.
 
@@ -116,11 +113,11 @@ struct TaskListView: View {
 }
 ```
 
-### Repository with DI
+### API Client with DI
 ```swift
-@Repository(endpoints: [...], mockData: true)
-protocol TaskRepository {
-    func getTasks() async throws -> [Task]
+@APIClient
+class TasksAPI {
+    func getTasks() async throws -> [Task] { ... }
 }
 ```
 

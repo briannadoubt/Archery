@@ -56,13 +56,13 @@ class ProductListViewModel {
 }
 ```
 
-#### 2. Create a Repository
+#### 2. Create an API Client
 
 ```swift
-@Repository
-protocol ProductRepository {
-    func fetchProducts() async throws -> [Product]
-    func getProduct(id: String) async throws -> Product
+@APIClient
+class ProductsAPI {
+    func fetchProducts() async throws -> [Product] { ... }
+    func getProduct(id: String) async throws -> Product { ... }
 }
 ```
 
@@ -101,8 +101,8 @@ struct MyApp: App {
 ### @KeyValueStore
 Generates a type-safe, Codable-backed storage system with async/await support.
 
-### @Repository
-Creates protocol + live/mock implementations with built-in error normalization and caching.
+### @APIClient
+Creates protocol + live/mock implementations with retry, caching, and error normalization.
 
 ### @ObservableViewModel
 Enforces @MainActor, provides lifecycle hooks, and manages task cancellation.

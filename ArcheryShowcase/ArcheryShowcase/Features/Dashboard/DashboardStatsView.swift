@@ -2,8 +2,8 @@ import SwiftUI
 import Archery
 
 struct DashboardStatsView: View {
-    @Query(PersistentTask.all()) var allTasks: [PersistentTask]
-    @Query(PersistentProject.all()) var allProjects: [PersistentProject]
+    @Query(\.all) var allTasks: [TaskItem]
+    @Query(\.all) var allProjects: [PersistentProject]
 
     var body: some View {
         List {
@@ -22,15 +22,15 @@ struct DashboardStatsView: View {
     }
 
     private var completedCount: Int {
-        allTasks.filter { $0.status == TaskStatus.completed.rawValue }.count
+        allTasks.filter { $0.status == .completed }.count
     }
 
     private var inProgressCount: Int {
-        allTasks.filter { $0.status == TaskStatus.inProgress.rawValue }.count
+        allTasks.filter { $0.status == .inProgress }.count
     }
 
     private var overdueCount: Int {
-        allTasks.filter { ($0.dueDate ?? .distantFuture) < Date() && $0.status != TaskStatus.completed.rawValue }.count
+        allTasks.filter { ($0.dueDate ?? .distantFuture) < Date() && $0.status != .completed }.count
     }
 }
 

@@ -11,27 +11,47 @@ public struct FormMacro: MemberMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        guard let structDecl = declaration.as(StructDeclSyntax.self) else {
+        // Support both structs and classes
+        let fields: [FieldInfo]
+        let isClass: Bool
+
+        if let structDecl = declaration.as(StructDeclSyntax.self) {
+            fields = extractFields(from: structDecl.memberBlock)
+            isClass = false
+        } else if let classDecl = declaration.as(ClassDeclSyntax.self) {
+            fields = extractFields(from: classDecl.memberBlock)
+            isClass = true
+        } else {
             return []
         }
         
-        let _ = structDecl.name.text
-        let fields = extractFields(from: structDecl)
-        
         var members: [DeclSyntax] = []
-        
-        // Generate form container
-        members.append(DeclSyntax(stringLiteral: """
-            @MainActor
-            public lazy var formContainer: FormContainer = {
-                FormContainer(
-                    fields: formFields,
-                    onSubmit: { [weak self] in
-                        try await self?.submit()
-                    }
-                )
-            }()
-            """))
+
+        // Generate form container - different for class vs struct
+        if isClass {
+            members.append(DeclSyntax(stringLiteral: """
+                @MainActor
+                public lazy var formContainer: FormContainer = {
+                    FormContainer(
+                        fields: formFields,
+                        onSubmit: { [weak self] in
+                            try await self?.submit()
+                        }
+                    )
+                }()
+                """))
+        } else {
+            // For structs, provide a factory method since lazy var with closure doesn't work
+            members.append(DeclSyntax(stringLiteral: """
+                @MainActor
+                public func makeFormContainer() -> FormContainer {
+                    FormContainer(
+                        fields: formFields,
+                        onSubmit: { }
+                    )
+                }
+                """))
+        }
         
         // Generate form fields array
         let fieldInitializers = fields.map { field in
@@ -74,10 +94,10 @@ public struct FormMacro: MemberMacro {
         return members
     }
     
-    private static func extractFields(from structDecl: StructDeclSyntax) -> [FieldInfo] {
+    private static func extractFields(from memberBlock: MemberBlockSyntax) -> [FieldInfo] {
         var fields: [FieldInfo] = []
-        
-        for member in structDecl.memberBlock.members {
+
+        for member in memberBlock.members {
             guard let variable = member.decl.as(VariableDeclSyntax.self),
                   let binding = variable.bindings.first,
                   let identifier = binding.pattern.as(IdentifierPatternSyntax.self),

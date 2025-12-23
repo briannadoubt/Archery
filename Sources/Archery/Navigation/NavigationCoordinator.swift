@@ -22,24 +22,31 @@ import SwiftUI
 /// }
 /// ```
 @MainActor
-open class NavigationCoordinator<Tab: Hashable & CaseIterable>: ObservableObject, NavigationCoordinatorProtocol {
+@Observable
+open class NavigationCoordinator<Tab: Hashable & CaseIterable>: NavigationCoordinatorProtocol {
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
     /// Currently selected tab
-    @Published public var selectedTab: Tab
+    public var selectedTab: Tab
 
     /// Navigation paths per tab (using [AnyHashable] for type erasure)
-    @Published public var tabPaths: [Tab: [AnyHashable]] = [:]
+    public var tabPaths: [Tab: [AnyHashable]] = [:]
 
     /// Stack of presented sheets (supports stacked sheets)
-    @Published public var sheetStack: [AnyRoute] = []
+    public var sheetStack: [AnyRoute] = []
 
     /// Currently presented full screen route
-    @Published public var fullScreenRoute: AnyRoute?
+    public var fullScreenRoute: AnyRoute?
 
     /// Active flows keyed by flow ID
-    @Published public var activeFlows: [String: FlowState] = [:]
+    public var activeFlows: [String: FlowState] = [:]
+
+    /// Routes displayed in windows, keyed by window ID
+    public var windowRoutes: [String: AnyRoute] = [:]
+
+    /// Pending window to open (observed by view for openWindow action)
+    public var pendingWindowOpen: String?
 
     // MARK: - Dependencies
 
@@ -237,12 +244,24 @@ open class NavigationCoordinator<Tab: Hashable & CaseIterable>: ObservableObject
         fullScreenRoute = route
     }
 
-    /// Override for window presentation (platform-specific)
+    /// Open a route in a window
+    ///
+    /// Stores the route for the window ID and sets pendingWindowOpen.
+    /// A view modifier should observe pendingWindowOpen and call the
+    /// environment's openWindow action.
     open func openWindow(id: String, route: AnyRoute) {
-        #if os(macOS) || os(iOS)
-        // Window presentation requires Scene-level handling
-        // Generated code will handle this
-        #endif
+        windowRoutes[id] = route
+        pendingWindowOpen = id
+    }
+
+    /// Get the route for a window ID
+    public func windowRoute(for id: String) -> AnyRoute? {
+        windowRoutes[id]
+    }
+
+    /// Clear pending window open (called after window is opened)
+    public func clearPendingWindowOpen() {
+        pendingWindowOpen = nil
     }
 
     #if os(visionOS)
@@ -548,5 +567,115 @@ public extension NavigationCoordinator {
             get: { [weak self] in self?.tabPaths[tab] ?? [] },
             set: { [weak self] newValue in self?.tabPaths[tab] = newValue }
         )
+    }
+}
+
+// MARK: - Window Opening View Modifier
+
+#if os(macOS) || os(iOS) || os(visionOS)
+
+/// View modifier that observes pending window opens and triggers openWindow
+public struct WindowOpenObserver<Tab: Hashable & CaseIterable>: ViewModifier {
+    var coordinator: NavigationCoordinator<Tab>
+    @Environment(\.openWindow) private var openWindow
+
+    public init(coordinator: NavigationCoordinator<Tab>) {
+        self.coordinator = coordinator
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .onChange(of: coordinator.pendingWindowOpen) { _, windowId in
+                if let windowId {
+                    openWindow(id: windowId)
+                    coordinator.clearPendingWindowOpen()
+                }
+            }
+    }
+}
+
+public extension View {
+    /// Observe and handle window open requests from the coordinator
+    func observeWindowOpens<Tab: Hashable & CaseIterable>(
+        coordinator: NavigationCoordinator<Tab>
+    ) -> some View {
+        modifier(WindowOpenObserver(coordinator: coordinator))
+    }
+}
+
+#endif
+
+// MARK: - Route-Based Window Content
+
+/// Environment key for accessing the coordinator's route resolution
+public struct WindowRouteResolverKey: @preconcurrency EnvironmentKey {
+    @MainActor public static let defaultValue: ((AnyRoute) -> AnyView)? = nil
+}
+
+public extension EnvironmentValues {
+    /// Route resolver for window content
+    var windowRouteResolver: ((AnyRoute) -> AnyView)? {
+        get { self[WindowRouteResolverKey.self] }
+        set { self[WindowRouteResolverKey.self] = newValue }
+    }
+}
+
+/// View that displays content for a route-based window
+public struct RouteWindowContent: View {
+    let windowId: String
+    @Environment(\.windowRouteResolver) private var resolver
+
+    // Try to get coordinator from environment
+    @Environment(CoordinatorRouteProvider.self) private var coordinatorWrapper: CoordinatorRouteProvider?
+
+    public init(windowId: String) {
+        self.windowId = windowId
+    }
+
+    public var body: some View {
+        if let coordinatorWrapper,
+           let route = coordinatorWrapper.windowRoute(for: windowId),
+           let resolver {
+            resolver(route)
+        } else {
+            ContentUnavailableView(
+                "No Content",
+                systemImage: "questionmark.circle",
+                description: Text("This window has no content to display.")
+            )
+        }
+    }
+}
+
+/// Protocol for providing window routes (implemented by generated coordinator)
+@MainActor
+public protocol WindowRouteProvider: AnyObject {
+    func windowRoute(for id: String) -> AnyRoute?
+    func resolveView(for route: AnyRoute) -> AnyView
+}
+
+/// Observable wrapper for coordinator route access
+@MainActor
+@Observable
+public final class CoordinatorRouteProvider {
+    private let getWindowRoute: (String) -> AnyRoute?
+    private let resolveView: (AnyRoute) -> AnyView
+
+    public init<Tab: Hashable & CaseIterable>(
+        coordinator: NavigationCoordinator<Tab>,
+        resolver: @escaping (AnyRoute) -> AnyView
+    ) {
+        self.getWindowRoute = { [weak coordinator] id in
+            coordinator?.windowRoute(for: id)
+        }
+        self.resolveView = resolver
+    }
+
+    public func windowRoute(for id: String) -> AnyRoute? {
+        getWindowRoute(id)
+    }
+
+    public func resolve(_ route: AnyRoute) -> AnyView {
+        resolveView(route)
     }
 }

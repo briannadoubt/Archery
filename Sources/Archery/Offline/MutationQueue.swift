@@ -47,15 +47,17 @@ public struct MutationRecord: Codable, Identifiable, Sendable {
 }
 
 @MainActor
-public final class MutationQueue: ObservableObject {
-    @Published public private(set) var pendingMutations: [MutationRecord] = []
-    @Published public private(set) var isProcessing = false
-    @Published public private(set) var lastSyncDate: Date?
-    @Published public private(set) var failedMutations: [MutationRecord] = []
+@Observable
+public final class MutationQueue {
+    public private(set) var pendingMutations: [MutationRecord] = []
+    public private(set) var isProcessing = false
+    public private(set) var lastSyncDate: Date?
+    public private(set) var failedMutations: [MutationRecord] = []
     
     private let persistence: MutationPersistence
     private let connectivity: ConnectivityMonitor
-    private var processingTask: Task<Void, Never>?
+    @ObservationIgnored
+    private nonisolated(unsafe) var processingTask: Task<Void, Never>?
     private var mutationHandlers: [String: @Sendable (Data) async throws -> MutationResult]
     private let syncInterval: TimeInterval
     
@@ -201,19 +203,24 @@ public final class MutationQueue: ObservableObject {
     
     private func startBackgroundSync() {
         processingTask?.cancel()
-        processingTask = Task {
-            for await isConnected in connectivity.$isConnected.values {
-                if isConnected && !pendingMutations.isEmpty {
-                    await processQueue()
+        processingTask = Task { [weak self] in
+            var lastConnected = false
+            while let self = self, !Task.isCancelled {
+                let isConnected = self.connectivity.isConnected
+                // Process when connection becomes available
+                if isConnected && !lastConnected && !self.pendingMutations.isEmpty {
+                    await self.processQueue()
                 }
+                lastConnected = isConnected
+                try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5s
             }
         }
-        
-        Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(syncInterval * 1_000_000_000))
-                if connectivity.isConnected && !pendingMutations.isEmpty {
-                    await processQueue()
+
+        Task { [weak self] in
+            while let self = self, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(self.syncInterval * 1_000_000_000))
+                if self.connectivity.isConnected && !self.pendingMutations.isEmpty {
+                    await self.processQueue()
                 }
             }
         }
@@ -238,7 +245,7 @@ public final class MutationQueue: ObservableObject {
         }
     }
     
-    deinit {
+    nonisolated deinit {
         processingTask?.cancel()
     }
 

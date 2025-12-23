@@ -59,7 +59,6 @@ public final class DocGenerator: Sendable {
     private func generateMacroDocumentation() async throws {
         let macros = [
             MacroDocumentation.keyValueStore,
-            MacroDocumentation.repository,
             MacroDocumentation.observableViewModel,
             MacroDocumentation.viewModelBound,
             MacroDocumentation.appShell,
@@ -584,14 +583,14 @@ public final class DocGenerator: Sendable {
         
         ```swift
         import Archery
-        
-        // Define a data model with repository
-        @Repository
-        struct UserRepository: DataRepository {
-            typealias Model = User
-            // Implementation generated automatically
+
+        // Define an API client for networking
+        @APIClient
+        class UsersAPI {
+            func fetchUsers() async throws -> [User] { ... }
+            // Protocol, Live, and Mock implementations generated
         }
-        
+
         // Create a ViewModel
         @ObservableViewModel
         class UserListViewModel: ObservableObject {

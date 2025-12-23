@@ -6,8 +6,8 @@ import UIKit
 // MARK: - Form View
 
 public struct FormView<Content: View>: View {
-    @ObservedObject var container: FormContainer
-    @StateObject private var focusManager = FocusStateManager()
+    @Bindable var container: FormContainer
+    @State private var focusManager = FocusStateManager()
     let configuration: FormConfiguration
     let content: () -> Content
 
@@ -29,7 +29,7 @@ public struct FormView<Content: View>: View {
                 }
                 .padding()
             }
-            #if canImport(UIKit)
+            #if os(iOS)
             .scrollDismissesKeyboard(configuration.keyboardDismissMode == .interactive ? .interactively : .immediately)
             #endif
             .onChange(of: container.focusedFieldId) { _, newValue in
@@ -40,7 +40,7 @@ public struct FormView<Content: View>: View {
                 }
             }
         }
-        .environmentObject(focusManager)
+        .environment(focusManager)
         .environment(\.formConfiguration, configuration)
     }
 }
@@ -49,8 +49,8 @@ public struct FormView<Content: View>: View {
 
 public struct FormFieldView: View {
     let field: any FormFieldProtocol
-    @EnvironmentObject private var container: FormContainer
-    @EnvironmentObject private var focusManager: FocusStateManager
+    @Environment(FormContainer.self) private var container
+    @Environment(FocusStateManager.self) private var focusManager
     @Environment(\.formConfiguration) private var configuration
     @FocusState private var isFocused: Bool
 
@@ -106,6 +106,25 @@ public struct FormFieldView: View {
         }
     }
 
+    #if os(tvOS) || os(watchOS)
+    @ViewBuilder
+    private var fieldContent: some View {
+        if let textField = field as? TextField {
+            TextFieldView(field: textField)
+        } else if let emailField = field as? EmailField {
+            TextFieldView(field: emailField)
+        } else if let passwordField = field as? PasswordField {
+            SecureFieldView(field: passwordField)
+        } else if let numberField = field as? NumberField {
+            NumberFieldView(field: numberField)
+        } else if let boolField = field as? BooleanField {
+            ToggleFieldView(field: boolField)
+        } else {
+            Text("Unsupported field type")
+                .foregroundColor(.secondary)
+        }
+    }
+    #else
     @ViewBuilder
     private var fieldContent: some View {
         if let textField = field as? TextField {
@@ -127,13 +146,14 @@ public struct FormFieldView: View {
                 .foregroundColor(.secondary)
         }
     }
+    #endif
 }
 
 // MARK: - Text Field Views
 
 struct TextFieldView: View {
-    @ObservedObject var field: TextField
-    @EnvironmentObject private var container: FormContainer
+    @Bindable var field: TextField
+    @Environment(FormContainer.self) private var container
     @Environment(\.formConfiguration) private var configuration
 
     var body: some View {
@@ -149,7 +169,7 @@ struct TextFieldView: View {
             isFocused: field.isFocused,
             formConfig: configuration
         ))
-        #if canImport(UIKit)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         .keyboardType(field.keyboardType)
         .textContentType(field.textContentType)
         .textInputAutocapitalization(field.autocapitalization)
@@ -160,8 +180,8 @@ struct TextFieldView: View {
 }
 
 struct SecureFieldView: View {
-    @ObservedObject var field: PasswordField
-    @EnvironmentObject private var container: FormContainer
+    @Bindable var field: PasswordField
+    @Environment(FormContainer.self) private var container
     @Environment(\.formConfiguration) private var configuration
     @State private var isSecure = true
 
@@ -206,8 +226,8 @@ struct SecureFieldView: View {
 }
 
 struct NumberFieldView: View {
-    @ObservedObject var field: NumberField
-    @EnvironmentObject private var container: FormContainer
+    @Bindable var field: NumberField
+    @Environment(FormContainer.self) private var container
     @Environment(\.formConfiguration) private var configuration
     @State private var text = ""
 
@@ -221,7 +241,7 @@ struct NumberFieldView: View {
             isFocused: field.isFocused,
             formConfig: configuration
         ))
-        #if canImport(UIKit)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         .keyboardType(.decimalPad)
         #endif
         .disabled(!field.isEnabled)
@@ -238,9 +258,10 @@ struct NumberFieldView: View {
     }
 }
 
+#if !os(tvOS) && !os(watchOS)
 struct DateFieldView: View {
-    @ObservedObject var field: DateField
-    @EnvironmentObject private var container: FormContainer
+    @Bindable var field: DateField
+    @Environment(FormContainer.self) private var container
     @Environment(\.formConfiguration) private var configuration
 
     var body: some View {
@@ -257,10 +278,11 @@ struct DateFieldView: View {
         .disabled(!field.isEnabled)
     }
 }
+#endif
 
 struct ToggleFieldView: View {
-    @ObservedObject var field: BooleanField
-    @EnvironmentObject private var container: FormContainer
+    @Bindable var field: BooleanField
+    @Environment(FormContainer.self) private var container
 
     var body: some View {
         Toggle(
@@ -275,9 +297,10 @@ struct ToggleFieldView: View {
     }
 }
 
+#if !os(tvOS) && !os(watchOS)
 struct TextAreaView: View {
-    @ObservedObject var field: TextAreaField
-    @EnvironmentObject private var container: FormContainer
+    @Bindable var field: TextAreaField
+    @Environment(FormContainer.self) private var container
     @Environment(\.formConfiguration) private var configuration
 
     var body: some View {
@@ -302,6 +325,7 @@ struct TextAreaView: View {
         .disabled(!field.isEnabled)
     }
 }
+#endif
 
 // MARK: - Form Text Field Style
 
@@ -342,7 +366,7 @@ struct FormTextFieldStyle: TextFieldStyle {
 // MARK: - Form Submit Button
 
 public struct FormSubmitButton: View {
-    @ObservedObject var container: FormContainer
+    @Bindable var container: FormContainer
     let title: String
 
     public init(

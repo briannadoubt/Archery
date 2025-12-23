@@ -7,86 +7,6 @@ import Foundation
 // MARK: - Navigation & Errors
 public protocol NavigationRoute: Hashable, Sendable, NavigationSerializable {}
 
-public enum RepositoryError: Error, Equatable {
-    case notFound
-    case decodingFailed
-    case encodingFailed
-    case io(Error)
-    case unknown(Error)
-
-    public static func == (lhs: RepositoryError, rhs: RepositoryError) -> Bool {
-        switch (lhs, rhs) {
-        case (.notFound, .notFound), (.decodingFailed, .decodingFailed), (.encodingFailed, .encodingFailed): return true
-        case (.io, .io), (.unknown, .unknown): return true
-        default: return false
-        }
-    }
-}
-
-public struct RepositorySourceError: Error, CustomStringConvertible {
-    public let function: String
-    public let file: String
-    public let line: Int
-    public let underlying: Error
-
-    public var description: String {
-        "\(function) @ \(file):\(line) — \(underlying)"
-    }
-}
-
-public struct RepositoryTraceEvent: @unchecked Sendable {
-    public let function: String
-    public let key: String?
-    public let start: ContinuousClock.Instant
-    public let end: ContinuousClock.Instant
-    public let duration: Duration
-    public let cacheHit: Bool
-    public let coalesced: Bool
-    public let error: Error?
-    public let metadata: RepositoryTraceMetadata?
-
-    public init(
-        function: String,
-        key: String?,
-        start: ContinuousClock.Instant,
-        end: ContinuousClock.Instant,
-        duration: Duration,
-        cacheHit: Bool,
-        coalesced: Bool,
-        error: Error?,
-        metadata: RepositoryTraceMetadata? = nil
-    ) {
-        self.function = function
-        self.key = key
-        self.start = start
-        self.end = end
-        self.duration = duration
-        self.cacheHit = cacheHit
-        self.coalesced = coalesced
-        self.error = error
-        self.metadata = metadata
-    }
-}
-
-public typealias RepositoryTraceHandler = @Sendable (RepositoryTraceEvent) -> Void
-
-public struct RepositoryTraceMetadata: Sendable {
-    public let info: [String: Sendable]
-    public init(_ info: [String: Sendable]) { self.info = info }
-}
-
-public func normalizeRepositoryError(_ error: Error, function: String, file: String, line: Int) -> RepositoryError {
-    if let repoError = error as? RepositoryError {
-        return repoError
-    }
-
-    if error is URLError {
-        return .io(RepositorySourceError(function: function, file: file, line: line, underlying: error))
-    }
-
-    return .unknown(RepositorySourceError(function: function, file: file, line: line, underlying: error))
-}
-
 public struct CancelableTask: Sendable {
     private let cancelImpl: @Sendable () -> Void
     public init(cancel: @escaping @Sendable () -> Void) { self.cancelImpl = cancel }
@@ -186,10 +106,6 @@ public struct AutoRegister: Sendable { public init() {} }
 @attached(member, names: arbitrary)
 public macro KeyValueStore() = #externalMacro(module: "ArcheryMacros", type: "KeyValueStoreMacro")
 
-@available(*, deprecated, message: "Use @Query with cache policy and @APIClient for data access. See QueryCachePolicy for network coordination patterns.")
-@attached(peer, names: suffixed(Protocol), suffixed(Live), prefixed(Mock))
-public macro Repository() = #externalMacro(module: "ArcheryMacros", type: "RepositoryMacro")
-
 /// Marks a type as a query source provider.
 ///
 /// Use with structs that define QuerySource properties for a specific model/domain.
@@ -240,13 +156,24 @@ public macro ViewModelBound<V>() = #externalMacro(module: "ArcheryMacros", type:
 @attached(member, names: arbitrary)
 public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShellMacro")
 
-@attached(member, names: arbitrary)
-public macro PersistenceGateway() = #externalMacro(module: "ArcheryMacros", type: "PersistenceGatewayMacro")
-
-/// Generates database conformances helpers: Columns enum and databaseTableName.
-/// User must manually add FetchableRecord, PersistableRecord conformances.
+/// @AppShell with database schema - generates GeneratedAppDatabase with migrations
+/// for the specified @Persistable types.
 ///
 /// Example:
+/// ```swift
+/// @AppShell(schema: [TaskItem.self, Project.self])
+/// @main
+/// struct MyApp: App {
+///     enum Tab: CaseIterable { case home, settings }
+/// }
+/// ```
+@attached(member, names: arbitrary)
+public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module: "ArcheryMacros", type: "AppShellMacro")
+
+/// Generates database conformances and optionally full App Intents integration.
+/// User must manually add FetchableRecord, PersistableRecord conformances.
+///
+/// Basic Example (database only):
 /// ```swift
 /// @Persistable(table: "players")
 /// struct Player: Codable, Identifiable, FetchableRecord, PersistableRecord {
@@ -254,13 +181,44 @@ public macro PersistenceGateway() = #externalMacro(module: "ArcheryMacros", type
 ///     var name: String
 ///     var score: Int
 /// }
-/// // Macro generates: enum Columns { ... } and static let databaseTableName = "players"
+/// // Generates: enum Columns { ... } and static let databaseTableName = "players"
 /// ```
-@attached(member, names: named(Columns), named(databaseTableName))
-@attached(extension, names: arbitrary)
+///
+/// Full Example (database + App Intents):
+/// ```swift
+/// @Persistable(table: "tasks", displayName: "Task", titleProperty: "title")
+/// struct TaskItem: Codable, Identifiable, Sendable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     var title: String
+///     var status: TaskStatus
+/// }
+/// // Generates: Columns, databaseTableName, AppEntity conformance,
+/// // EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+/// ```
+///
+/// Generates members:
+/// - `Columns` enum with type-safe column references
+/// - `databaseTableName` static property
+///
+/// Generates conformances via extension:
+/// - `Identifiable`, `Hashable`, `Sendable` (if not already declared)
+///
+/// You must declare on the struct: `Codable, FetchableRecord, PersistableRecord`
+/// (PersistableRecord requires Encodable which must be visible at struct definition)
+///
+/// When `displayName` is provided, also generates App Intents (skipping Sendable):
+/// - `AppEntity` conformance with `{TypeName}EntityQuery`
+/// - CRUD intents: `{TypeName}CreateIntent`, `{TypeName}ListIntent`, `{TypeName}DeleteIntent`
+/// - `{TypeName}Shortcuts: AppShortcutsProvider` (unless `shortcuts: false`)
+@attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration))
+@attached(extension, conformances: Identifiable, Hashable, Sendable, AppEntity, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt, names: named(defaultQuery), named(typeDisplayRepresentation), named(displayRepresentation), arbitrary)
 public macro Persistable(
     table: String? = nil,
-    primaryKey: String = "id"
+    primaryKey: String = "id",
+    displayName: String? = nil,
+    titleProperty: String = "title",
+    intents: Bool = true,
+    shortcuts: Bool = true
 ) = #externalMacro(module: "ArcheryMacros", type: "PersistableMacro")
 
 /// Generates a repository pattern for the database with protocol, live, and mock implementations.
@@ -292,20 +250,8 @@ public macro Cache(
 ) = #externalMacro(module: "ArcheryMacros", type: "CacheMacro")
 
 @attached(member, names: arbitrary)
-@attached(extension, conformances: DesignTokenSet)
-public macro DesignTokens(manifest: String) = #externalMacro(module: "ArcheryMacros", type: "DesignTokensMacro")
-
-@attached(member, names: arbitrary)
 @attached(extension, conformances: LocalizationKey)
 public macro Localizable() = #externalMacro(module: "ArcheryMacros", type: "LocalizableMacro")
-
-@attached(member, names: arbitrary)
-@attached(extension)
-public macro SharedModel(
-    widget: Bool = true,
-    intent: Bool = true,
-    liveActivity: Bool = false
-) = #externalMacro(module: "ArcheryMacros", type: "SharedModelMacro")
 
 /// Generates analytics event tracking methods for enums.
 /// Generates: `eventName`, `properties`, `validate()`, `track(with:)`, `redactedProperties()`
@@ -450,6 +396,14 @@ public macro presents(
     interactiveDismissDisabled: Bool = false
 ) = #externalMacro(module: "ArcheryMacros", type: "PresentsMacro")
 
+/// Overload for window presentation with ID
+@attached(peer)
+public macro presents(
+    _ style: RoutePresentationStyle,
+    id: String,
+    interactiveDismissDisabled: Bool = false
+) = #externalMacro(module: "ArcheryMacros", type: "PresentsMacro")
+
 /// Presentation styles for routes (used by @presents macro)
 public enum RoutePresentationStyle: String, Sendable, Codable {
     case push
@@ -576,14 +530,6 @@ public macro Settings() = #externalMacro(module: "ArcheryMacros", type: "Setting
 #if canImport(AppIntents)
 import AppIntents
 
-/// Generates `typeDisplayRepresentation` and `displayRepresentation` for AppEntity.
-/// User must add `: AppEntity` conformance and provide `defaultQuery`.
-@attached(member)
-@attached(extension, names: arbitrary)
-public macro IntentEntity(
-    displayName: String? = nil
-) = #externalMacro(module: "ArcheryMacros", type: "IntentEntityMacro")
-
 /// Generates `typeDisplayRepresentation` and `caseDisplayRepresentations` for AppEnum.
 /// User must add `: AppEnum` conformance to their enum.
 @attached(member, names: named(caseDisplayRepresentations))
@@ -592,6 +538,157 @@ public macro IntentEnum(
     displayName: String? = nil
 ) = #externalMacro(module: "ArcheryMacros", type: "IntentEnumMacro")
 #endif
+
+// MARK: - Schema Attribute Macros for @Persistable
+
+/// Marks a property as the primary key for the database table.
+/// If not specified, @Persistable assumes a property named "id" is the primary key.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "players")
+/// struct Player: Codable, FetchableRecord, PersistableRecord {
+///     @PrimaryKey var playerId: String  // Custom primary key
+///     var name: String
+/// }
+/// ```
+@attached(peer)
+public macro PrimaryKey() = #externalMacro(module: "ArcheryMacros", type: "PrimaryKeyMacro")
+
+/// Marks a property to have a database index created for faster queries.
+/// Use on columns frequently used in WHERE clauses or sorting.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "tasks")
+/// struct Task: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     @Indexed var status: TaskStatus      // Index on status column
+///     @Indexed var projectId: String?      // Index on foreign key
+/// }
+/// ```
+@attached(peer)
+public macro Indexed() = #externalMacro(module: "ArcheryMacros", type: "IndexedMacro")
+
+/// Marks a property as having a unique constraint in the database.
+/// Optionally takes a group name for composite unique constraints.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "users")
+/// struct User: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     @Unique var email: String           // Unique email
+///     @Unique("org_name") var orgId: String  // Composite unique
+///     @Unique("org_name") var username: String
+/// }
+/// ```
+@attached(peer)
+public macro Unique(_ group: String? = nil) = #externalMacro(module: "ArcheryMacros", type: "UniqueMacro")
+
+/// Marks a property as a foreign key reference to another @Persistable type.
+/// The referenced table name is inferred from the type's databaseTableName.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "tasks")
+/// struct Task: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     @ForeignKey(Project.self) var projectId: String?  // References projects table
+/// }
+/// ```
+@attached(peer)
+public macro ForeignKey<T>(_ type: T.Type) = #externalMacro(module: "ArcheryMacros", type: "ForeignKeyMacro")
+
+/// Marks a Date property to be auto-set to the current date on record insertion.
+/// The property should be of type Date (not optional).
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "posts")
+/// struct Post: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     var title: String
+///     @CreatedAt var createdAt: Date  // Auto-set on insert
+/// }
+/// ```
+@attached(peer)
+public macro CreatedAt() = #externalMacro(module: "ArcheryMacros", type: "CreatedAtMacro")
+
+/// Marks a Date property to be auto-updated to the current date on record update.
+/// The property should be of type Date (not optional).
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "posts")
+/// struct Post: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     var title: String
+///     @CreatedAt var createdAt: Date
+///     @UpdatedAt var updatedAt: Date  // Auto-updated on save
+/// }
+/// ```
+@attached(peer)
+public macro UpdatedAt() = #externalMacro(module: "ArcheryMacros", type: "UpdatedAtMacro")
+
+/// Marks a property as transient - it will not be persisted to the database.
+/// The property will be excluded from the Columns enum and migration generation.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "items")
+/// struct Item: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     var name: String
+///     @NotPersisted var isSelected: Bool = false  // UI state, not persisted
+/// }
+/// ```
+@attached(peer)
+public macro NotPersisted() = #externalMacro(module: "ArcheryMacros", type: "NotPersistedMacro")
+
+/// Marks a property to have a default value in the database schema.
+/// This ensures new rows have this value when the column is not specified.
+///
+/// Example:
+/// ```swift
+/// @Persistable(table: "tasks")
+/// struct Task: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     var title: String
+///     @Default("todo") var status: String
+///     @Default(0) var priority: Int
+/// }
+/// ```
+@attached(peer)
+public macro Default(_ value: Any) = #externalMacro(module: "ArcheryMacros", type: "DefaultMacro")
+
+/// Explicitly sets the SQLite column type for a property.
+/// Use this for enums or custom types where the macro can't infer the correct type.
+///
+/// Usage:
+/// ```swift
+/// @Persistable(table: "tasks")
+/// struct Task: Codable, FetchableRecord, PersistableRecord {
+///     var id: String
+///     @ColumnType(.integer)
+///     var priority: TaskPriority  // Int-backed enum stored as INTEGER
+///     @ColumnType(.text)
+///     var status: TaskStatus      // String-backed enum stored as TEXT
+/// }
+/// ```
+///
+/// Available types: `.text`, `.integer`, `.double`, `.blob`, `.datetime`
+@attached(peer)
+public macro ColumnType(_ type: SQLiteColumnType) = #externalMacro(module: "ArcheryMacros", type: "ColumnTypeMacro")
+
+/// SQLite column types for use with @ColumnType
+public enum SQLiteColumnType: String {
+    case text
+    case integer
+    case double
+    case blob
+    case datetime
+}
 
 // Minimal handle for tests - renamed to avoid shadowing the module name
 public struct ArcheryHandle { public init() {} }

@@ -11,7 +11,7 @@ struct AuthenticationView: View {
     @State private var showingSignUp = false
     @State private var showingForgotPassword = false
     @State private var error: AuthError?
-    @EnvironmentObject var themeManager: ThemeManager
+    @Environment(ThemeManager.self) var themeManager
 
     var body: some View {
         ScrollView {
@@ -37,7 +37,7 @@ struct AuthenticationView: View {
                     TextField("Email", text: $email)
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.emailAddress)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
 
                     SecureField("Password", text: $password)
@@ -124,7 +124,9 @@ struct AuthenticationView: View {
             .padding(.bottom, 32)
         }
         .navigationTitle("")
+        #if os(iOS)
         .navigationBarHidden(true)
+        #endif
         .sheet(isPresented: $showingSignUp) {
             NavigationStack {
                 SignUpView()
@@ -158,5 +160,5 @@ struct AuthenticationView: View {
 
 #Preview {
     AuthenticationView()
-        .environmentObject(ThemeManager())
+        .environment(ThemeManager())
 }

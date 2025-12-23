@@ -1,9 +1,9 @@
 import Foundation
-import WidgetKit
 import SwiftUI
 import AppIntents
 
-#if canImport(WidgetKit)
+#if canImport(WidgetKit) && !os(tvOS)
+import WidgetKit
 
 // MARK: - Widget Support
 
@@ -111,7 +111,11 @@ public struct WidgetViewBuilder<Entry: ArcheryTimelineEntry, Content: View> {
 // Custom environment key for widget family (since \.widgetFamily is read-only)
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
 private struct ArcheryWidgetFamilyKey: EnvironmentKey {
+    #if os(watchOS)
+    static let defaultValue: WidgetFamily = .accessoryRectangular
+    #else
     static let defaultValue: WidgetFamily = .systemSmall
+    #endif
 }
 
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
@@ -171,7 +175,8 @@ public macro WidgetDefinition(
 
 /// Allows widgets to access repository data through the DI container
 @available(iOS 14.0, macOS 11.0, watchOS 9.0, *)
-public final class WidgetStore: ObservableObject, @unchecked Sendable {
+@Observable
+public final class WidgetStore: @unchecked Sendable {
     private let container: EnvContainer
 
     @MainActor

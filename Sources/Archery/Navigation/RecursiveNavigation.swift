@@ -16,7 +16,7 @@ import SwiftUI
 ///     )
 /// ```
 public struct RecursiveNavigationModifier<Tab: Hashable & CaseIterable & Sendable>: ViewModifier {
-    @ObservedObject var coordinator: NavigationCoordinator<Tab>
+    @Bindable var coordinator: NavigationCoordinator<Tab>
     let context: PresentationContext
     let routeResolver: (AnyRoute) -> AnyView
 
@@ -157,12 +157,14 @@ public struct FlowContainerView<Content: View>: View {
                     }
                 }
 
+                #if !os(watchOS)
                 ToolbarItem(placement: .principal) {
                     FlowProgressIndicator(
                         currentStep: flowState.currentStepIndex,
                         totalSteps: flowState.totalSteps
                     )
                 }
+                #endif
 
                 ToolbarItem(placement: .confirmationAction) {
                     if flowState.isComplete {
@@ -218,9 +220,10 @@ public extension EnvironmentValues {
 
 /// Context provided to views within a flow
 @MainActor
-public final class FlowNavigationContext: ObservableObject {
+@Observable
+public final class FlowNavigationContext {
     public let flowId: String
-    @Published public private(set) var state: FlowState
+    public private(set) var state: FlowState
 
     private weak var coordinator: (any NavigationCoordinatorProtocol)?
 

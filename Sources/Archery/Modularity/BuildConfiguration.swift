@@ -184,16 +184,13 @@ public struct MacroSettings: Codable, Sendable {
 
 public enum MacroType: String, CaseIterable, Sendable {
     case keyValueStore = "KeyValueStore"
-    case repository = "Repository"
     case observableViewModel = "ObservableViewModel"
     case viewModelBound = "ViewModelBound"
     case appShell = "AppShell"
     case apiClient = "APIClient"
     case cache = "Cache"
     case designTokens = "DesignTokens"
-    case persistenceGateway = "PersistenceGateway"
     case localizable = "Localizable"
-    case sharedModel = "SharedModel"
     case analyticsEvent = "AnalyticsEvent"
     case featureFlag = "FeatureFlag"
     case authenticated = "Authenticated"

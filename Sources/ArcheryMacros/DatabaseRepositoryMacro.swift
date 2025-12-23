@@ -241,7 +241,7 @@ public enum DatabaseRepositoryMacro: PeerMacro {
         // Auto-track entity created
         await MainActor.run {
             ArcheryAnalyticsConfiguration.shared.track(
-                .entityCreated(entityType: entityTypeName, entityId: "\\(result.id)")
+                .entityCreated(entityType: entityTypeName, entityId: String(describing: result.id))
             )
         }
 
@@ -254,7 +254,7 @@ public enum DatabaseRepositoryMacro: PeerMacro {
         // Auto-track entity updated
         await MainActor.run {
             ArcheryAnalyticsConfiguration.shared.track(
-                .entityUpdated(entityType: entityTypeName, entityId: "\\(record.id)")
+                .entityUpdated(entityType: entityTypeName, entityId: String(describing: record.id))
             )
         }
     }
@@ -269,7 +269,7 @@ public enum DatabaseRepositoryMacro: PeerMacro {
         // Auto-track entity created/updated (upsert)
         await MainActor.run {
             ArcheryAnalyticsConfiguration.shared.track(
-                .entityUpdated(entityType: entityTypeName, entityId: "\\(result.id)")
+                .entityUpdated(entityType: entityTypeName, entityId: String(describing: result.id))
             )
         }
 
@@ -283,7 +283,7 @@ public enum DatabaseRepositoryMacro: PeerMacro {
             // Auto-track entity deleted
             await MainActor.run {
                 ArcheryAnalyticsConfiguration.shared.track(
-                    .entityDeleted(entityType: entityTypeName, entityId: "\\(id)")
+                    .entityDeleted(entityType: entityTypeName, entityId: String(describing: id))
                 )
             }
         }

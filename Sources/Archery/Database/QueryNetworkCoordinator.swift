@@ -7,12 +7,13 @@ import GRDB
 /// Coordinates network refresh for @Query property wrappers
 /// Manages staleness tracking, background refreshes, and connectivity awareness
 @MainActor
-public final class QueryNetworkCoordinator: ObservableObject {
+@Observable
+public final class QueryNetworkCoordinator {
     /// Set of query keys currently being refreshed
-    @Published public private(set) var activeRefreshes: Set<String> = []
+    public private(set) var activeRefreshes: Set<String> = []
 
     /// Errors from recent refresh attempts
-    @Published public private(set) var refreshErrors: [String: Error] = [:]
+    public private(set) var refreshErrors: [String: Error] = [:]
 
     private let container: PersistenceContainer
     private let connectivity: ConnectivityMonitor
@@ -305,10 +306,10 @@ public extension View {
 
 /// View modifier that automatically sets up query network coordination
 public struct QueryCoordinationModifier: ViewModifier {
-    @StateObject private var coordinator: QueryNetworkCoordinator
+    @State private var coordinator: QueryNetworkCoordinator
 
     public init(container: PersistenceContainer) {
-        self._coordinator = StateObject(wrappedValue: QueryNetworkCoordinator(container: container))
+        self._coordinator = State(initialValue: QueryNetworkCoordinator(container: container))
     }
 
     public func body(content: Content) -> some View {
