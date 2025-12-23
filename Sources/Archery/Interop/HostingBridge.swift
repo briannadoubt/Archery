@@ -78,13 +78,10 @@ public struct HostingBridge {
     }
     
     /// Remove an embedded SwiftUI view
+    @MainActor
     public static func removeEmbedded(from containerView: UIView) {
         containerView.subviews.forEach { subview in
-            if let hostingView = subview as? UIHostingController<AnyView> {
-                hostingView.willMove(toParent: nil)
-                hostingView.view.removeFromSuperview()
-                hostingView.removeFromParent()
-            }
+            subview.removeFromSuperview()
         }
     }
     

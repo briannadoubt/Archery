@@ -142,11 +142,15 @@ public extension View {
     
     @ViewBuilder
     func archeryWidgetAccentable(_ isAccentable: Bool = true) -> some View {
-        if #available(iOS 16.0, macOS 13.0, watchOS 9.0, *) {
+        #if os(watchOS)
+        self.modifier(WidgetAccentableModifier(isAccentable: isAccentable))
+        #else
+        if #available(iOS 16.0, macOS 13.0, *) {
             self.modifier(WidgetAccentableModifier(isAccentable: isAccentable))
         } else {
             self
         }
+        #endif
     }
 }
 

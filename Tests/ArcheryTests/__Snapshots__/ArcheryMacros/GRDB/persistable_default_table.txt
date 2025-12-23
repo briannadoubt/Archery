@@ -4,10 +4,24 @@ struct Task: Codable, Identifiable {
     var completed: Bool
 
     enum Columns {
-        static let id = GRDB.Column(CodingKeys.id)
-        static let title = GRDB.Column(CodingKeys.title)
-        static let completed = GRDB.Column(CodingKeys.completed)
+        static let id = Column(CodingKeys.id)
+            static let title = Column(CodingKeys.title)
+            static let completed = Column(CodingKeys.completed)
     }
 
     static let databaseTableName = "task"
+
+    static let createTableMigration = Migration(id: "create_task") { db in
+                try db.create(table: "task") { t in
+                t.primaryKey("id", .text)
+                t.column("title", .text).notNull()
+                t.column("completed", .integer).notNull()
+                }
+            }
+}
+
+extension Task: Hashable, Sendable {
+}
+
+extension Task: AutoMigrating {
 }

@@ -613,9 +613,10 @@ struct ManageSubscriptionView: View {
         }
     }
 
+    @MainActor
     private func openAppStoreSubscriptionManagement() async {
         #if os(iOS)
-        if let scene = await UIApplication.shared.connectedScenes.first as? UIWindowScene {
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             do {
                 try await AppStore.showManageSubscriptions(in: scene)
             } catch {

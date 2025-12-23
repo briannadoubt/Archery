@@ -17,7 +17,10 @@ private let persistableMacros: [String: Macro.Type] = [
     "NotPersisted": NotPersistedMacro.self,
     "Default": DefaultMacro.self
 ]
-private let repositoryMacros: [String: Macro.Type] = ["DatabaseRepository": DatabaseRepositoryMacro.self]
+private let repositoryMacros: [String: Macro.Type] = [
+    "DatabaseRepository": DatabaseRepositoryMacro.self,
+    "GRDBRepository": DatabaseRepositoryMacro.self
+]
 #endif
 
 @MainActor
@@ -29,14 +32,12 @@ final class GRDBMacroTests: XCTestCase {
         #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
+            @Persistable(table: "players")
             struct Player: Codable, Identifiable {
                 var id: Int64
                 var name: String
                 var score: Int
             }
-
-            @Persistable(table: "players")
-            extension Player {}
             """,
             expandedSource: snapshot("ArcheryMacros/GRDB/persistable_basic"),
             macros: persistableMacros,
@@ -49,14 +50,12 @@ final class GRDBMacroTests: XCTestCase {
         #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
+            @Persistable
             struct Task: Codable, Identifiable {
                 var id: UUID
                 var title: String
                 var completed: Bool
             }
-
-            @Persistable
-            extension Task {}
             """,
             expandedSource: snapshot("ArcheryMacros/GRDB/persistable_default_table"),
             macros: persistableMacros,
@@ -171,7 +170,7 @@ final class GRDBMacroTests: XCTestCase {
             }
             """,
             diagnostics: [
-                DiagnosticSpec(message: "@GRDBRepository can only be applied to a class", line: 1, column: 1, severity: .error)
+                DiagnosticSpec(message: "@DatabaseRepository can only be applied to a class", line: 1, column: 1, severity: .error)
             ],
             macros: repositoryMacros,
             indentationWidth: .spaces(4)

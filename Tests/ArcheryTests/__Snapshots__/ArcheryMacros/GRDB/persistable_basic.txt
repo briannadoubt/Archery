@@ -4,10 +4,24 @@ struct Player: Codable, Identifiable {
     var score: Int
 
     enum Columns {
-        static let id = GRDB.Column(CodingKeys.id)
-        static let name = GRDB.Column(CodingKeys.name)
-        static let score = GRDB.Column(CodingKeys.score)
+        static let id = Column(CodingKeys.id)
+            static let name = Column(CodingKeys.name)
+            static let score = Column(CodingKeys.score)
     }
 
     static let databaseTableName = "players"
+
+    static let createTableMigration = Migration(id: "create_players") { db in
+                try db.create(table: "players") { t in
+                t.primaryKey("id", .integer)
+                t.column("name", .text).notNull()
+                t.column("score", .integer).notNull()
+                }
+            }
+}
+
+extension Player: Hashable, Sendable {
+}
+
+extension Player: AutoMigrating {
 }

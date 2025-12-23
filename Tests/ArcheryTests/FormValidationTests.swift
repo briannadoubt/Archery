@@ -99,13 +99,14 @@ final class FormValidationTests: XCTestCase {
     
     func testPastDateValidator() {
         let validator = PastDateValidator()
-        
+
         let futureDate = Date().addingTimeInterval(86400) // Tomorrow
         let pastDate = Date().addingTimeInterval(-86400) // Yesterday
-        
+        let nowDate = Date().addingTimeInterval(1) // 1 second in future to avoid timing issues
+
         XCTAssertFalse(validator.validate(futureDate, field: "Date").isEmpty)
         XCTAssertTrue(validator.validate(pastDate, field: "Date").isEmpty)
-        XCTAssertFalse(validator.validate(Date(), field: "Date").isEmpty)
+        XCTAssertFalse(validator.validate(nowDate, field: "Date").isEmpty)
     }
 }
 

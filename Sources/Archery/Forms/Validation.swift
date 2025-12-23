@@ -114,15 +114,23 @@ public struct RegexValidator: Validator {
 
 public struct EmailValidator: Validator {
     private let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
-    
+
     public init() {}
-    
+
     public func validate(_ value: String, field: String) -> [ValidationError] {
-        let validator = RegexValidator(
-            pattern: pattern,
-            message: "Please enter a valid email address"
-        )
-        return validator.validate(value, field: field)
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return []
+        }
+
+        let range = NSRange(location: 0, length: value.utf16.count)
+        if regex.firstMatch(in: value, range: range) == nil {
+            return [ValidationError(
+                field: field,
+                message: "Please enter a valid email address",
+                type: .format
+            )]
+        }
+        return []
     }
 }
 
@@ -144,10 +152,11 @@ public struct URLValidator: Validator {
 }
 
 public struct PhoneValidator: Validator {
-    private let pattern = #"^\+?[1-9]\d{1,14}$"#
-    
+    // Require at least 7 digits (minimum for valid phone numbers)
+    private let pattern = #"^\+?[1-9]\d{6,14}$"#
+
     public init() {}
-    
+
     public func validate(_ value: String, field: String) -> [ValidationError] {
         let cleaned = value.replacingOccurrences(of: "[^0-9+]", with: "", options: .regularExpression)
         let validator = RegexValidator(

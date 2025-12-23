@@ -322,20 +322,18 @@ public struct IntentAnalytics {
 
 // MARK: - Siri Integration Helpers
 
-@available(iOS 16.0, macOS 13.0, watchOS 9.0, tvOS 16.0, *)
+#if !os(watchOS)
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 public extension View {
     func addToSiri<Intent: AppIntent>(_ intent: Intent, phrase: String) -> some View {
         self.contextMenu {
             Button("Add to Siri") {
-                // Implementation would use INVoiceShortcutCenter for iOS 15 and earlier
-                #if canImport(Intents)
-                if #available(iOS 12.0, *) {
-                    // Legacy Siri integration
-                }
-                #endif
+                // Implementation would use INVoiceShortcutCenter
+                // Siri integration is handled by the system for AppIntents
             }
         }
     }
 }
+#endif
 
 #endif

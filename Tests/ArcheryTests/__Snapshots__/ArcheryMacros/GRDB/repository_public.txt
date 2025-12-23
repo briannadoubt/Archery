@@ -14,77 +14,154 @@ public protocol PlayerStoreProtocol: Sendable {
 }
 
 public final class PlayerStoreLive: PlayerStoreProtocol, @unchecked Sendable {
-    private let db: any GRDB.DatabaseWriter
+    private let container: Archery.PersistenceContainer
     private let base: PlayerStore
+    private let entityTypeName = "Player"
 
-    public init(db: any GRDB.DatabaseWriter) {
-        self.db = db
+    public init(container: Archery.PersistenceContainer) {
+        self.container = container
         self.base = PlayerStore()
     }
 
-    public init(container: EnvContainer) {
-        guard let grdb = container.grdb else {
-            fatalError("GRDBContainer not registered in EnvContainer")
+    public init(envContainer: Archery.EnvContainer) {
+        guard let persistenceContainer = envContainer.grdb else {
+            fatalError("PersistenceContainer not registered in EnvContainer")
         }
-        self.db = grdb.writer
+        self.container = persistenceContainer
         self.base = PlayerStore()
     }
 
     // CRUD operations
 
     public func fetchAll() async throws -> [Player] {
-        try await db.read { db in try Player.fetchAll(db) }
+        let start = ContinuousClock.now
+        let results = try await container.read { db in
+            try Player.fetchAll(db)
+        }
+        let duration = ContinuousClock.now - start
+        let durationMs = Double(duration.components.attoseconds) / 1_000_000_000_000_000
+
+        // Auto-track fetch
+        await MainActor.run {
+            ArcheryAnalyticsConfiguration.shared.track(
+                .entityFetched(entityType: entityTypeName, count: results.count, durationMs: durationMs)
+            )
+        }
+
+        return results
     }
 
     public func fetch(id: Player.ID) async throws -> Player? {
-        try await db.read { db in try Player.fetchOne(db, id: id) }
+        try await container.read { db in
+            try Player.fetchOne(db, id: id)
+        }
     }
 
     public func insert(_ record: Player) async throws -> Player {
-        try await db.write { db in
+        let result = try await container.write { db in
             var record = record
             try record.insert(db)
             return record
         }
+
+        // Auto-track entity created
+        await MainActor.run {
+            ArcheryAnalyticsConfiguration.shared.track(
+                .entityCreated(entityType: entityTypeName, entityId: String(describing: result.id))
+            )
+        }
+
+        return result
     }
 
     public func update(_ record: Player) async throws {
-        try await db.write { db in try record.update(db) }
+        try await container.write { db in
+            try record.update(db)
+        }
+
+        // Auto-track entity updated
+        await MainActor.run {
+            ArcheryAnalyticsConfiguration.shared.track(
+                .entityUpdated(entityType: entityTypeName, entityId: String(describing: record.id))
+            )
+        }
     }
 
     public func upsert(_ record: Player) async throws -> Player {
-        try await db.write { db in
+        let result = try await container.write { db in
             var record = record
             try record.save(db)
             return record
         }
+
+        // Auto-track entity created/updated (upsert)
+        await MainActor.run {
+            ArcheryAnalyticsConfiguration.shared.track(
+                .entityUpdated(entityType: entityTypeName, entityId: String(describing: result.id))
+            )
+        }
+
+        return result
     }
 
     public func delete(id: Player.ID) async throws -> Bool {
-        try await db.write { db in try Player.deleteOne(db, id: id) }
+        let deleted = try await container.write { db in
+            try Player.deleteOne(db, id: id)
+        }
+
+        if deleted {
+            // Auto-track entity deleted
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityDeleted(entityType: entityTypeName, entityId: String(describing: id))
+                )
+            }
+        }
+
+        return deleted
     }
 
     public func deleteAll() async throws -> Int {
-        try await db.write { db in try Player.deleteAll(db) }
+        try await container.write { db in
+            try Player.deleteAll(db)
+        }
     }
 
     public func count() async throws -> Int {
-        try await db.read { db in try Player.fetchCount(db) }
+        try await container.read { db in
+            try Player.fetchCount(db)
+        }
     }
 }
 
 public final class MockPlayerStore: PlayerStoreProtocol, @unchecked Sendable {
     // CRUD handlers
-    public var fetchAllHandler: () async throws -> [Player] = { [] }
-    public var fetchHandler: (Player.ID) async throws -> Player? = { _ in nil }
-    public var insertHandler: (Player) async throws -> Player = { $0 }
-    public var updateHandler: (Player) async throws -> Void = { _ in }
-    public var upsertHandler: (Player) async throws -> Player = { $0 }
-    public var deleteHandler: (Player.ID) async throws -> Bool = { _ in true }
-    public var deleteAllHandler: () async throws -> Int = { 0 }
-    public var countHandler: () async throws -> Int = { 0 }
+    public var fetchAllHandler: () async throws -> [Player] = {
+        []
+    }
+    public var fetchHandler: (Player.ID) async throws -> Player? = { _ in
+        nil
+    }
+    public var insertHandler: (Player) async throws -> Player = {
+        $0
+    }
+    public var updateHandler: (Player) async throws -> Void = { _ in
+    }
+    public var upsertHandler: (Player) async throws -> Player = {
+        $0
+    }
+    public var deleteHandler: (Player.ID) async throws -> Bool = { _ in
+        true
+    }
+    public var deleteAllHandler: () async throws -> Int = {
+        0
+    }
+    public var countHandler: () async throws -> Int = {
+        0
+    }
 
-    public init() {}
+    public init() {
+    }
 
     // CRUD operations
 
