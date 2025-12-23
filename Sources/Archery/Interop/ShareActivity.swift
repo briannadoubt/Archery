@@ -29,7 +29,7 @@ public struct ShareSheet: ViewModifier {
     }
     
     public func body(content: Content) -> some View {
-        #if os(iOS) || os(visionOS)
+        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
         content
             .sheet(isPresented: $isPresented) {
                 ShareActivityViewController(
@@ -50,17 +50,17 @@ public struct ShareSheet: ViewModifier {
         content
         #endif
     }
-    
-    #if canImport(AppKit)
+
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     private func showMacShareSheet() {
         guard let window = NSApplication.shared.keyWindow else { return }
-        
+
         let picker = NSSharingServicePicker(items: items)
         picker.delegate = MacShareDelegate(completion: { success in
             isPresented = false
             completion?(success)
         })
-        
+
         if let contentView = window.contentView {
             picker.show(
                 relativeTo: .zero,
@@ -74,7 +74,7 @@ public struct ShareSheet: ViewModifier {
 
 // MARK: - iOS/iPadOS Share Activity
 
-#if os(iOS) || os(visionOS)
+#if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
 
 /// UIKit activity view controller wrapper for SwiftUI
 public struct ShareActivityViewController: UIViewControllerRepresentable {
@@ -115,7 +115,7 @@ public struct ShareActivityViewController: UIViewControllerRepresentable {
 
 // MARK: - macOS Share Delegate
 
-#if canImport(AppKit)
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 class MacShareDelegate: NSObject, NSSharingServicePickerDelegate {
     let completion: ((Bool) -> Void)?
@@ -263,7 +263,7 @@ public struct DocumentPicker: ViewModifier {
     let onCompletion: (Result<[URL], Error>) -> Void
     
     public func body(content: Content) -> some View {
-        #if os(iOS) || os(visionOS)
+        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
         content
             .sheet(isPresented: $isPresented) {
                 DocumentPickerViewController(
@@ -285,17 +285,17 @@ public struct DocumentPicker: ViewModifier {
         #endif
     }
 
-    #if canImport(AppKit)
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     private func showMacDocumentPicker() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = allowsMultipleSelection
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = allowedContentTypes
-        
+
         panel.begin { response in
             isPresented = false
-            
+
             if response == .OK {
                 onCompletion(.success(panel.urls))
             } else {
@@ -306,7 +306,7 @@ public struct DocumentPicker: ViewModifier {
     #endif
 }
 
-#if os(iOS) || os(visionOS)
+#if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
 
 /// UIKit document picker wrapper
 public struct DocumentPickerViewController: UIViewControllerRepresentable {

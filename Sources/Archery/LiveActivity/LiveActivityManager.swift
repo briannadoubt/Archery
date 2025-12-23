@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
 @preconcurrency import ActivityKit
 
 @available(iOS 16.1, *)

@@ -5,7 +5,7 @@ import WidgetKit
 #if canImport(AppIntents)
 import AppIntents
 #endif
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 #endif
 
@@ -143,7 +143,7 @@ public struct IntentTestFixtures {
 }
 #endif
 
-#if canImport(ActivityKit) && os(iOS)
+#if canImport(ActivityKit) && os(iOS) && !targetEnvironment(macCatalyst)
 @available(iOS 16.1, *)
 public struct LiveActivityTestFixtures {
     
