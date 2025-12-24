@@ -68,7 +68,8 @@ jobs:
             -skipMacroValidation \
             -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            SWIFT_PACKAGE_USE_PREBUILT_MODULES=NO
 
   macro-tests:
     name: Macro Expansion Tests
