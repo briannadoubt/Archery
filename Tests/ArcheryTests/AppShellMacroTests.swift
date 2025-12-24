@@ -1,16 +1,14 @@
+#if os(macOS)
 import ArcheryMacros
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
-#if canImport(ArcheryMacros)
 private let testMacros: [String: Macro.Type] = ["AppShell": AppShellMacro.self]
-#endif
 
 @MainActor
 final class AppShellMacroTests: XCTestCase {
     func testMinimalShellExpansion() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @AppShell
@@ -22,11 +20,9 @@ final class AppShellMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testDiagnosticsWhenMissingTabEnum() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @AppShell
@@ -41,6 +37,6 @@ final class AppShellMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 }
+#endif
