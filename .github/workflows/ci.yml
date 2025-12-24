@@ -54,8 +54,11 @@ jobs:
             -derivedDataPath DerivedData \
             -disablePackageRepositoryCache
 
-      - name: Remove Prebuilt Modules
-        run: rm -rf DerivedData/SourcePackages/prebuilts
+      - name: Block Prebuilt Modules
+        run: |
+          rm -rf DerivedData/SourcePackages/prebuilts
+          mkdir -p DerivedData/SourcePackages/prebuilts
+          chmod 000 DerivedData/SourcePackages/prebuilts
 
       - name: Build and Test
         run: |
