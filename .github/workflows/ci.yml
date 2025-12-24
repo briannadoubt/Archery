@@ -11,6 +11,10 @@ env:
   XCODE_VERSION: '26.0'
 
 jobs:
+  # Note: Non-macOS platform tests are temporarily disabled due to swift-syntax
+  # prebuilt module incompatibility with Xcode 26. The prebuilt modules from
+  # swiftlang-6.2.0.19.9 are incompatible with the Xcode 26.0.1 compiler.
+  # Tracking: https://github.com/apple/swift-syntax/issues/2846
   build-and-test:
     name: Build & Test (${{ matrix.platform }})
     runs-on: macos-26
@@ -20,14 +24,15 @@ jobs:
         include:
           - platform: macOS
             destination: 'platform=macOS'
-          - platform: iOS
-            destination: 'platform=iOS Simulator,name=iPhone 17 Pro'
-          - platform: tvOS
-            destination: 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
-          - platform: watchOS
-            destination: 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
-          - platform: visionOS
-            destination: 'platform=visionOS Simulator,name=Apple Vision Pro'
+          # Temporarily disabled due to swift-syntax prebuilt module issue
+          # - platform: iOS
+          #   destination: 'platform=iOS Simulator,name=iPhone 17 Pro'
+          # - platform: tvOS
+          #   destination: 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
+          # - platform: watchOS
+          #   destination: 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
+          # - platform: visionOS
+          #   destination: 'platform=visionOS Simulator,name=Apple Vision Pro'
 
     steps:
       - uses: actions/checkout@v4
@@ -45,34 +50,20 @@ jobs:
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/org.swift.swiftpm
           rm -rf .build
-          rm -rf DerivedData
 
       - name: Resolve Dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -scheme Archery-Package \
-            -derivedDataPath DerivedData \
-            -disablePackageRepositoryCache
-
-      - name: Block Prebuilt Modules
-        run: |
-          rm -rf DerivedData/SourcePackages/prebuilts
-          mkdir -p DerivedData/SourcePackages/prebuilts
-          chmod 000 DerivedData/SourcePackages/prebuilts
+        run: swift package resolve
 
       - name: Build and Test
         run: |
           xcodebuild test \
             -scheme Archery-Package \
             -destination '${{ matrix.destination }}' \
-            -derivedDataPath DerivedData \
             -configuration Debug \
             -parallel-testing-enabled NO \
             -skipMacroValidation \
-            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            SWIFT_PACKAGE_USE_PREBUILT_MODULES=NO
+            COMPILER_INDEX_STORE_ENABLE=NO
 
   macro-tests:
     name: Macro Expansion Tests
