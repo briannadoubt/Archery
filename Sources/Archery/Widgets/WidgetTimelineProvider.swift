@@ -385,6 +385,8 @@ public final class WidgetAnalytics {
             return "large"
         case .systemExtraLarge:
             return "extra_large"
+        case .systemExtraLargePortrait:
+            return "extra_large_portrait"
         @unknown default:
             return "unknown"
         }
