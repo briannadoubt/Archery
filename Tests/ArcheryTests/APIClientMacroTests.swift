@@ -1,11 +1,12 @@
 import Archery
-import ArcheryMacros
 import Foundation
-import SwiftSyntaxMacros
-import SwiftSyntaxMacrosTestSupport
 import XCTest
 
-#if canImport(ArcheryMacros)
+#if os(macOS)
+import ArcheryMacros
+import SwiftSyntaxMacros
+import SwiftSyntaxMacrosTestSupport
+
 private let testMacros: [String: Macro.Type] = ["APIClient": APIClientMacro.self]
 #endif
 
@@ -51,8 +52,8 @@ class OverrideAPI {
 
 @MainActor
 final class APIClientMacroTests: XCTestCase {
+    #if os(macOS)
     func testMacroExpansionIncludesLiveMockAndDI() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @APIClient
@@ -64,11 +65,9 @@ final class APIClientMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testDiagnosticsRequireAsync() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @APIClient
@@ -83,8 +82,8 @@ final class APIClientMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
+    #endif
 
     func testRetryHonorsPolicy() async throws {
         let api = FlakyAPI()

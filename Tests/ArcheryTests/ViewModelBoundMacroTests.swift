@@ -1,16 +1,14 @@
+#if os(macOS)
 import ArcheryMacros
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
-#if canImport(ArcheryMacros)
 private let testMacros: [String: Macro.Type] = ["ViewModelBound": ViewModelBoundMacro.self]
-#endif
 
 @MainActor
 final class ViewModelBoundMacroTests: XCTestCase {
     func testInjectsStateViewModel() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ViewModelBound<SampleVM>
@@ -20,11 +18,9 @@ final class ViewModelBoundMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testUsesCustomPreviewContainerWhenPresent() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ViewModelBound<SampleVM>
@@ -36,11 +32,9 @@ final class ViewModelBoundMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testObservedObjectAndNoAutoLoad() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ViewModelBound<SampleVM>(useStateObject: false, autoLoad: false)
@@ -50,6 +44,6 @@ final class ViewModelBoundMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 }
+#endif

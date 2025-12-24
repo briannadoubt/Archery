@@ -1,3 +1,4 @@
+#if os(macOS)
 import Archery
 import ArcheryMacros
 import Foundation
@@ -5,7 +6,6 @@ import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
-#if canImport(ArcheryMacros)
 private let persistableMacros: [String: Macro.Type] = [
     "Persistable": PersistableMacro.self,
     "PrimaryKey": PrimaryKeyMacro.self,
@@ -21,7 +21,6 @@ private let repositoryMacros: [String: Macro.Type] = [
     "DatabaseRepository": DatabaseRepositoryMacro.self,
     "GRDBRepository": DatabaseRepositoryMacro.self
 ]
-#endif
 
 @MainActor
 final class GRDBMacroTests: XCTestCase {
@@ -29,7 +28,6 @@ final class GRDBMacroTests: XCTestCase {
     // MARK: - @Persistable Tests
 
     func testPersistableMacroExpansion() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @Persistable(table: "players")
@@ -43,11 +41,9 @@ final class GRDBMacroTests: XCTestCase {
             macros: persistableMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testPersistableWithDefaultTableName() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @Persistable
@@ -61,11 +57,9 @@ final class GRDBMacroTests: XCTestCase {
             macros: persistableMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testPersistableWithSchemaAttributes() throws {
-        #if canImport(ArcheryMacros)
         // Test that @Persistable with schema attributes generates createTableMigration
         // This test verifies the new auto-migration feature
         assertMacroExpansion(
@@ -85,11 +79,9 @@ final class GRDBMacroTests: XCTestCase {
             macros: persistableMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testPersistableWithForeignKey() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @Persistable(table: "comments")
@@ -104,13 +96,11 @@ final class GRDBMacroTests: XCTestCase {
             macros: persistableMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     // MARK: - @GRDBRepository Tests
 
     func testGRDBRepositoryMacroExpansion() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @GRDBRepository(record: Player.self)
@@ -121,11 +111,9 @@ final class GRDBMacroTests: XCTestCase {
             macros: repositoryMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testGRDBRepositoryWithCustomMethods() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @GRDBRepository(record: Player.self)
@@ -139,11 +127,9 @@ final class GRDBMacroTests: XCTestCase {
             macros: repositoryMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testGRDBRepositoryPublicAccess() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @GRDBRepository(record: Player.self)
@@ -154,11 +140,9 @@ final class GRDBMacroTests: XCTestCase {
             macros: repositoryMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testGRDBRepositoryRequiresClass() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @GRDBRepository(record: Player.self)
@@ -175,6 +159,6 @@ final class GRDBMacroTests: XCTestCase {
             macros: repositoryMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 }
+#endif

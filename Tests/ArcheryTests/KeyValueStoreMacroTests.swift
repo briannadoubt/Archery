@@ -1,17 +1,24 @@
 import Archery
+import XCTest
+
+#if os(macOS)
 import ArcheryMacros
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
-import XCTest
 
-#if canImport(ArcheryMacros)
 private let testMacros: [String: Macro.Type] = ["KeyValueStore": KeyValueStoreMacro.self]
 #endif
 
+@KeyValueStore
+enum RuntimeStore {
+    case username(String)
+    case score(Int)
+}
+
 @MainActor
 final class KeyValueStoreMacroTests: XCTestCase {
+    #if os(macOS)
     func testExpansionProducesStoreHelpers() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @KeyValueStore
@@ -24,11 +31,9 @@ final class KeyValueStoreMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testDiagnosticsRequireAssociatedValues() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @KeyValueStore
@@ -47,14 +52,8 @@ final class KeyValueStoreMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
-
-    @KeyValueStore
-    enum RuntimeStore {
-        case username(String)
-        case score(Int)
-    }
+    #endif
 
     func testMigrationMovesOldKeys() async throws {
         let legacy = try JSONEncoder().encode("old-name")

@@ -1,16 +1,14 @@
+#if os(macOS)
 import ArcheryMacros
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
-#if canImport(ArcheryMacros)
 private let testMacros: [String: Macro.Type] = ["ObservableViewModel": ObservableViewModelMacro.self]
-#endif
 
 @MainActor
 final class ObservableViewModelMacroTests: XCTestCase {
     func testExpandsWithAsyncLoadAndHelpers() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ObservableViewModel
@@ -23,11 +21,9 @@ final class ObservableViewModelMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testAddsLoadStubWhenMissingAndIncludesStateHelpers() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ObservableViewModel
@@ -41,11 +37,9 @@ final class ObservableViewModelMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 
     func testDiagnosticsRequireMainActorAndResettable() throws {
-        #if canImport(ArcheryMacros)
         assertMacroExpansion(
             """
             @ObservableViewModel
@@ -59,6 +53,6 @@ final class ObservableViewModelMacroTests: XCTestCase {
             macros: testMacros,
             indentationWidth: .spaces(4)
         )
-        #endif
     }
 }
+#endif
