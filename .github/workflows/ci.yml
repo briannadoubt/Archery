@@ -66,6 +66,7 @@ jobs:
             -configuration Debug \
             -parallel-testing-enabled NO \
             -skipMacroValidation \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
 
