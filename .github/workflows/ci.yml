@@ -80,16 +80,7 @@ jobs:
           rm -rf ~/Library/Caches/org.swift.swiftpm
           rm -rf .build
 
-      - name: Resolve Dependencies
-        run: swift package resolve
-
-      - name: Remove Prebuilt Modules
-        run: rm -rf .build/prebuilts
-
-      - name: Build Macros
-        run: swift build --target ArcheryMacros
-
-      - name: Test Macro Expansions
+      - name: Build and Test Macros
         run: swift test --filter MacroTests --no-parallel
 
   snapshot-tests:
@@ -106,12 +97,6 @@ jobs:
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/org.swift.swiftpm
           rm -rf .build
-
-      - name: Resolve Dependencies
-        run: swift package resolve
-
-      - name: Remove Prebuilt Modules
-        run: rm -rf .build/prebuilts
 
       - name: Run Snapshot Tests
         run: swift test --filter SnapshotTests --no-parallel
