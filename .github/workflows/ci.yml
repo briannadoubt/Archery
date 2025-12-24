@@ -40,11 +40,16 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Clean DerivedData
-        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+      - name: Clean DerivedData and Prebuilt Modules
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          rm -rf ~/Library/Caches/org.swift.swiftpm
+          rm -rf .build
 
       - name: Resolve Dependencies
         run: swift package resolve
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
       - name: Build and Test
         run: |
@@ -56,6 +61,8 @@ jobs:
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
   macro-tests:
     name: Macro Expansion Tests
@@ -66,11 +73,26 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
 
+      - name: Clean DerivedData and Prebuilt Modules
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          rm -rf ~/Library/Caches/org.swift.swiftpm
+          rm -rf .build
+
+      - name: Resolve Dependencies
+        run: swift package resolve
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
+
       - name: Build Macros
         run: swift build --target ArcheryMacros
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
       - name: Test Macro Expansions
         run: swift test --filter MacroTests --no-parallel
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
   snapshot-tests:
     name: Snapshot Tests
@@ -81,8 +103,21 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
 
+      - name: Clean DerivedData and Prebuilt Modules
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          rm -rf ~/Library/Caches/org.swift.swiftpm
+          rm -rf .build
+
+      - name: Resolve Dependencies
+        run: swift package resolve
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
+
       - name: Run Snapshot Tests
         run: swift test --filter SnapshotTests --no-parallel
+        env:
+          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
       - name: Upload Failed Snapshots
         if: failure()
