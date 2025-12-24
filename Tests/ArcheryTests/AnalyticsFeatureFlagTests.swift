@@ -1,6 +1,8 @@
 import XCTest
 @testable import Archery
+#if os(macOS)
 @testable import ArcheryMacros
+#endif
 
 final class AnalyticsTests: XCTestCase {
     
@@ -233,23 +235,25 @@ final class FeatureFlagTests: XCTestCase {
     // Property wrapper tested via integration, removed direct test due to actor isolation
 }
 
+#if os(macOS)
 final class AnalyticsEventMacroTests: XCTestCase {
-    
+
     func testEventNameGeneration() {
         let macro = AnalyticsEventMacro()
         XCTAssertNotNil(macro)
-        
+
         // Test camel case to snake case conversion
         XCTAssertEqual("userLoggedIn".camelCaseToSnakeCase(), "user_logged_in")
         XCTAssertEqual("ButtonClicked".camelCaseToSnakeCase(), "button_clicked")
         XCTAssertEqual("simple".camelCaseToSnakeCase(), "simple")
     }
-    
+
     func testMacroError() {
         let error = AnalyticsMacroError.notAnEnum
         XCTAssertEqual(error.description, "@AnalyticsEvent can only be applied to enums")
     }
 }
+#endif
 
 final class FeatureFlagMacroTests: XCTestCase {
     

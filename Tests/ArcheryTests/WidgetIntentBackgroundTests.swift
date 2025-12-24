@@ -9,7 +9,6 @@ import AppIntents
 import ActivityKit
 #endif
 @testable import Archery
-@testable import ArcheryMacros
 
 #if canImport(WidgetKit)
 @available(iOS 16.0, macOS 13.0, *)
