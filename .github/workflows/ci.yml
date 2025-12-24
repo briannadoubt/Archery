@@ -11,10 +11,6 @@ env:
   XCODE_VERSION: '26.0'
 
 jobs:
-  # Note: Non-macOS platform tests are temporarily disabled due to swift-syntax
-  # prebuilt module incompatibility with Xcode 26. The prebuilt modules from
-  # swiftlang-6.2.0.19.9 are incompatible with the Xcode 26.0.1 compiler.
-  # Tracking: https://github.com/apple/swift-syntax/issues/2846
   build-and-test:
     name: Build & Test (${{ matrix.platform }})
     runs-on: macos-26
@@ -24,15 +20,14 @@ jobs:
         include:
           - platform: macOS
             destination: 'platform=macOS'
-          # Temporarily disabled due to swift-syntax prebuilt module issue
-          # - platform: iOS
-          #   destination: 'platform=iOS Simulator,name=iPhone 17 Pro'
-          # - platform: tvOS
-          #   destination: 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
-          # - platform: watchOS
-          #   destination: 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
-          # - platform: visionOS
-          #   destination: 'platform=visionOS Simulator,name=Apple Vision Pro'
+          - platform: iOS
+            destination: 'platform=iOS Simulator,name=iPhone 17 Pro'
+          - platform: tvOS
+            destination: 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
+          - platform: watchOS
+            destination: 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
+          - platform: visionOS
+            destination: 'platform=visionOS Simulator,name=Apple Vision Pro'
 
     steps:
       - uses: actions/checkout@v4
@@ -56,43 +51,14 @@ jobs:
 
       - name: Build and Test
         run: |
-          # Note: Macro expansion tests (using assertMacroExpansion) are skipped
-          # due to swift-syntax crashes on macOS 26. SnapshotTests cover macro testing.
           xcodebuild test \
             -scheme Archery-Package \
             -destination '${{ matrix.destination }}' \
             -configuration Debug \
             -parallel-testing-enabled NO \
             -skipMacroValidation \
-            -skip-testing:ArcheryTests/ViewModelBoundMacroTests \
-            -skip-testing:ArcheryTests/APIClientMacroTests \
-            -skip-testing:ArcheryTests/GRDBMacroTests \
-            -skip-testing:ArcheryTests/ObservableViewModelMacroTests \
-            -skip-testing:ArcheryTests/KeyValueStoreMacroTests \
-            -skip-testing:ArcheryTests/AppShellMacroTests \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
-
-  # Note: Macro Expansion Tests are temporarily disabled due to crashes
-  # with swift-syntax on the macos-26 runner. The SnapshotTests job
-  # covers macro expansion testing via swift-testing.
-  # macro-tests:
-  #   name: Macro Expansion Tests
-  #   runs-on: macos-26
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - name: Select Xcode
-  #       run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-  #
-  #     - name: Clean Caches
-  #       run: |
-  #         rm -rf ~/Library/Developer/Xcode/DerivedData
-  #         rm -rf ~/Library/Caches/org.swift.swiftpm
-  #         rm -rf .build
-  #
-  #     - name: Build and Test Macros
-  #       run: swift test --filter MacroTests --no-parallel
 
   snapshot-tests:
     name: Snapshot Tests
