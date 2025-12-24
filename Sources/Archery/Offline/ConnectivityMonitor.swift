@@ -163,6 +163,15 @@ public final class ConnectivityMonitor {
     deinit {
         monitor.cancel()
     }
+
+    // MARK: - Test Helpers
+
+    #if DEBUG
+    /// Test helper to force connectivity state
+    public func _testSetConnected(_ connected: Bool) {
+        isConnected = connected
+    }
+    #endif
 }
 
 public struct ConnectivityView: View {

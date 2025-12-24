@@ -170,12 +170,16 @@ final class MutationQueueTests: XCTestCase {
     @MainActor
     override func setUp() async throws {
         connectivity = ConnectivityMonitor.shared
+        // Force connectivity to true for tests
+        connectivity._testSetConnected(true)
         queue = MutationQueue(name: "test_queue", connectivity: connectivity)
+        // Clear any persisted mutations from previous test runs
+        await queue.clearAll()
     }
-    
+
     @MainActor
     override func tearDown() async throws {
-        await queue.clearFailed()
+        await queue.clearAll()
     }
     
     @MainActor
@@ -197,11 +201,12 @@ final class MutationQueueTests: XCTestCase {
 
         let mutation = TestMutation(shouldFail: false)
         await queue.enqueue(mutation)
-        
-        await queue.processQueue()
-        
-        XCTAssertEqual(queue.pendingMutations.count, 0)
-        XCTAssertEqual(queue.failedMutations.count, 0)
+
+        // Wait for processing to complete
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
+        XCTAssertEqual(queue.pendingMutations.count, 0, "Mutation should be processed and removed")
+        XCTAssertEqual(queue.failedMutations.count, 0, "No mutations should have failed")
     }
     
     @MainActor

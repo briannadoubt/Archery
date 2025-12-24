@@ -106,7 +106,7 @@ public actor IncrementalCodeGenerator {
             if let entry = manifest.entries[input.identifier] {
                 // Check if input has changed
                 let currentHash = try computeHash(for: input)
-                if currentHash != entry.contentHash {
+                if currentHash != entry.inputHash {
                     needsGeneration.append(input)
                 } else if !fileExists(entry.outputPath) {
                     // Output file missing, regenerate
@@ -136,7 +136,9 @@ public actor IncrementalCodeGenerator {
     
     private func computeHash(for input: CodegenInput) throws -> String {
         let hasher = SHA256()
-        let data = try JSONEncoder().encode(input)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = try encoder.encode(input)
         let hash = hasher.finalize(data: data)
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
