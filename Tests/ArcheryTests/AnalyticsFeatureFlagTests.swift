@@ -270,7 +270,7 @@ final class RedactedStringTests: XCTestCase {
         XCTAssertEqual(redacted.value, "User email: [EMAIL], phone: [PHONE]")
         
         let hashed: RedactedString = "User hash: \(hash: email)"
-        XCTAssertEqual(hashed.value.count, 12) // "User hash: " + 16 char hash
+        XCTAssertEqual(hashed.value.count, 27) // "User hash: " (11 chars) + 16 char hash
     }
     
     func testRedactedCodable() throws {

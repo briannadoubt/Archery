@@ -6,16 +6,19 @@ import Foundation
 public protocol FeatureModule {
     /// Unique identifier for this module
     static var identifier: String { get }
-    
+
     /// Module version for compatibility checking
     static var version: ModuleVersion { get }
-    
+
     /// Dependencies on other modules (contracts only)
     static var dependencies: [ModuleDependency] { get }
-    
+
     /// Public contract exposed by this module
     associatedtype Contract: ModuleContract
-    
+
+    /// Contract instance for this module
+    static var contract: Contract { get }
+
     /// Module configuration
     static var configuration: ModuleConfiguration { get }
 }
@@ -80,27 +83,23 @@ public struct ModuleVersion: Comparable, Hashable, Codable, CustomStringConverti
     public let build: String?
     
     public init(_ string: String) {
-        let components = string.split(separator: ".")
+        // First extract build metadata (after +)
+        let buildParts = string.split(separator: "+", maxSplits: 1)
+        let versionWithPrerelease = String(buildParts[0])
+        let buildMetadata = buildParts.count > 1 ? String(buildParts[1]) : nil
+
+        // Then extract prerelease (after -)
+        let prereleaseParts = versionWithPrerelease.split(separator: "-", maxSplits: 1)
+        let versionOnly = String(prereleaseParts[0])
+        let prereleaseString = prereleaseParts.count > 1 ? String(prereleaseParts[1]) : nil
+
+        // Parse major.minor.patch
+        let components = versionOnly.split(separator: ".")
         self.major = Int(components[safe: 0] ?? "0") ?? 0
         self.minor = Int(components[safe: 1] ?? "0") ?? 0
         self.patch = Int(components[safe: 2] ?? "0") ?? 0
-        
-        // Parse prerelease and build metadata
-        if let patchAndMore = components[safe: 2] {
-            let parts = patchAndMore.split(separator: "-", maxSplits: 1)
-            if parts.count > 1 {
-                let prereleaseAndBuild = parts[1].split(separator: "+", maxSplits: 1)
-                self.prerelease = String(prereleaseAndBuild[0])
-                self.build = prereleaseAndBuild.count > 1 ? String(prereleaseAndBuild[1]) : nil
-            } else {
-                let patchParts = parts[0].split(separator: "+", maxSplits: 1)
-                self.prerelease = nil
-                self.build = patchParts.count > 1 ? String(patchParts[1]) : nil
-            }
-        } else {
-            self.prerelease = nil
-            self.build = nil
-        }
+        self.prerelease = prereleaseString
+        self.build = buildMetadata
     }
     
     public init(
@@ -272,16 +271,17 @@ public final class ModuleRegistry {
     /// Register a feature module
     public func register<T: FeatureModule>(_ moduleType: T.Type) throws {
         let identifier = moduleType.identifier
-        
+
         // Check for duplicates
         guard modules[identifier] == nil else {
             throw ModuleError.duplicateModule(identifier)
         }
-        
+
         // Validate dependencies
         try validateDependencies(for: moduleType)
-        
+
         modules[identifier] = moduleType
+        contracts[identifier] = moduleType.contract
         dependencyGraph.addModule(moduleType)
     }
     
@@ -312,6 +312,13 @@ public final class ModuleRegistry {
     /// Get initialization order based on dependencies
     public func initializationOrder() -> [String] {
         return dependencyGraph.topologicalSort()
+    }
+
+    /// Reset the registry (for testing only)
+    public func reset() {
+        modules.removeAll()
+        contracts.removeAll()
+        dependencyGraph = DependencyGraph()
     }
 }
 

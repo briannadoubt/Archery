@@ -188,6 +188,7 @@ public enum MacroType: String, CaseIterable, Sendable {
     case viewModelBound = "ViewModelBound"
     case appShell = "AppShell"
     case apiClient = "APIClient"
+    case repository = "Repository"
     case cache = "Cache"
     case designTokens = "DesignTokens"
     case localizable = "Localizable"
@@ -196,7 +197,7 @@ public enum MacroType: String, CaseIterable, Sendable {
     case authenticated = "Authenticated"
     case form = "Form"
     case configuration = "Configuration"
-    
+
     static let production: [MacroType] = allCases.filter { $0 != .analyticsEvent }
     static let debugOnly: [MacroType] = []
 }

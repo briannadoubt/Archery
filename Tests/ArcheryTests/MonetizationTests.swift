@@ -90,13 +90,21 @@ final class MonetizationTests: XCTestCase {
     
     func testAllEntitlementCases() {
         let allCases = Entitlement.allCases
-        XCTAssertEqual(allCases.count, 6)
+        XCTAssertEqual(allCases.count, 12)
+        // Subscription tiers
         XCTAssertTrue(allCases.contains(.basic))
         XCTAssertTrue(allCases.contains(.premium))
         XCTAssertTrue(allCases.contains(.pro))
         XCTAssertTrue(allCases.contains(.unlimitedAccess))
         XCTAssertTrue(allCases.contains(.removeAds))
         XCTAssertTrue(allCases.contains(.additionalStorage))
+        // Role-based entitlements
+        XCTAssertTrue(allCases.contains(.admin))
+        XCTAssertTrue(allCases.contains(.moderator))
+        XCTAssertTrue(allCases.contains(.support))
+        XCTAssertTrue(allCases.contains(.verified))
+        XCTAssertTrue(allCases.contains(.twoFactorEnabled))
+        XCTAssertTrue(allCases.contains(.betaTester))
     }
     
     // MARK: - Error Tests

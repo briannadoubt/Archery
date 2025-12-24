@@ -195,7 +195,14 @@ public final class MutationQueue {
         failedMutations.removeAll()
         await persistence.clearFailedQueue()
     }
-    
+
+    public func clearAll() async {
+        pendingMutations.removeAll()
+        failedMutations.removeAll()
+        await persistence.clearPendingQueue()
+        await persistence.clearFailedQueue()
+    }
+
     private func loadPendingMutations() async {
         pendingMutations = await persistence.loadPending()
         failedMutations = await persistence.loadFailed()
@@ -322,12 +329,22 @@ public actor MutationPersistence {
         guard let files = try? fileManager.contentsOfDirectory(at: failedDirectory, includingPropertiesForKeys: nil) else {
             return
         }
-        
+
         for file in files {
             try? fileManager.removeItem(at: file)
         }
     }
-    
+
+    public func clearPendingQueue() async {
+        guard let files = try? fileManager.contentsOfDirectory(at: pendingDirectory, includingPropertiesForKeys: nil) else {
+            return
+        }
+
+        for file in files {
+            try? fileManager.removeItem(at: file)
+        }
+    }
+
     private func loadFrom(directory: URL) async -> [MutationRecord] {
         guard let files = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
             return []
