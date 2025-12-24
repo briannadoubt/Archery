@@ -253,16 +253,16 @@ final class AnalyticsEventMacroTests: XCTestCase {
         XCTAssertEqual(error.description, "@AnalyticsEvent can only be applied to enums")
     }
 }
-#endif
 
 final class FeatureFlagMacroTests: XCTestCase {
-    
+
     func testKebabCaseConversion() {
         XCTAssertEqual("myFeatureFlag".camelCaseToKebabCase(), "my-feature-flag")
         XCTAssertEqual("SimpleFlag".camelCaseToKebabCase(), "simple-flag")
         XCTAssertEqual("flag".camelCaseToKebabCase(), "flag")
     }
 }
+#endif
 
 final class RedactedStringTests: XCTestCase {
     
