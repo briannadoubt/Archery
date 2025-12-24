@@ -40,29 +40,34 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Clean DerivedData and Prebuilt Modules
+      - name: Clean Caches
         run: |
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/org.swift.swiftpm
           rm -rf .build
+          rm -rf DerivedData
 
       - name: Resolve Dependencies
-        run: swift package resolve
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme Archery-Package \
+            -derivedDataPath DerivedData \
+            -disablePackageRepositoryCache
+
+      - name: Remove Prebuilt Modules
+        run: rm -rf DerivedData/SourcePackages/prebuilts
 
       - name: Build and Test
         run: |
           xcodebuild test \
             -scheme Archery-Package \
             -destination '${{ matrix.destination }}' \
+            -derivedDataPath DerivedData \
             -configuration Debug \
             -parallel-testing-enabled NO \
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
   macro-tests:
     name: Macro Expansion Tests
@@ -73,7 +78,7 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
 
-      - name: Clean DerivedData and Prebuilt Modules
+      - name: Clean Caches
         run: |
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/org.swift.swiftpm
@@ -81,18 +86,15 @@ jobs:
 
       - name: Resolve Dependencies
         run: swift package resolve
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
+
+      - name: Remove Prebuilt Modules
+        run: rm -rf .build/prebuilts
 
       - name: Build Macros
         run: swift build --target ArcheryMacros
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
       - name: Test Macro Expansions
         run: swift test --filter MacroTests --no-parallel
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
   snapshot-tests:
     name: Snapshot Tests
@@ -103,7 +105,7 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
 
-      - name: Clean DerivedData and Prebuilt Modules
+      - name: Clean Caches
         run: |
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/org.swift.swiftpm
@@ -111,13 +113,12 @@ jobs:
 
       - name: Resolve Dependencies
         run: swift package resolve
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
+
+      - name: Remove Prebuilt Modules
+        run: rm -rf .build/prebuilts
 
       - name: Run Snapshot Tests
         run: swift test --filter SnapshotTests --no-parallel
-        env:
-          SWIFT_PACKAGE_USE_PREBUILT_MODULES: 'NO'
 
       - name: Upload Failed Snapshots
         if: failure()
