@@ -1,3 +1,4 @@
+#if os(macOS)
 import ArcheryMacros
 import Foundation
 import SwiftParser
@@ -285,3 +286,4 @@ private func writeSnapshot(name: String, contents: String) throws {
     try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
     try contents.write(to: path, atomically: true, encoding: .utf8)
 }
+#endif

@@ -1,7 +1,6 @@
 import XCTest
 import SwiftUI
 @testable import Archery
-@testable import ArcheryMacros
 
 /// Integration tests that verify the @Localizable macro generates working code
 /// rather than testing exact string matching of the generated code
