@@ -40,14 +40,8 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Cache SPM
-        uses: actions/cache@v4
-        with:
-          path: .build
-          key: ${{ runner.os }}-spm-${{ matrix.platform }}-${{ hashFiles('Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-${{ matrix.platform }}-
-            ${{ runner.os }}-spm-
+      - name: Clean DerivedData
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
 
       - name: Resolve Dependencies
         run: swift package resolve
@@ -59,7 +53,9 @@ jobs:
             -destination '${{ matrix.destination }}' \
             -configuration Debug \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
   macro-tests:
     name: Macro Expansion Tests
