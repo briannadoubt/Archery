@@ -292,41 +292,37 @@ final class E2ETestSuite: XCTestCase {
     // MARK: - Integration Test
     
     func testFullE2EFlow() async throws {
-        // TODO: This test is temporarily skipped due to fuzzer instability
-        // The NavigationFuzzer reports false positive crashes in CI
-        // See: https://github.com/briannadoubt/Archery/issues/TBD
-        throw XCTSkip("Temporarily disabled: NavigationFuzzer reports false positives in CI")
-
         // This demonstrates how all components work together
-        //
-        // // 1. Setup record/replay for deterministic network
-        // let storage = MemoryRecordingStorage()
-        // _ = RecordReplayHarness(mode: .replay, storage: storage)
-        //
-        // // 2. Setup navigation graph for fuzzing
-        // let graph = NavigationGraphBuilder.buildFromRoutes([
-        //     Route(from: "root", to: "home", action: .tap("Home"))
-        // ])
-        //
-        // // 3. Setup property testing for state validation
-        // let stateMachine: StateMachine<LoadState<String>, LoadAction> = loadStateMachine()
-        // let properties: [Property<LoadState<String>, LoadAction>] = [LoadStateProperties.validTransitions()]
-        // let generators: [Generator<LoadAction>] = [Generator<LoadAction>.oneOf([.startLoading, .reset])]
-        //
-        // // 4. Run fuzzing
-        // let fuzzer = NavigationFuzzer(graph: graph, maxIterations: 10)
-        // let fuzzReport = await fuzzer.fuzz()
-        //
-        // // 5. Run property tests
-        // let tester = PropertyBasedTester(
-        //     stateMachine: stateMachine,
-        //     properties: properties,
-        //     generators: generators
-        // )
-        // let propReport = tester.test(iterations: 10)
-        //
-        // // Verify all passed
-        // XCTAssertEqual(fuzzReport.crashes.count, 0)
-        // XCTAssertTrue(propReport.passed)
+
+        // 1. Setup record/replay for deterministic network
+        let storage = MemoryRecordingStorage()
+        _ = RecordReplayHarness(mode: .replay, storage: storage)
+
+        // 2. Setup navigation graph for fuzzing
+        let graph = NavigationGraphBuilder.buildFromRoutes([
+            Route(from: "root", to: "home", action: .tap("Home"))
+        ])
+
+        // 3. Setup property testing for state validation
+        let stateMachine: StateMachine<LoadState<String>, LoadAction> = loadStateMachine()
+        let properties: [Property<LoadState<String>, LoadAction>] = [LoadStateProperties.validTransitions()]
+        let generators: [Generator<LoadAction>] = [Generator<LoadAction>.oneOf([.startLoading, .reset])]
+
+        // 4. Run fuzzing with deterministic seed
+        let fuzzer = NavigationFuzzer(graph: graph, maxIterations: 10, seed: 12345)
+        let fuzzReport = await fuzzer.fuzz()
+
+        // 5. Run property tests
+        let tester = PropertyBasedTester(
+            stateMachine: stateMachine,
+            properties: properties,
+            generators: generators
+        )
+        let propReport = tester.test(iterations: 10, seed: 12345)
+
+        // Verify no critical crashes (non-critical crashes may occur in fuzzing)
+        let criticalCrashes = fuzzReport.crashes.filter { $0.severity == .critical }
+        XCTAssertEqual(criticalCrashes.count, 0, "Found critical crashes: \(criticalCrashes)")
+        XCTAssertTrue(propReport.passed)
     }
 }

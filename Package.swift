@@ -40,7 +40,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0-prerelease-2025-10-30"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
     ],
