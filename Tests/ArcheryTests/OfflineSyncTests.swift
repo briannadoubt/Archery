@@ -225,22 +225,23 @@ final class MutationQueueTests: XCTestCase {
     
     @MainActor
     func testRetryMutation() async {
-        queue.registerHandler(for: TestMutation.self) { mutation in
-            if mutation.retryCount == 0 {
-                return .failure(TestError.executionFailed)
-            }
-            return .success("completed".data(using: .utf8))
-        }
+        // Set connectivity to false so retry doesn't immediately process
+        connectivity._testSetConnected(false)
 
-        var mutation = TestMutation()
-        mutation.retryCount = 3
-        
+        let mutation = TestMutation()
         let record = try! MutationRecord(mutation: mutation)
         queue._testAddFailed(record)
-        
+
+        XCTAssertEqual(queue.failedMutations.count, 1)
+        XCTAssertEqual(queue.pendingMutations.count, 0)
+
         await queue.retry(record.id)
-        
+
+        XCTAssertEqual(queue.failedMutations.count, 0)
         XCTAssertTrue(queue.pendingMutations.contains { $0.id == record.id })
+
+        // Restore connectivity for other tests
+        connectivity._testSetConnected(true)
     }
     
     @MainActor
