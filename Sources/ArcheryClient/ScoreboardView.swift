@@ -153,7 +153,7 @@ struct ScoreboardView: View {
 
     private func playRetryHaptic() {
         guard hapticsEnabled else { return }
-        #if canImport(UIKit) && !os(tvOS)
+        #if os(iOS)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         #elseif canImport(WatchKit)
         WKInterfaceDevice.current().play(.click)
