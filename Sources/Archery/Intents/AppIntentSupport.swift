@@ -320,17 +320,59 @@ public struct IntentAnalytics {
     }
 }
 
-// MARK: - Siri Integration Helpers
+// MARK: - Siri Integration Views
 
-#if !os(watchOS)
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
-public extension View {
-    func addToSiri<Intent: AppIntent>(_ intent: Intent, phrase: String) -> some View {
-        self.contextMenu {
-            Button("Add to Siri") {
-                // Implementation would use INVoiceShortcutCenter
-                // Siri integration is handled by the system for AppIntents
-            }
+/// A view that displays a Siri tip for an App Shortcut.
+/// Use this to help users discover voice commands for your app's intents.
+///
+/// Example:
+/// ```swift
+/// struct MyView: View {
+///     @State private var showSiriTip = true
+///
+///     var body: some View {
+///         VStack {
+///             SiriTip(intent: OrderCoffeeIntent(), isVisible: $showSiriTip)
+///             // ... rest of view
+///         }
+///     }
+/// }
+/// ```
+///
+/// Note: The intent must be registered with an `AppShortcutsProvider` for the tip to display.
+#if os(iOS) || os(watchOS) || os(tvOS) || os(visionOS)
+@available(iOS 16.0, watchOS 9.0, tvOS 16.0, visionOS 1.0, *)
+public struct SiriTip<Intent: AppIntent>: View {
+    let intent: Intent
+    @Binding var isVisible: Bool
+
+    public init(intent: Intent, isVisible: Binding<Bool>) {
+        self.intent = intent
+        self._isVisible = isVisible
+    }
+
+    public var body: some View {
+        SiriTipView(intent: intent, isVisible: $isVisible)
+    }
+}
+#endif
+
+/// A button that opens the Shortcuts app to the current app's App Shortcuts page.
+/// Use this to let users customize and manage their shortcuts.
+#if os(iOS) || os(visionOS)
+@available(iOS 16.0, visionOS 1.0, *)
+public struct AppShortcutsButton: View {
+    let action: (() -> Void)?
+
+    public init(action: (() -> Void)? = nil) {
+        self.action = action
+    }
+
+    public var body: some View {
+        if let action {
+            ShortcutsLink(action: action)
+        } else {
+            ShortcutsLink()
         }
     }
 }
