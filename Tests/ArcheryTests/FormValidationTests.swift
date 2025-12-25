@@ -338,15 +338,21 @@ final class FormPreviewSeedsTests: XCTestCase {
     @MainActor
     func testAllFieldTypesForm() {
         let container = FormPreviewSeeds.allFieldTypesForm()
-        
+
+        #if os(tvOS) || os(watchOS)
+        XCTAssertEqual(container.fields.count, 6) // DateField not available
+        #else
         XCTAssertEqual(container.fields.count, 7)
-        
+        #endif
+
         let fieldTypes = container.fields.map { type(of: $0) }
         XCTAssertTrue(fieldTypes.contains { $0 == TextField.self })
         XCTAssertTrue(fieldTypes.contains { $0 == EmailField.self })
         XCTAssertTrue(fieldTypes.contains { $0 == PasswordField.self })
         XCTAssertTrue(fieldTypes.contains { $0 == NumberField.self })
+        #if !os(tvOS) && !os(watchOS)
         XCTAssertTrue(fieldTypes.contains { $0 == DateField.self })
+        #endif
         XCTAssertTrue(fieldTypes.contains { $0 == BooleanField.self })
         XCTAssertTrue(fieldTypes.contains { $0 == TextAreaField.self })
     }
