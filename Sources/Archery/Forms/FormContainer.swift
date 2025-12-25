@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import Combine
 
 // MARK: - Form Container
 
@@ -13,8 +12,7 @@ public final class FormContainer {
     public private(set) var isDirty = false
     public private(set) var errors: [ValidationError] = []
     public var focusedFieldId: String?
-    
-    private var cancellables = Set<AnyCancellable>()
+
     private let onSubmit: () async throws -> Void
     private let validateOnChange: Bool
     private let validateOnBlur: Bool
@@ -194,39 +192,45 @@ public final class FocusStateManager {
     public var keyboardHeight: CGFloat = 0
     public var isKeyboardVisible = false
 
-    private var showObserver: (any NSObjectProtocol)?
-    private var hideObserver: (any NSObjectProtocol)?
+    private var keyboardTask: Task<Void, Never>?
 
     public init() {
-        setupKeyboardObservers()
+        startKeyboardObservation()
     }
 
-    private func setupKeyboardObservers() {
+    private func startKeyboardObservation() {
         #if os(iOS)
-        let notificationCenter = NotificationCenter.default
+        keyboardTask = Task { [weak self] in
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    let keyboardFrames = NotificationCenter.default
+                        .notifications(named: UIResponder.keyboardWillShowNotification)
+                        .compactMap { notification -> CGFloat? in
+                            (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height
+                        }
 
-        showObserver = notificationCenter.addObserver(
-            forName: UIResponder.keyboardWillShowNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-            Task { @MainActor in
-                if let frame {
-                    self?.keyboardHeight = frame.height
-                    self?.isKeyboardVisible = true
+                    for await height in keyboardFrames {
+                        guard !Task.isCancelled else { break }
+                        await MainActor.run {
+                            self?.keyboardHeight = height
+                            self?.isKeyboardVisible = true
+                        }
+                    }
                 }
-            }
-        }
 
-        hideObserver = notificationCenter.addObserver(
-            forName: UIResponder.keyboardWillHideNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.keyboardHeight = 0
-                self?.isKeyboardVisible = false
+                group.addTask {
+                    let hideNotifications = NotificationCenter.default
+                        .notifications(named: UIResponder.keyboardWillHideNotification)
+                        .map { _ in () }
+
+                    for await _ in hideNotifications {
+                        guard !Task.isCancelled else { break }
+                        await MainActor.run {
+                            self?.keyboardHeight = 0
+                            self?.isKeyboardVisible = false
+                        }
+                    }
+                }
             }
         }
         #endif
@@ -241,14 +245,8 @@ public final class FocusStateManager {
     }
 
     public func cleanup() {
-        #if os(iOS)
-        if let observer = showObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = hideObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        #endif
+        keyboardTask?.cancel()
+        keyboardTask = nil
     }
 }
 
