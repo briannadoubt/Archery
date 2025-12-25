@@ -19,7 +19,7 @@ final class RTLSnapshotTests: XCTestCase {
         XCTAssertNotNil(rtlButton)
     }
     
-    #if !os(tvOS)
+    #if !os(tvOS) && !os(watchOS)
     func testTextFieldRTLLayout() {
         struct TextFieldView: View {
             @State private var text = "Sample Text"
