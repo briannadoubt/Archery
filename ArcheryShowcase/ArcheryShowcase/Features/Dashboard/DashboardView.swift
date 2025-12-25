@@ -13,6 +13,8 @@ struct DashboardView: View {
     @Environment(\.databaseWriter) private var writer
     @Environment(\.navigationHandle) private var nav
 
+    @State private var showSiriTip = true
+
     // Direct filtering on TaskItem (no conversion needed!)
     var completedTasks: [TaskItem] { allTasks.filter { $0.status == .completed } }
     var inProgressTasks: [TaskItem] { allTasks.filter { $0.status == .inProgress } }
@@ -24,6 +26,12 @@ struct DashboardView: View {
             VStack(spacing: 24) {
                 WelcomeHeaderView(taskCount: allTasks.count, completedToday: completedTasks.count)
                     .padding(.horizontal)
+
+                // Siri tip for the auto-generated TaskItem list intent
+                #if os(iOS) || os(watchOS) || os(tvOS) || os(visionOS)
+                SiriTip(intent: TaskItem.TaskItemListIntent(), isVisible: $showSiriTip)
+                    .padding(.horizontal)
+                #endif
 
                 // Weather widget using @APIClient
                 WeatherWidget(location: "San Francisco")
