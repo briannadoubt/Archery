@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 @MainActor
@@ -16,3 +17,4 @@ func snapshot(_ name: String, file: StaticString = #filePath, line: UInt = #line
         fatalError("Missing snapshot \(base.path) – run the snapshot generator. (\(error))")
     }
 }
+#endif
