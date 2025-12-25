@@ -145,7 +145,8 @@ final class AppIntentTests: XCTestCase {
 #if canImport(ActivityKit) && os(iOS)
 @available(iOS 16.1, *)
 final class LiveActivityTests: XCTestCase {
-    
+
+    @MainActor
     func testLiveActivityManager() async throws {
         let manager = LiveActivityManager<LiveActivityTestFixtures.SampleAttributes>(
             staleTimeout: 3600,
@@ -196,6 +197,7 @@ final class LiveActivityTests: XCTestCase {
     }
     
     #if DEBUG
+    @MainActor
     func testMockLiveActivityManager() async throws {
         let manager = MockLiveActivityManager<LiveActivityTestFixtures.SampleAttributes>()
         
