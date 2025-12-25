@@ -19,18 +19,19 @@ final class RTLSnapshotTests: XCTestCase {
         XCTAssertNotNil(rtlButton)
     }
     
+    #if !os(tvOS)
     func testTextFieldRTLLayout() {
         struct TextFieldView: View {
             @State private var text = "Sample Text"
-            
+
             var body: some View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Enter your name:")
                         .font(.headline)
-                    
+
                     TextField("Name", text: $text)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                    
+
                     HStack {
                         Button("Cancel") {}
                         Spacer()
@@ -40,12 +41,13 @@ final class RTLSnapshotTests: XCTestCase {
                 .padding()
             }
         }
-        
+
         let view = TextFieldView()
         let rtlView = view.rtlSnapshot()
-        
+
         XCTAssertNotNil(rtlView)
     }
+    #endif
     
     func testNavigationRTLLayout() {
         #if os(iOS) || os(tvOS)

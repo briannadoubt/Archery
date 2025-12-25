@@ -25,7 +25,7 @@ jobs:
           - platform: tvOS
             destination: 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)'
           - platform: watchOS
-            destination: 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
+            destination: 'platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm)'
           - platform: visionOS
             destination: 'platform=visionOS Simulator,name=Apple Vision Pro'
 

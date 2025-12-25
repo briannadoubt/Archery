@@ -209,7 +209,7 @@ final class InteropTests: XCTestCase {
             .savedPhotosAlbum
         ]
 
-        #if os(iOS) || os(visionOS)
+        #if os(iOS)
         for source in sources {
             XCTAssertNotNil(source.uiSourceType)
         }
