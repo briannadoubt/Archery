@@ -210,8 +210,8 @@ public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module:
 /// - `AppEntity` conformance with `{TypeName}EntityQuery`
 /// - CRUD intents: `{TypeName}CreateIntent`, `{TypeName}ListIntent`, `{TypeName}DeleteIntent`
 /// - `{TypeName}Shortcuts: AppShortcutsProvider` (unless `shortcuts: false`)
-@attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration))
-@attached(extension, conformances: Identifiable, Hashable, Sendable, AppEntity, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt, names: named(defaultQuery), named(typeDisplayRepresentation), named(displayRepresentation), arbitrary)
+@attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration), named(defaultQuery), named(typeDisplayRepresentation), named(displayRepresentation), arbitrary)
+@attached(extension, conformances: Identifiable, Hashable, Sendable, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt)
 public macro Persistable(
     table: String? = nil,
     primaryKey: String = "id",

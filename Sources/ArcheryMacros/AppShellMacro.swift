@@ -779,8 +779,9 @@ public enum AppShellMacro: MemberMacro {
             }.joined(separator: "\n")
 
             // Generate query source registrations for schema types
+            // Types in schema array must conform to HasQuerySources
             let querySourceCalls = config.schemaTypes.map { type in
-                "            if \(type).self is any HasQuerySources.Type { QuerySourceRegistry.shared.register(\(type).Sources()) }"
+                "            QuerySourceRegistry.shared.register(\(type).Sources())"
             }.joined(separator: "\n")
 
             // Generate clearAllData delete calls for each schema type

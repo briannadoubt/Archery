@@ -29,7 +29,7 @@ import AppIntents
     titleProperty: "title",
     shortcuts: false  // Disabled - using ShowcaseShortcuts instead
 )
-struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
+struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
     @PrimaryKey var id: String
     var title: String
     var taskDescription: String?
@@ -138,7 +138,7 @@ struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRe
     titleProperty: "name",
     shortcuts: false  // Disabled - using ShowcaseShortcuts instead
 )
-struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
+struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
     @PrimaryKey var id: String
     var name: String
     var projectDescription: String?

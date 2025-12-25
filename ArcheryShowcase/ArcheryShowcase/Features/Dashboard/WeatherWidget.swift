@@ -75,7 +75,7 @@ struct WeatherWidget: View {
                         .foregroundStyle(.tertiary)
                     }
                 }
-            } else if let error {
+            } else if error != nil {
                 HStack {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
