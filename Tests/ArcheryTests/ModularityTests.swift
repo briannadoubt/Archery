@@ -368,8 +368,9 @@ final class ModularityTests: XCTestCase {
         XCTAssertEqual(loaded.allowedImports["FeatureA"], config.allowedImports["FeatureA"])
     }
     
-    // MARK: - CI Integration Tests
-    
+    // MARK: - CI Integration Tests (macOS only)
+
+    #if os(macOS)
     func testCIBuildExecution() async throws {
         let config = CIConfiguration.default
         _ = CIIntegration(configuration: config)
@@ -379,7 +380,7 @@ final class ModularityTests: XCTestCase {
         XCTAssertNotNil(config.budgets)
         XCTAssertTrue(config.cache.enabled)
     }
-    
+
     func testPerformanceMonitoring() {
         let monitor = PerformanceMonitor(budgets: .default)
 
@@ -391,18 +392,19 @@ final class ModularityTests: XCTestCase {
         let results = monitor.checkBudgets(metrics)
         XCTAssertFalse(results.violations.isEmpty) // Should have violations with default budgets
     }
-    
+
     func testGitHubActionsGeneration() {
         let workflow = GitHubActionsGenerator.generateWorkflow(
             configuration: .default
         )
-        
+
         XCTAssertTrue(workflow.contains("name: Archery CI"))
         XCTAssertTrue(workflow.contains("Run Module Linter"))
         XCTAssertTrue(workflow.contains("Check Performance Budgets"))
         XCTAssertTrue(workflow.contains("cache"))
     }
-    
+    #endif
+
     // MARK: - Integration Tests
     
     @MainActor
