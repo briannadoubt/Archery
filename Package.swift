@@ -38,6 +38,21 @@ let package = Package(
             name: "DesignTokensPlugin",
             targets: ["DesignTokensPlugin"]
         ),
+        // Command plugin for scaffolding new features
+        .plugin(
+            name: "FeatureScaffoldPlugin",
+            targets: ["FeatureScaffoldPlugin"]
+        ),
+        // Command plugin for architecture linting
+        .plugin(
+            name: "ArcheryLintPlugin",
+            targets: ["ArcheryLintPlugin"]
+        ),
+        // Command plugin for performance budget checking
+        .plugin(
+            name: "ArcheryBudgetPlugin",
+            targets: ["ArcheryBudgetPlugin"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0-prerelease-2025-10-30"),
@@ -153,6 +168,74 @@ let package = Package(
                 .target(name: "design-tokens-generator")
             ],
             path: "Plugins/DesignTokensPlugin"
+        ),
+
+        // Feature scaffold CLI tool
+        .executableTarget(
+            name: "feature-scaffold",
+            dependencies: [],
+            path: "Sources/FeatureScaffold",
+            swiftSettings: warningFlags
+        ),
+
+        // Feature scaffold command plugin
+        .plugin(
+            name: "FeatureScaffoldPlugin",
+            capability: .command(
+                intent: .custom(verb: "feature-scaffold", description: "Scaffold a new feature with Archery macros"),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Create feature files")
+                ]
+            ),
+            dependencies: [
+                .target(name: "feature-scaffold")
+            ],
+            path: "Plugins/FeatureScaffoldPlugin"
+        ),
+
+        // Architecture linter CLI tool
+        .executableTarget(
+            name: "archery-lint",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
+            path: "Sources/ArcheryLint",
+            swiftSettings: warningFlags
+        ),
+
+        // Architecture linter command plugin
+        .plugin(
+            name: "ArcheryLintPlugin",
+            capability: .command(
+                intent: .custom(verb: "archery-lint", description: "Lint for architectural violations"),
+                permissions: []
+            ),
+            dependencies: [
+                .target(name: "archery-lint")
+            ],
+            path: "Plugins/ArcheryLintPlugin"
+        ),
+
+        // Performance budget CLI tool
+        .executableTarget(
+            name: "archery-budget",
+            dependencies: [],
+            path: "Sources/ArcheryBudget",
+            swiftSettings: warningFlags
+        ),
+
+        // Performance budget command plugin
+        .plugin(
+            name: "ArcheryBudgetPlugin",
+            capability: .command(
+                intent: .custom(verb: "archery-budget", description: "Check performance budgets"),
+                permissions: []
+            ),
+            dependencies: [
+                .target(name: "archery-budget")
+            ],
+            path: "Plugins/ArcheryBudgetPlugin"
         ),
     ],
     swiftLanguageModes: [.v6]

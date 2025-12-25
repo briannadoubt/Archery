@@ -85,6 +85,29 @@ jobs:
           name: failed-snapshots
           path: '**/__Snapshots__/'
 
+  lint:
+    name: Architecture Lint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+
+      - name: Resolve Dependencies
+        run: swift package resolve
+
+      - name: Build Linter
+        run: swift build --target archery-lint
+
+      - name: Run Architecture Linter
+        run: |
+          swift run archery-lint \
+            --project-root . \
+            --format github \
+            --warn-only
+        continue-on-error: true
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest
