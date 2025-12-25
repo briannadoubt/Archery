@@ -20,6 +20,14 @@ struct SettingsView: View {
                 NavigationLink("Data & Storage", destination: Text("Data & Storage").navigationTitle("Data & Storage"))
             }
 
+            #if os(iOS) || os(visionOS)
+            Section("Siri & Shortcuts") {
+                AppShortcutsButton {
+                    // Optional: track analytics when user opens shortcuts
+                }
+            }
+            #endif
+
             Section("About") {
                 NavigationLink("Help & Support", destination: Text("Help").navigationTitle("Help"))
                 NavigationLink("Terms of Service", destination: Text("Terms").navigationTitle("Terms"))
