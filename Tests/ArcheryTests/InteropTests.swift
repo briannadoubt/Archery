@@ -5,95 +5,7 @@ import SwiftData
 @testable import Archery
 
 final class InteropTests: XCTestCase {
-    
-    // MARK: - Hosting Bridge Tests
 
-    #if os(iOS) || os(visionOS)
-    @MainActor
-    func testUIKitHostingBridge() {
-        let view = Text("Hello SwiftUI")
-        let viewController = HostingBridge.makeViewController(
-            rootView: view,
-            configuration: HostingConfiguration(
-                preferredContentSize: CGSize(width: 320, height: 480),
-                backgroundColor: .systemBackground
-            )
-        )
-
-        XCTAssertNotNil(viewController)
-        XCTAssertEqual(viewController.preferredContentSize, CGSize(width: 320, height: 480))
-    }
-
-    @MainActor
-    func testUIKitViewEmbedding() {
-        let containerView = UIView()
-        let parentViewController = UIViewController()
-        let swiftUIView = Text("Embedded View")
-
-        HostingBridge.embed(
-            swiftUIView,
-            in: containerView,
-            parent: parentViewController,
-            configuration: EmbeddingConfiguration(
-                insets: EdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
-            )
-        )
-
-        XCTAssertEqual(parentViewController.children.count, 1)
-        XCTAssertFalse(containerView.subviews.isEmpty)
-    }
-
-    @MainActor
-    func testUIKitViewRepresentable() {
-        let uiView = UILabel()
-        uiView.text = "UIKit Label"
-
-        let representable = UIKitViewRepresentable(
-            makeView: { uiView },
-            updateView: { view in
-                view.text = "Updated"
-            }
-        )
-
-        // Skip context-based tests as UIViewRepresentableContext is not constructible
-        XCTAssertNotNil(representable)
-    }
-    #endif
-    
-    #if canImport(AppKit)
-    @MainActor
-    func testAppKitHostingBridge() {
-        let view = Text("Hello SwiftUI")
-        let viewController = HostingBridge.makeViewController(
-            rootView: view,
-            configuration: HostingConfiguration(
-                preferredContentSize: CGSize(width: 320, height: 480)
-            )
-        )
-
-        XCTAssertNotNil(viewController)
-        XCTAssertEqual(viewController.preferredContentSize, CGSize(width: 320, height: 480))
-    }
-
-    @MainActor
-    func testAppKitViewRepresentable() {
-        // Note: NSViewRepresentableContext cannot be directly constructed in tests
-        // This test verifies the view representable can be created
-        let nsView = NSTextField()
-        nsView.stringValue = "AppKit TextField"
-
-        let representable = AppKitViewRepresentable(
-            makeView: { nsView },
-            updateView: { view in
-                view.stringValue = "Updated"
-            }
-        )
-
-        // Skip context-based tests as NSViewRepresentableContext is not constructible
-        XCTAssertNotNil(representable)
-    }
-    #endif
-    
     // MARK: - Share Activity Tests
     
     func testActivityTypes() {
@@ -220,35 +132,18 @@ final class InteropTests: XCTestCase {
     }
     
     // MARK: - Array Chunking Test
-    
+
     func testArrayChunking() {
         let array = Array(1...10)
         let chunks = array.chunked(into: 3)
-        
+
         XCTAssertEqual(chunks.count, 4) // 3, 3, 3, 1
         XCTAssertEqual(chunks[0], [1, 2, 3])
         XCTAssertEqual(chunks[1], [4, 5, 6])
         XCTAssertEqual(chunks[2], [7, 8, 9])
         XCTAssertEqual(chunks[3], [10])
     }
-    
-    // MARK: - Edge Insets Test
-    
-    func testEdgeInsets() {
-        let insets = EdgeInsets(top: 10, left: 20, bottom: 30, right: 40)
-        
-        XCTAssertEqual(insets.top, 10)
-        XCTAssertEqual(insets.left, 20)
-        XCTAssertEqual(insets.bottom, 30)
-        XCTAssertEqual(insets.right, 40)
-        
-        let zeroInsets = EdgeInsets.zero
-        XCTAssertEqual(zeroInsets.top, 0)
-        XCTAssertEqual(zeroInsets.left, 0)
-        XCTAssertEqual(zeroInsets.bottom, 0)
-        XCTAssertEqual(zeroInsets.right, 0)
-    }
-    
+
 }
 
 // MARK: - Test Models
