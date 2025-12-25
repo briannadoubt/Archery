@@ -7,7 +7,6 @@ import UIKit
 
 public struct FormView<Content: View>: View {
     @Bindable var container: FormContainer
-    @State private var focusManager = FocusStateManager()
     let configuration: FormConfiguration
     let content: () -> Content
 
@@ -40,7 +39,6 @@ public struct FormView<Content: View>: View {
                 }
             }
         }
-        .environment(focusManager)
         .environment(\.formConfiguration, configuration)
     }
 }
@@ -50,7 +48,6 @@ public struct FormView<Content: View>: View {
 public struct FormFieldView: View {
     let field: any FormFieldProtocol
     @Environment(FormContainer.self) private var container
-    @Environment(FocusStateManager.self) private var focusManager
     @Environment(\.formConfiguration) private var configuration
     @FocusState private var isFocused: Bool
 
