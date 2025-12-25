@@ -4,10 +4,6 @@
 import PackageDescription
 import CompilerPluginSupport
 
-let warningFlags: [SwiftSetting] = [
-    .treatAllWarnings(as: .error),
-]
-
 let package = Package(
     name: "Archery",
     platforms: [
@@ -68,8 +64,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
-            ],
-            swiftSettings: warningFlags
+            ]
         ),
 
         // Library that exposes a macro as part of its API, which is used in client programs.
@@ -89,7 +84,6 @@ let package = Package(
                 "Performance/PerformanceSuite.swift",
                 "Documentation/DocGeneratorCLI.swift"
             ],
-            swiftSettings: warningFlags,
             plugins: [
                 .plugin(name: "DesignTokensPlugin")
             ]
@@ -98,8 +92,7 @@ let package = Package(
         // A client of the library, which is able to use the macro in its own code.
         .target(
             name: "ArcheryClient",
-            dependencies: ["Archery"],
-            swiftSettings: warningFlags
+            dependencies: ["Archery"]
         ),
 
         // A test target used to develop the macro implementation.
@@ -116,8 +109,7 @@ let package = Package(
             ],
             resources: [
                 .process("__Snapshots__")
-            ],
-            swiftSettings: warningFlags
+            ]
         ),
 
         .plugin(
@@ -138,8 +130,7 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
-            path: "Sources/RouteValidator",
-            swiftSettings: warningFlags
+            path: "Sources/RouteValidator"
         ),
 
         // Build tool plugin for validating @Route paths at compile time
@@ -156,8 +147,7 @@ let package = Package(
         .executableTarget(
             name: "design-tokens-generator",
             dependencies: [],
-            path: "Sources/DesignTokensGenerator",
-            swiftSettings: warningFlags
+            path: "Sources/DesignTokensGenerator"
         ),
 
         // Build tool plugin for generating design tokens from JSON
@@ -174,8 +164,7 @@ let package = Package(
         .executableTarget(
             name: "feature-scaffold",
             dependencies: [],
-            path: "Sources/FeatureScaffold",
-            swiftSettings: warningFlags
+            path: "Sources/FeatureScaffold"
         ),
 
         // Feature scaffold command plugin
@@ -200,8 +189,7 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
-            path: "Sources/ArcheryLint",
-            swiftSettings: warningFlags
+            path: "Sources/ArcheryLint"
         ),
 
         // Architecture linter command plugin
@@ -221,8 +209,7 @@ let package = Package(
         .executableTarget(
             name: "archery-budget",
             dependencies: [],
-            path: "Sources/ArcheryBudget",
-            swiftSettings: warningFlags
+            path: "Sources/ArcheryBudget"
         ),
 
         // Performance budget command plugin

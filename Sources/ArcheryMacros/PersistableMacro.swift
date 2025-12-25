@@ -9,6 +9,8 @@ import SwiftDiagnostics
 enum PersistableDiagnostic: String, DiagnosticMessage {
     case mustBeStruct
     case noProperties
+    case appEntityRequiresDisplayName
+    case displayNameRequiresAppEntity
 
     var message: String {
         switch self {
@@ -16,6 +18,10 @@ enum PersistableDiagnostic: String, DiagnosticMessage {
             return "@Persistable can only be applied to structs"
         case .noProperties:
             return "@Persistable requires at least one stored property"
+        case .appEntityRequiresDisplayName:
+            return "AppEntity conformance requires displayName parameter: @Persistable(table: \"...\", displayName: \"...\")"
+        case .displayNameRequiresAppEntity:
+            return "displayName parameter requires AppEntity conformance on the struct"
         }
     }
 
@@ -602,6 +608,23 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         let config = parseConfig(from: node, typeName: typeName)
         let tableName = config.tableName ?? typeName.lowercased()
 
+        // Check for AppEntity conformance and displayName parameter
+        let existingConformances = getExistingConformances(structDecl)
+        let hasAppEntity = existingConformances.contains("AppEntity")
+        let hasDisplayName = config.displayName != nil
+
+        // Validate: AppEntity requires displayName, displayName requires AppEntity
+        if hasAppEntity && !hasDisplayName {
+            throw DiagnosticsError(diagnostics: [
+                Diagnostic(node: Syntax(node), message: PersistableDiagnostic.appEntityRequiresDisplayName)
+            ])
+        }
+        if hasDisplayName && !hasAppEntity {
+            throw DiagnosticsError(diagnostics: [
+                Diagnostic(node: Syntax(node), message: PersistableDiagnostic.displayNameRequiresAppEntity)
+            ])
+        }
+
         var members: [DeclSyntax] = []
 
         // Generate Columns enum (excluding @Transient properties)
@@ -632,8 +655,51 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         )
         members.append(DeclSyntax(stringLiteral: migrationDecl))
 
-        // Note: App Intents members are generated in the extension, not as struct members
-        // This allows proper isolation handling for Swift 6 concurrency
+        // Generate AppEntity members inline if struct declares AppEntity conformance
+        if hasAppEntity, let displayName = config.displayName {
+            let properties = extractProperties(from: structDecl)
+
+            let appEntityMembers = generateAppEntityMembersInline(
+                typeName: typeName,
+                displayName: displayName,
+                titleProperty: config.titleProperty
+            )
+            members.append(DeclSyntax(stringLiteral: appEntityMembers))
+
+            let entityQueryCode = generateEntityQueryCode(typeName: typeName)
+            members.append(DeclSyntax(stringLiteral: entityQueryCode))
+
+            if config.generateIntents {
+                let createIntentCode = generateCreateIntentCode(
+                    typeName: typeName,
+                    displayName: displayName,
+                    titleProperty: config.titleProperty,
+                    properties: properties
+                )
+                members.append(DeclSyntax(stringLiteral: createIntentCode))
+
+                let listIntentCode = generateListIntentCode(
+                    typeName: typeName,
+                    displayName: displayName
+                )
+                members.append(DeclSyntax(stringLiteral: listIntentCode))
+
+                let deleteIntentCode = generateDeleteIntentCode(
+                    typeName: typeName,
+                    displayName: displayName,
+                    titleProperty: config.titleProperty
+                )
+                members.append(DeclSyntax(stringLiteral: deleteIntentCode))
+            }
+
+            if config.generateShortcuts {
+                let shortcutsCode = generateShortcutsProviderCode(
+                    typeName: typeName,
+                    displayName: displayName
+                )
+                members.append(DeclSyntax(stringLiteral: shortcutsCode))
+            }
+        }
 
         return members
     }
@@ -652,17 +718,14 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         }
 
         let typeName = structDecl.name.text
-        let config = parseConfig(from: node, typeName: typeName)
-        let properties = extractProperties(from: structDecl)
         var extensions: [ExtensionDeclSyntax] = []
 
         // Check which conformances are already declared
         let existingConformances = getExistingConformances(structDecl)
 
-        // Mode selection based on displayName:
-        // - No displayName: database-only mode (add Sendable, skip AppEntity)
-        // - With displayName: App Intents mode (skip Sendable, add AppEntity)
-        let isAppIntentsMode = config.displayName != nil
+        // AppEntity mode: user declares AppEntity on struct, macro generates members inline
+        // Database-only mode: no AppEntity, add Sendable
+        let hasAppEntity = existingConformances.contains("AppEntity")
 
         // Note: We only generate Identifiable, Hashable, Sendable via extension.
         // Codable, FetchableRecord, PersistableRecord must be declared on the struct
@@ -677,8 +740,8 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
             conformances.append("Hashable")
         }
 
-        // Sendable only in database-only mode (not compatible with AppEntity in Swift 6)
-        if !isAppIntentsMode && !existingConformances.contains("Sendable") {
+        // Sendable only in database-only mode (AppEntity types handle isolation differently)
+        if !hasAppEntity && !existingConformances.contains("Sendable") {
             conformances.append("Sendable")
         }
 
@@ -691,56 +754,8 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
             extensions.append(conformanceExtension)
         }
 
-        // Generate App Intents extension if in App Intents mode
-        if isAppIntentsMode {
-            let displayName = config.displayName!
-            let appEntityMembers = generateAppEntityMembersInline(
-                typeName: typeName,
-                displayName: displayName,
-                titleProperty: config.titleProperty
-            )
-            let entityQueryCode = generateEntityQueryCode(typeName: typeName)
-            let createIntentCode = config.generateIntents ? generateCreateIntentCode(
-                typeName: typeName,
-                displayName: displayName,
-                titleProperty: config.titleProperty,
-                properties: properties
-            ) : ""
-            let listIntentCode = config.generateIntents ? generateListIntentCode(
-                typeName: typeName,
-                displayName: displayName
-            ) : ""
-            let deleteIntentCode = config.generateIntents ? generateDeleteIntentCode(
-                typeName: typeName,
-                displayName: displayName,
-                titleProperty: config.titleProperty
-            ) : ""
-            let shortcutsCode = config.generateShortcuts ? generateShortcutsProviderCode(
-                typeName: typeName,
-                displayName: displayName
-            ) : ""
-
-            // Use @preconcurrency to suppress Swift 6 actor isolation conflicts
-            // AppEntity has complex isolation requirements that conflict with extension-added conformances
-            let appEntityExtension = try ExtensionDeclSyntax(
-                """
-                extension \(raw: typeName): @preconcurrency AppEntity {
-                    \(raw: appEntityMembers)
-
-                    \(raw: entityQueryCode)
-
-                    \(raw: createIntentCode)
-
-                    \(raw: listIntentCode)
-
-                    \(raw: deleteIntentCode)
-
-                    \(raw: shortcutsCode)
-                }
-                """
-            )
-            extensions.append(appEntityExtension)
-        }
+        // Note: AppEntity members are now generated inline in MemberMacro when the struct
+        // declares AppEntity conformance. No extension-based conformance needed.
 
         // Always generate AutoMigrating conformance for migration support
         let autoMigratingExtension = try ExtensionDeclSyntax(
@@ -894,11 +909,8 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
                     )
 
                     if let container = PersistenceContainer.current {
-                        // Capture item by value to satisfy Swift 6 concurrency
                         item = try await container.write { [item] db in
-                            var mutableItem = item
-                            try mutableItem.insert(db)
-                            return mutableItem
+                            try item.inserted(db)
                         }
                     }
 
