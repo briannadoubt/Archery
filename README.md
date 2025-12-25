@@ -119,6 +119,66 @@ Provides async/await networking with retry logic, caching, and error handling.
 ### @DesignTokens
 Imports design tokens from Figma/Style Dictionary for consistent theming.
 
+## Developer Tools
+
+Archery includes command-line plugins to help with development workflows.
+
+### Feature Scaffold
+
+Generate new features with all Archery macros pre-configured:
+
+```bash
+swift package plugin feature-scaffold Profile ./Features
+```
+
+Creates a complete feature structure:
+- `ProfileView.swift` - SwiftUI view with ViewModel binding
+- `ProfileViewModel.swift` - `@Observable` ViewModel with lifecycle hooks
+- `ProfileItem.swift` - `@Persistable` model with GRDB support
+- `ProfileRoute.swift` - `@Route` navigation enum
+- `ProfileTests.swift` - Unit test scaffolding
+
+Options:
+```bash
+swift package plugin feature-scaffold Settings ./Features --minimal  # View only
+swift package plugin feature-scaffold Admin ./Features --with-tests  # Include tests
+```
+
+### Architecture Linter
+
+Enforce architectural boundaries and best practices:
+
+```bash
+swift package plugin archery-lint
+```
+
+Rules enforced:
+- **No feature-to-feature imports** - Features should communicate through shared modules or DI
+- **Views shouldn't import persistence** - Use `@Query` or inject via ViewModel
+- **Shared module patterns** - Core, Common, Utilities modules are allowed everywhere
+
+CI Integration (GitHub Actions):
+```bash
+swift run archery-lint --format github --project-root .
+```
+
+### Performance Budget
+
+Check binary size and build time against defined budgets:
+
+```bash
+swift package plugin archery-budget \
+  --binary .build/release/MyApp \
+  --build-time 45.2
+```
+
+Default thresholds:
+- Binary size: 50 MB
+- Build time: 2 minutes
+- Configurable via `budgets.json`
+
+Output formats: `text`, `json`, `github` (for CI annotations)
+
 ## Architecture Principles
 
 ### 1. Macro-First Development

@@ -49,6 +49,18 @@ struct SettingsView: View {
             Section("Debug") {
                 NavigationLink("Deep Links", destination: DeepLinkTesterView())
             }
+
+            Section {
+                NavigationLink {
+                    DeveloperToolsView()
+                } label: {
+                    Label("Developer Tools", systemImage: "hammer")
+                }
+            } header: {
+                Label("For Developers", systemImage: "terminal")
+            } footer: {
+                Text("CLI plugins for scaffolding features, linting architecture, and checking performance budgets.")
+            }
         }
         .navigationTitle("Settings")
     }
