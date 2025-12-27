@@ -167,6 +167,9 @@ public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShel
 ///     enum Tab: CaseIterable { case home, settings }
 /// }
 /// ```
+///
+/// Note: AppShortcutsProvider cannot be macro-generated due to AppIntents metadata
+/// processor limitations. Create a separate file with your AppShortcutsProvider.
 @attached(member, names: arbitrary)
 public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module: "ArcheryMacros", type: "AppShellMacro")
 
