@@ -1,4 +1,4 @@
-struct Task: Codable, FetchableRecord, PersistableRecord {
+nonisolated struct Task: Sendable, Codable, FetchableRecord, PersistableRecord {
     var id: String
     var title: String
     var status: String

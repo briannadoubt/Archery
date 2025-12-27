@@ -1,4 +1,4 @@
-struct Comment: Codable, FetchableRecord, PersistableRecord {
+nonisolated struct Comment: Sendable, Codable, FetchableRecord, PersistableRecord {
     var id: String
     var content: String
     var postId: String?

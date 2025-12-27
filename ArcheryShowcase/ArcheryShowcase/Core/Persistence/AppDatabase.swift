@@ -11,20 +11,20 @@ import AppIntents
 /// - `status: TaskStatus` stored as TEXT in SQLite
 /// - `priority: TaskPriority` stored as INTEGER in SQLite
 ///
-/// The `@Persistable` macro generates:
+/// The `@Persistable` macro requires `nonisolated` and `Sendable` for Swift 6
+/// MainActor isolation compatibility, and generates:
 /// - `Columns` enum with type-safe column references
 /// - `databaseTableName` static property
 /// - `createTableMigration` for automatic schema migration
-///
-/// Note: With Swift 6 MainActor default isolation, conformances must be declared
-/// on the struct to avoid actor isolation conflicts with GRDB's Sendable requirements.
+/// - `Codable`, `Identifiable`, `Hashable`, `FetchableRecord`, `PersistableRecord`
+/// - `TaskItemEntity`, `TaskItemEntityListIntent`, `TaskItemEntityDeleteIntent` (via displayName)
 ///
 /// Usage with `@Query`:
 /// ```swift
 /// @Query(TaskItem.all()) var tasks: [TaskItem]
 /// ```
 @Persistable(table: "tasks", displayName: "Task")
-struct TaskItem {
+nonisolated struct TaskItem: Sendable {
     @PrimaryKey var id: String
     var title: String
     var taskDescription: String?
@@ -128,7 +128,7 @@ struct TaskItem {
 // MARK: - Project Model
 
 @Persistable(table: "projects", displayName: "Project", titleProperty: "name")
-struct PersistentProject {
+nonisolated struct PersistentProject: Sendable {
     @PrimaryKey var id: String
     var name: String
     var projectDescription: String?

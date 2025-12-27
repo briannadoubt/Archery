@@ -1,4 +1,4 @@
-struct Task: Codable, Identifiable {
+nonisolated struct Task: Sendable, Codable, Identifiable {
     var id: UUID
     var title: String
     var completed: Bool

@@ -1,4 +1,4 @@
-struct Player: Codable, Identifiable {
+nonisolated struct Player: Sendable, Codable, Identifiable {
     var id: Int64
     var name: String
     var score: Int

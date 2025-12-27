@@ -2,6 +2,9 @@ import Foundation
 #if canImport(Observation)
 @_exported import Observation
 #endif
+#if canImport(AppIntents)
+@_exported import AppIntents
+#endif
 // Runtime shims and macro declarations for Archery.
 
 // MARK: - Navigation & Errors

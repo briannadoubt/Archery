@@ -31,7 +31,7 @@ final class GRDBMacroTests: XCTestCase {
         assertMacroExpansion(
             """
             @Persistable(table: "players")
-            struct Player: Codable, Identifiable {
+            nonisolated struct Player: Sendable, Codable, Identifiable {
                 var id: Int64
                 var name: String
                 var score: Int
@@ -47,7 +47,7 @@ final class GRDBMacroTests: XCTestCase {
         assertMacroExpansion(
             """
             @Persistable
-            struct Task: Codable, Identifiable {
+            nonisolated struct Task: Sendable, Codable, Identifiable {
                 var id: UUID
                 var title: String
                 var completed: Bool
@@ -65,7 +65,7 @@ final class GRDBMacroTests: XCTestCase {
         assertMacroExpansion(
             """
             @Persistable(table: "tasks")
-            struct Task: Codable, FetchableRecord, PersistableRecord {
+            nonisolated struct Task: Sendable, Codable, FetchableRecord, PersistableRecord {
                 @PrimaryKey var id: String
                 var title: String
                 @Indexed var status: String
@@ -85,7 +85,7 @@ final class GRDBMacroTests: XCTestCase {
         assertMacroExpansion(
             """
             @Persistable(table: "comments")
-            struct Comment: Codable, FetchableRecord, PersistableRecord {
+            nonisolated struct Comment: Sendable, Codable, FetchableRecord, PersistableRecord {
                 @PrimaryKey var id: String
                 var content: String
                 @ForeignKey(Post.self) @Indexed var postId: String?
