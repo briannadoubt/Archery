@@ -701,42 +701,46 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         // Check which conformances are already declared on the struct
         let existingConformances = getExistingConformances(structDecl)
 
-        // Check if struct has AppEntity - when present, we can't generate ANY conformances
-        // via extension because the whole struct becomes MainActor-isolated, and extensions
-        // inherit that isolation, breaking Sendable requirements for GRDB protocols
-        let hasAppEntity = existingConformances.contains("AppEntity")
+        // Build list of conformances to generate
+        var conformances: [String] = []
 
-        // When AppEntity is present, user must declare all conformances on the struct
-        // We only generate AutoMigrating and timestamp protocols
-        if !hasAppEntity {
-            // Build list of conformances to generate
-            var conformances: [String] = []
+        // Core conformances - generate if not already declared
+        if !existingConformances.contains("Codable") {
+            conformances.append("Codable")
+        }
+        if !existingConformances.contains("Identifiable") {
+            conformances.append("Identifiable")
+        }
+        if !existingConformances.contains("Hashable") {
+            conformances.append("Hashable")
+        }
 
-            // Core conformances - generate if not already declared
-            if !existingConformances.contains("Codable") {
-                conformances.append("Codable")
-            }
-            if !existingConformances.contains("Identifiable") {
-                conformances.append("Identifiable")
-            }
-            if !existingConformances.contains("Hashable") {
-                conformances.append("Hashable")
-            }
-            if !existingConformances.contains("FetchableRecord") {
-                conformances.append("FetchableRecord")
-            }
-            if !existingConformances.contains("PersistableRecord") {
-                conformances.append("PersistableRecord")
-            }
+        // Generate main conformances extension (non-GRDB protocols)
+        if !conformances.isEmpty {
+            let conformanceList = conformances.joined(separator: ", ")
+            let conformanceExtension = try ExtensionDeclSyntax(
+                "extension \(raw: typeName): \(raw: conformanceList) {}"
+            )
+            extensions.append(conformanceExtension)
+        }
 
-            // Generate main conformances extension
-            if !conformances.isEmpty {
-                let conformanceList = conformances.joined(separator: ", ")
-                let conformanceExtension = try ExtensionDeclSyntax(
-                    "extension \(raw: typeName): \(raw: conformanceList) {}"
-                )
-                extensions.append(conformanceExtension)
-            }
+        // Generate GRDB conformances with nonisolated to avoid MainActor isolation conflicts
+        // Swift 6's default actor isolation makes types MainActor-isolated, which breaks
+        // GRDB's Sendable requirements. Using nonisolated opts out of this isolation.
+        var grdbConformances: [String] = []
+        if !existingConformances.contains("FetchableRecord") {
+            grdbConformances.append("nonisolated FetchableRecord")
+        }
+        if !existingConformances.contains("PersistableRecord") {
+            grdbConformances.append("nonisolated PersistableRecord")
+        }
+
+        if !grdbConformances.isEmpty {
+            let grdbConformanceList = grdbConformances.joined(separator: ", ")
+            let grdbExtension = try ExtensionDeclSyntax(
+                "extension \(raw: typeName): \(raw: grdbConformanceList) {}"
+            )
+            extensions.append(grdbExtension)
         }
 
         // Always generate AutoMigrating conformance for migration support
@@ -768,6 +772,156 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         }
 
         return extensions
+    }
+}
+
+// MARK: - PeerMacro
+
+extension PersistableMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        guard let structDecl = declaration.as(StructDeclSyntax.self) else {
+            return []
+        }
+
+        let typeName = structDecl.name.text
+        let config = parseConfig(from: node, typeName: typeName)
+
+        // Only generate Entity peer when displayName is provided
+        guard let displayName = config.displayName else {
+            return []
+        }
+
+        let titleProperty = config.titleProperty
+        let entityTypeName = "\(typeName)Entity"
+
+        // Generate the Entity struct that wraps the database type for App Intents
+        let entityCode = generateEntityPeer(
+            typeName: typeName,
+            entityTypeName: entityTypeName,
+            displayName: displayName,
+            titleProperty: titleProperty,
+            generateIntents: config.generateIntents
+        )
+
+        return [DeclSyntax(stringLiteral: entityCode)]
+    }
+
+    /// Generates the Entity peer struct for App Intents integration
+    private static func generateEntityPeer(
+        typeName: String,
+        entityTypeName: String,
+        displayName: String,
+        titleProperty: String,
+        generateIntents: Bool
+    ) -> String {
+        let displayNamePlural = displayName + "s"
+
+        var code = """
+/// App Intents entity wrapper for \(typeName)
+/// Generated by @Persistable macro
+struct \(entityTypeName): AppIntents.AppEntity {
+    let wrapped: \(typeName)
+
+    init(_ wrapped: \(typeName)) {
+        self.wrapped = wrapped
+    }
+
+    var id: String { wrapped.id }
+
+    static var typeDisplayRepresentation: AppIntents.TypeDisplayRepresentation {
+        AppIntents.TypeDisplayRepresentation(name: "\(displayName)")
+    }
+
+    var displayRepresentation: AppIntents.DisplayRepresentation {
+        AppIntents.DisplayRepresentation(title: "\\(wrapped.\(titleProperty))")
+    }
+
+    static var defaultQuery: \(entityTypeName)Query { \(entityTypeName)Query() }
+
+    /// Query for fetching \(typeName) entities
+    struct \(entityTypeName)Query: AppIntents.EntityQuery {
+        init() {}
+
+        func entities(for identifiers: [String]) async throws -> [\(entityTypeName)] {
+            guard let container = PersistenceContainer.current else {
+                return []
+            }
+            return try await container.read { db in
+                try \(typeName)
+                    .filter(ids: identifiers)
+                    .fetchAll(db)
+                    .map { \(entityTypeName)($0) }
+            }
+        }
+
+        func suggestedEntities() async throws -> [\(entityTypeName)] {
+            guard let container = PersistenceContainer.current else {
+                return []
+            }
+            return try await container.read { db in
+                try \(typeName)
+                    .limit(10)
+                    .fetchAll(db)
+                    .map { \(entityTypeName)($0) }
+            }
+        }
+    }
+}
+"""
+
+        // Generate intents if enabled
+        if generateIntents {
+            code += """
+
+
+/// List intent for \(displayNamePlural)
+struct \(entityTypeName)ListIntent: AppIntents.AppIntent {
+    static var title: LocalizedStringResource { "List \(displayNamePlural)" }
+    static var description: AppIntents.IntentDescription { "Lists all \(displayNamePlural.lowercased())" }
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some AppIntents.IntentResult & AppIntents.ReturnsValue<[\(entityTypeName)]> {
+        guard let container = PersistenceContainer.current else {
+            return .result(value: [])
+        }
+        let items = try await container.read { db in
+            try \(typeName).fetchAll(db)
+        }
+        return .result(value: items.map { \(entityTypeName)($0) })
+    }
+}
+
+/// Delete intent for \(displayName)
+struct \(entityTypeName)DeleteIntent: AppIntents.AppIntent {
+    static var title: LocalizedStringResource { "Delete \(displayName)" }
+    static var description: AppIntents.IntentDescription { "Deletes a \(displayName.lowercased())" }
+
+    @Parameter(title: "\(displayName)")
+    var entity: \(entityTypeName)
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some AppIntents.IntentResult {
+        guard let container = PersistenceContainer.current else {
+            throw NSError(domain: "AppIntents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Database not available"])
+        }
+        _ = try await container.write { db in
+            try \(typeName).deleteOne(db, id: entity.id)
+        }
+        return .result()
+    }
+}
+"""
+        }
+
+        return code
     }
 }
 
