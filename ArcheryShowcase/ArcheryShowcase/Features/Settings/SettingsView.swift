@@ -55,6 +55,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Benchmarks", systemImage: "gauge.with.dots.needle.67percent")
                 }
+                NavigationLink {
+                    PerformanceTracingView()
+                } label: {
+                    Label("Performance Tracing", systemImage: "waveform.path.ecg")
+                }
             }
 
             Section {

@@ -893,26 +893,38 @@ extension PersistableMacro: PeerMacro {
         \(accessLevel)init() {}
 
         \(accessLevel)func entities(for identifiers: [String]) async throws -> [\(entityTypeName)] {
-            guard let container = PersistenceContainer.current else {
-                return []
-            }
-            return try await container.read { db in
-                try \(typeName)
-                    .filter(ids: identifiers)
-                    .fetchAll(db)
-                    .map { \(entityTypeName)($0) }
+            try await Archery.OperationTracer.trace(
+                "EntityQuery.entities",
+                category: .query,
+                attributes: ["type": "\(typeName)", "count": "\\(identifiers.count)"]
+            ) {
+                guard let container = PersistenceContainer.current else {
+                    return []
+                }
+                return try await container.read { db in
+                    try \(typeName)
+                        .filter(ids: identifiers)
+                        .fetchAll(db)
+                        .map { \(entityTypeName)($0) }
+                }
             }
         }
 
         \(accessLevel)func suggestedEntities() async throws -> [\(entityTypeName)] {
-            guard let container = PersistenceContainer.current else {
-                return []
-            }
-            return try await container.read { db in
-                try \(typeName)
-                    .limit(10)
-                    .fetchAll(db)
-                    .map { \(entityTypeName)($0) }
+            try await Archery.OperationTracer.trace(
+                "EntityQuery.suggestedEntities",
+                category: .query,
+                attributes: ["type": "\(typeName)"]
+            ) {
+                guard let container = PersistenceContainer.current else {
+                    return []
+                }
+                return try await container.read { db in
+                    try \(typeName)
+                        .limit(10)
+                        .fetchAll(db)
+                        .map { \(entityTypeName)($0) }
+                }
             }
         }
     }
@@ -1029,22 +1041,35 @@ extension PersistableMacro {
     private static func generateEntityQueryCode(typeName: String) -> String {
         // EntityQuery must be nonisolated and work with async contexts
         // Use unique struct name to avoid App Intents identifier conflicts
+        // Wrap database operations with OperationTracer for performance tracing
         """
         /// EntityQuery for \(typeName) - fetches from database
             public struct \(typeName)EntityQuery: AppIntents.EntityQuery, Sendable {
                 public init() {}
 
                 public func entities(for identifiers: [String]) async throws -> [\(typeName)] {
-                    guard let container = PersistenceContainer.current else { return [] }
-                    return try await container.read { db in
-                        try \(typeName).filter(ids: identifiers).fetchAll(db)
+                    try await Archery.OperationTracer.trace(
+                        "EntityQuery.entities",
+                        category: .query,
+                        attributes: ["type": "\(typeName)", "count": "\\(identifiers.count)"]
+                    ) {
+                        guard let container = PersistenceContainer.current else { return [] }
+                        return try await container.read { db in
+                            try \(typeName).filter(ids: identifiers).fetchAll(db)
+                        }
                     }
                 }
 
                 public func suggestedEntities() async throws -> [\(typeName)] {
-                    guard let container = PersistenceContainer.current else { return [] }
-                    return try await container.read { db in
-                        try \(typeName).limit(10).fetchAll(db)
+                    try await Archery.OperationTracer.trace(
+                        "EntityQuery.suggestedEntities",
+                        category: .query,
+                        attributes: ["type": "\(typeName)"]
+                    ) {
+                        guard let container = PersistenceContainer.current else { return [] }
+                        return try await container.read { db in
+                            try \(typeName).limit(10).fetchAll(db)
+                        }
                     }
                 }
             }

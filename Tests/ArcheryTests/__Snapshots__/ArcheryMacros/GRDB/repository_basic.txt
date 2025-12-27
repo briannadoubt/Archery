@@ -17,6 +17,7 @@ final class PlayerStoreLive: PlayerStoreProtocol, @unchecked Sendable {
     private let container: Archery.PersistenceContainer
     private let base: PlayerStore
     private let entityTypeName = "Player"
+    private let tableName = "players"
 
     init(container: Archery.PersistenceContainer) {
         self.container = container
@@ -31,105 +32,121 @@ final class PlayerStoreLive: PlayerStoreProtocol, @unchecked Sendable {
         self.base = PlayerStore()
     }
 
-    // CRUD operations
+    // CRUD operations with performance tracing
 
     func fetchAll() async throws -> [Player] {
-        let start = ContinuousClock.now
-        let results = try await container.read { db in
-            try Player.fetchAll(db)
-        }
-        let duration = ContinuousClock.now - start
-        let durationMs = Double(duration.components.attoseconds) / 1_000_000_000_000_000
+        try await Archery.OperationTracer.traceDatabase("fetchAll", table: tableName) {
+            let start = ContinuousClock.now
+            let results = try await container.read { db in
+                try Player.fetchAll(db)
+            }
+            let duration = ContinuousClock.now - start
+            let durationMs = Double(duration.components.attoseconds) / 1_000_000_000_000_000
 
-        // Auto-track fetch
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityFetched(entityType: entityTypeName, count: results.count, durationMs: durationMs)
-            )
-        }
+            // Auto-track fetch
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityFetched(entityType: entityTypeName, count: results.count, durationMs: durationMs)
+                )
+            }
 
-        return results
+            return results
+        }
     }
 
     func fetch(id: Player.ID) async throws -> Player? {
-        try await container.read { db in
-            try Player.fetchOne(db, id: id)
+        try await Archery.OperationTracer.traceDatabase("fetch", table: tableName) {
+            try await container.read { db in
+                try Player.fetchOne(db, id: id)
+            }
         }
     }
 
     func insert(_ record: Player) async throws -> Player {
-        let result = try await container.write { db in
-            var record = record
-            try record.insert(db)
-            return record
-        }
+        try await Archery.OperationTracer.traceDatabase("insert", table: tableName) {
+            let result = try await container.write { db in
+                var record = record
+                try record.insert(db)
+                return record
+            }
 
-        // Auto-track entity created
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityCreated(entityType: entityTypeName, entityId: String(describing: result.id))
-            )
-        }
+            // Auto-track entity created
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityCreated(entityType: entityTypeName, entityId: String(describing: result.id))
+                )
+            }
 
-        return result
+            return result
+        }
     }
 
     func update(_ record: Player) async throws {
-        try await container.write { db in
-            try record.update(db)
-        }
+        try await Archery.OperationTracer.traceDatabase("update", table: tableName) {
+            try await container.write { db in
+                try record.update(db)
+            }
 
-        // Auto-track entity updated
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityUpdated(entityType: entityTypeName, entityId: String(describing: record.id))
-            )
+            // Auto-track entity updated
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityUpdated(entityType: entityTypeName, entityId: String(describing: record.id))
+                )
+            }
         }
     }
 
     func upsert(_ record: Player) async throws -> Player {
-        let result = try await container.write { db in
-            var record = record
-            try record.save(db)
-            return record
-        }
+        try await Archery.OperationTracer.traceDatabase("upsert", table: tableName) {
+            let result = try await container.write { db in
+                var record = record
+                try record.save(db)
+                return record
+            }
 
-        // Auto-track entity created/updated (upsert)
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityUpdated(entityType: entityTypeName, entityId: String(describing: result.id))
-            )
-        }
+            // Auto-track entity created/updated (upsert)
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityUpdated(entityType: entityTypeName, entityId: String(describing: result.id))
+                )
+            }
 
-        return result
+            return result
+        }
     }
 
     func delete(id: Player.ID) async throws -> Bool {
-        let deleted = try await container.write { db in
-            try Player.deleteOne(db, id: id)
-        }
-
-        if deleted {
-            // Auto-track entity deleted
-            await MainActor.run {
-                ArcheryAnalyticsConfiguration.shared.track(
-                    .entityDeleted(entityType: entityTypeName, entityId: String(describing: id))
-                )
+        try await Archery.OperationTracer.traceDatabase("delete", table: tableName) {
+            let deleted = try await container.write { db in
+                try Player.deleteOne(db, id: id)
             }
-        }
 
-        return deleted
+            if deleted {
+                // Auto-track entity deleted
+                await MainActor.run {
+                    ArcheryAnalyticsConfiguration.shared.track(
+                        .entityDeleted(entityType: entityTypeName, entityId: String(describing: id))
+                    )
+                }
+            }
+
+            return deleted
+        }
     }
 
     func deleteAll() async throws -> Int {
-        try await container.write { db in
-            try Player.deleteAll(db)
+        try await Archery.OperationTracer.traceDatabase("deleteAll", table: tableName) {
+            try await container.write { db in
+                try Player.deleteAll(db)
+            }
         }
     }
 
     func count() async throws -> Int {
-        try await container.read { db in
-            try Player.fetchCount(db)
+        try await Archery.OperationTracer.traceDatabase("count", table: tableName) {
+            try await container.read { db in
+                try Player.fetchCount(db)
+            }
         }
     }
 }
