@@ -9,6 +9,8 @@ import SwiftDiagnostics
 enum PersistableDiagnostic: String, DiagnosticMessage {
     case mustBeStruct
     case noProperties
+    case missingNonisolated
+    case missingSendable
 
     var message: String {
         switch self {
@@ -16,6 +18,10 @@ enum PersistableDiagnostic: String, DiagnosticMessage {
             return "@Persistable can only be applied to structs"
         case .noProperties:
             return "@Persistable requires at least one stored property"
+        case .missingNonisolated:
+            return "@Persistable requires 'nonisolated' modifier on the struct to avoid Swift 6 MainActor isolation conflicts with GRDB's Sendable requirements"
+        case .missingSendable:
+            return "@Persistable requires 'Sendable' conformance on the struct for thread-safe database operations"
         }
     }
 
@@ -30,32 +36,44 @@ enum PersistableDiagnostic: String, DiagnosticMessage {
 
 /// Generates GRDB conformances, type-safe Columns enum, and optionally full App Intents integration.
 ///
-/// All protocol conformances are auto-generated via extension - no need to declare them manually.
+/// ## Requirements
 ///
-/// Basic Usage (database only):
+/// The struct MUST be declared with `nonisolated` and `Sendable` to avoid Swift 6 MainActor
+/// isolation conflicts with GRDB's thread-safe database operations:
+///
 /// ```swift
 /// @Persistable(table: "players")
-/// struct Player {
+/// nonisolated struct Player: Sendable {
 ///     var id: String
 ///     var name: String
 ///     var score: Int
 /// }
-/// // Generates: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating
 /// ```
 ///
-/// Full Usage (database + App Intents):
+/// ## Generated Conformances
+///
+/// The macro generates these conformances via extension:
+/// - `Codable` - For encoding/decoding
+/// - `Identifiable` - For SwiftUI lists
+/// - `Hashable` - For collections
+/// - `FetchableRecord` - GRDB fetch support
+/// - `PersistableRecord` - GRDB insert/update/delete support
+/// - `AutoMigrating` - Automatic schema migrations
+///
+/// ## App Intents Integration
+///
+/// Add `displayName` to generate App Intents Entity and Intent types:
+///
 /// ```swift
-/// @Persistable(table: "tasks", displayName: "Task", titleProperty: "title")
-/// struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
+/// @Persistable(table: "tasks", displayName: "Task")
+/// nonisolated struct TaskItem: Sendable {
 ///     var id: String
 ///     var title: String
-///     var status: TaskStatus
 /// }
-/// // Generates EntityQuery, CreateIntent, ListIntent, DeleteIntent
+/// // Generates: TaskItemEntity, TaskItemEntityListIntent, TaskItemEntityDeleteIntent
 /// ```
 ///
-/// Note: With AppEntity, declare ALL conformances on struct.
-/// Swift 6 actor isolation requires this to avoid MainActor/Sendable conflicts.
+/// The file using `displayName` must `import AppIntents`.
 public struct PersistableMacro: MemberMacro, ExtensionMacro {
 
     // MARK: - Configuration
@@ -586,6 +604,24 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
             ])
         }
 
+        // Check for required nonisolated modifier
+        let hasNonisolated = structDecl.modifiers.contains { modifier in
+            modifier.name.tokenKind == .keyword(.nonisolated)
+        }
+        guard hasNonisolated else {
+            throw DiagnosticsError(diagnostics: [
+                Diagnostic(node: Syntax(structDecl.structKeyword), message: PersistableDiagnostic.missingNonisolated)
+            ])
+        }
+
+        // Check for required Sendable conformance
+        let existingConformances = getExistingConformances(structDecl)
+        guard existingConformances.contains("Sendable") else {
+            throw DiagnosticsError(diagnostics: [
+                Diagnostic(node: Syntax(structDecl.name), message: PersistableDiagnostic.missingSendable)
+            ])
+        }
+
         // Extract properties with schema attributes
         let schemaProperties = extractSchemaProperties(from: structDecl)
 
@@ -599,8 +635,7 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         let config = parseConfig(from: node, typeName: typeName)
         let tableName = config.tableName ?? typeName.lowercased()
 
-        // Check if struct declares AppEntity conformance
-        let existingConformances = getExistingConformances(structDecl)
+        // Check if struct declares AppEntity conformance (reuse existingConformances from above)
         let hasAppEntityConformance = existingConformances.contains("AppEntity")
         let hasDisplayName = config.displayName != nil
 
@@ -652,31 +687,8 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
             let entityQueryCode = generateEntityQueryCode(typeName: typeName)
             members.append(DeclSyntax(stringLiteral: entityQueryCode))
 
-            // Generate intents if enabled
-            if config.generateIntents {
-                let properties = extractProperties(from: structDecl)
-
-                let createIntent = generateCreateIntentCode(
-                    typeName: typeName,
-                    displayName: displayName,
-                    titleProperty: titleProperty,
-                    properties: properties
-                )
-                members.append(DeclSyntax(stringLiteral: createIntent))
-
-                let listIntent = generateListIntentCode(
-                    typeName: typeName,
-                    displayName: displayName
-                )
-                members.append(DeclSyntax(stringLiteral: listIntent))
-
-                let deleteIntent = generateDeleteIntentCode(
-                    typeName: typeName,
-                    displayName: displayName,
-                    titleProperty: titleProperty
-                )
-                members.append(DeclSyntax(stringLiteral: deleteIntent))
-            }
+            // Note: Intent types are generated by the PeerMacro as top-level types
+            // (e.g., TaskItemEntityListIntent, TaskItemEntityDeleteIntent)
         }
 
         return members
@@ -701,9 +713,9 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         // Check which conformances are already declared on the struct
         let existingConformances = getExistingConformances(structDecl)
 
-        // Generate all conformances with nonisolated to avoid MainActor isolation conflicts.
-        // Swift 6's default actor isolation makes types MainActor-isolated, which breaks
-        // Sendable requirements for GRDB and AppEntity types.
+        // Generate conformances via extension with nonisolated.
+        // Even though the struct is nonisolated, Swift 6's default actor isolation
+        // still applies MainActor to extension conformances unless explicitly nonisolated.
         var conformances: [String] = []
 
         // Core conformances - generate if not already declared
@@ -723,7 +735,7 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
             conformances.append("nonisolated PersistableRecord")
         }
 
-        // Generate all conformances in a single nonisolated extension
+        // Generate all conformances in a single extension
         if !conformances.isEmpty {
             let conformanceList = conformances.joined(separator: ", ")
             let conformanceExtension = try ExtensionDeclSyntax(
@@ -784,58 +796,103 @@ extension PersistableMacro: PeerMacro {
             return []
         }
 
+        // Match the access level of the source type
+        let accessLevel = getAccessLevel(from: structDecl)
+
         let titleProperty = config.titleProperty
         let entityTypeName = "\(typeName)Entity"
+        let displayNamePlural = displayName + "s"
 
         // Generate the Entity struct that wraps the database type for App Intents
-        let entityCode = generateEntityPeer(
+        var declarations: [DeclSyntax] = []
+
+        let entityCode = generateEntityCode(
             typeName: typeName,
             entityTypeName: entityTypeName,
             displayName: displayName,
             titleProperty: titleProperty,
-            generateIntents: config.generateIntents
+            accessLevel: accessLevel
         )
+        declarations.append(DeclSyntax(stringLiteral: entityCode))
 
-        return [DeclSyntax(stringLiteral: entityCode)]
+        // Generate intents if enabled (as separate peer declarations)
+        if config.generateIntents {
+            let listIntentCode = generateListIntentPeer(
+                typeName: typeName,
+                entityTypeName: entityTypeName,
+                displayNamePlural: displayNamePlural,
+                accessLevel: accessLevel
+            )
+            declarations.append(DeclSyntax(stringLiteral: listIntentCode))
+
+            let deleteIntentCode = generateDeleteIntentPeer(
+                typeName: typeName,
+                entityTypeName: entityTypeName,
+                displayName: displayName,
+                accessLevel: accessLevel
+            )
+            declarations.append(DeclSyntax(stringLiteral: deleteIntentCode))
+        }
+
+        return declarations
     }
 
-    /// Generates the Entity peer struct for App Intents integration
-    private static func generateEntityPeer(
+    /// Extracts the access level from a struct declaration
+    private static func getAccessLevel(from structDecl: StructDeclSyntax) -> String {
+        for modifier in structDecl.modifiers {
+            switch modifier.name.tokenKind {
+            case .keyword(.public):
+                return "public "
+            case .keyword(.internal):
+                return ""  // internal is the default, no keyword needed
+            case .keyword(.fileprivate):
+                return "fileprivate "
+            case .keyword(.private):
+                return "private "
+            case .keyword(.package):
+                return "package "
+            default:
+                continue
+            }
+        }
+        return ""  // Default is internal (no keyword)
+    }
+
+    /// Generates the Entity struct for App Intents integration
+    private static func generateEntityCode(
         typeName: String,
         entityTypeName: String,
         displayName: String,
         titleProperty: String,
-        generateIntents: Bool
+        accessLevel: String
     ) -> String {
-        let displayNamePlural = displayName + "s"
-
-        var code = """
+        return """
 /// App Intents entity wrapper for \(typeName)
 /// Generated by @Persistable macro
-struct \(entityTypeName): AppIntents.AppEntity {
-    let wrapped: \(typeName)
+\(accessLevel)struct \(entityTypeName): AppIntents.AppEntity {
+    \(accessLevel)let wrapped: \(typeName)
 
-    init(_ wrapped: \(typeName)) {
+    \(accessLevel)init(_ wrapped: \(typeName)) {
         self.wrapped = wrapped
     }
 
-    var id: String { wrapped.id }
+    \(accessLevel)var id: String { wrapped.id }
 
-    static var typeDisplayRepresentation: AppIntents.TypeDisplayRepresentation {
+    \(accessLevel)static var typeDisplayRepresentation: AppIntents.TypeDisplayRepresentation {
         AppIntents.TypeDisplayRepresentation(name: "\(displayName)")
     }
 
-    var displayRepresentation: AppIntents.DisplayRepresentation {
+    \(accessLevel)var displayRepresentation: AppIntents.DisplayRepresentation {
         AppIntents.DisplayRepresentation(title: "\\(wrapped.\(titleProperty))")
     }
 
-    static var defaultQuery: \(entityTypeName)Query { \(entityTypeName)Query() }
+    \(accessLevel)static var defaultQuery: \(entityTypeName)Query { \(entityTypeName)Query() }
 
     /// Query for fetching \(typeName) entities
-    struct \(entityTypeName)Query: AppIntents.EntityQuery {
-        init() {}
+    \(accessLevel)struct \(entityTypeName)Query: AppIntents.EntityQuery {
+        \(accessLevel)init() {}
 
-        func entities(for identifiers: [String]) async throws -> [\(entityTypeName)] {
+        \(accessLevel)func entities(for identifiers: [String]) async throws -> [\(entityTypeName)] {
             guard let container = PersistenceContainer.current else {
                 return []
             }
@@ -847,7 +904,7 @@ struct \(entityTypeName): AppIntents.AppEntity {
             }
         }
 
-        func suggestedEntities() async throws -> [\(entityTypeName)] {
+        \(accessLevel)func suggestedEntities() async throws -> [\(entityTypeName)] {
             guard let container = PersistenceContainer.current else {
                 return []
             }
@@ -861,21 +918,25 @@ struct \(entityTypeName): AppIntents.AppEntity {
     }
 }
 """
+    }
 
-        // Generate intents if enabled
-        if generateIntents {
-            code += """
-
-
+    /// Generates the ListIntent peer struct
+    private static func generateListIntentPeer(
+        typeName: String,
+        entityTypeName: String,
+        displayNamePlural: String,
+        accessLevel: String
+    ) -> String {
+        return """
 /// List intent for \(displayNamePlural)
-struct \(entityTypeName)ListIntent: AppIntents.AppIntent {
-    static var title: LocalizedStringResource { "List \(displayNamePlural)" }
-    static var description: AppIntents.IntentDescription { "Lists all \(displayNamePlural.lowercased())" }
+\(accessLevel)struct \(entityTypeName)ListIntent: AppIntents.AppIntent {
+    \(accessLevel)static var title: LocalizedStringResource { "List \(displayNamePlural)" }
+    \(accessLevel)static var description: AppIntents.IntentDescription { "Lists all \(displayNamePlural.lowercased())" }
 
-    init() {}
+    \(accessLevel)init() {}
 
     @MainActor
-    func perform() async throws -> some AppIntents.IntentResult & AppIntents.ReturnsValue<[\(entityTypeName)]> {
+    \(accessLevel)func perform() async throws -> some AppIntents.IntentResult & AppIntents.ReturnsValue<[\(entityTypeName)]> {
         guard let container = PersistenceContainer.current else {
             return .result(value: [])
         }
@@ -885,19 +946,29 @@ struct \(entityTypeName)ListIntent: AppIntents.AppIntent {
         return .result(value: items.map { \(entityTypeName)($0) })
     }
 }
+"""
+    }
 
+    /// Generates the DeleteIntent peer struct
+    private static func generateDeleteIntentPeer(
+        typeName: String,
+        entityTypeName: String,
+        displayName: String,
+        accessLevel: String
+    ) -> String {
+        return """
 /// Delete intent for \(displayName)
-struct \(entityTypeName)DeleteIntent: AppIntents.AppIntent {
-    static var title: LocalizedStringResource { "Delete \(displayName)" }
-    static var description: AppIntents.IntentDescription { "Deletes a \(displayName.lowercased())" }
+\(accessLevel)struct \(entityTypeName)DeleteIntent: AppIntents.AppIntent {
+    \(accessLevel)static var title: LocalizedStringResource { "Delete \(displayName)" }
+    \(accessLevel)static var description: AppIntents.IntentDescription { "Deletes a \(displayName.lowercased())" }
 
     @Parameter(title: "\(displayName)")
-    var entity: \(entityTypeName)
+    \(accessLevel)var entity: \(entityTypeName)
 
-    init() {}
+    \(accessLevel)init() {}
 
     @MainActor
-    func perform() async throws -> some AppIntents.IntentResult {
+    \(accessLevel)func perform() async throws -> some AppIntents.IntentResult {
         guard let container = PersistenceContainer.current else {
             throw NSError(domain: "AppIntents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Database not available"])
         }
@@ -908,9 +979,6 @@ struct \(entityTypeName)DeleteIntent: AppIntents.AppIntent {
     }
 }
 """
-        }
-
-        return code
     }
 }
 
@@ -983,143 +1051,6 @@ extension PersistableMacro {
         """
     }
 
-    // MARK: - Intent Generation
-
-    private static func generateCreateIntentCode(
-        typeName: String,
-        displayName: String,
-        titleProperty: String,
-        properties: [PropertyInfo]
-    ) -> String {
-        // Build parameter declarations for supported types
-        let supportedTypes = ["String", "Int", "Double", "Bool", "Date", "URL"]
-        let parameterDecls = properties.compactMap { prop -> String? in
-            let baseType = prop.type.replacingOccurrences(of: "?", with: "")
-            let isEnum = !supportedTypes.contains(baseType) && baseType.first?.isUppercase == true
-
-            if prop.isOptional || isEnum || supportedTypes.contains(baseType) {
-                return """
-                        @Parameter(title: "\(prop.displayName)")
-                        var \(prop.name): \(prop.type)
-                """
-            }
-            return nil
-        }.joined(separator: "\n\n")
-
-        // Build initializer assignments
-        let initAssignments = properties.compactMap { prop -> String? in
-            let baseType = prop.type.replacingOccurrences(of: "?", with: "")
-            let isEnum = !supportedTypes.contains(baseType) && baseType.first?.isUppercase == true
-
-            if prop.isOptional || isEnum || supportedTypes.contains(baseType) {
-                return "\(prop.name): \(prop.name)"
-            }
-            return nil
-        }.joined(separator: ",\n                    ")
-
-        // perform() must be @MainActor for Swift 6 compatibility with AppEntity
-        // Use unique struct name to avoid App Intents identifier conflicts
-        return """
-            /// Intent to create a new \(displayName)
-            public struct \(typeName)CreateIntent: AppIntent {
-                public static let title: LocalizedStringResource = "Create \(displayName)"
-                public static let description = IntentDescription("Creates a new \(displayName.lowercased())")
-
-        \(parameterDecls)
-
-                public init() {}
-
-                @MainActor
-                public func perform() async throws -> some IntentResult & ReturnsValue<\(typeName)> & ProvidesDialog {
-                    var item = \(typeName)(
-                        \(initAssignments)
-                    )
-
-                    if let container = PersistenceContainer.current {
-                        item = try await container.write { [item] db in
-                            try item.inserted(db)
-                        }
-                    }
-
-                    return .result(
-                        value: item,
-                        dialog: "Created \(displayName.lowercased()) '\\(item.\(titleProperty))'"
-                    )
-                }
-            }
-        """
-    }
-
-    private static func generateListIntentCode(
-        typeName: String,
-        displayName: String
-    ) -> String {
-        let displayNameLower = displayName.lowercased()
-
-        // Use unique struct name to avoid App Intents identifier conflicts
-        return """
-            /// Intent to list all \(displayName)s
-            public struct \(typeName)ListIntent: AppIntent {
-                public static let title: LocalizedStringResource = "List \(displayName)s"
-                public static let description = IntentDescription("Shows all \(displayNameLower)s")
-                public static let openAppWhenRun: Bool = true
-
-                @Parameter(title: "Limit", default: 10)
-                var limit: Int
-
-                public init() {}
-
-                @MainActor
-                public func perform() async throws -> some IntentResult & ReturnsValue<[\(typeName)]> & ProvidesDialog {
-                    guard let container = PersistenceContainer.current else {
-                        return .result(value: [], dialog: "Could not access database")
-                    }
-
-                    let items = try await container.read { db in
-                        try \(typeName).limit(limit).fetchAll(db)
-                    }
-
-                    return .result(
-                        value: items,
-                        dialog: "Found \\(items.count) \(displayNameLower)\\(items.count == 1 ? "" : "s")"
-                    )
-                }
-            }
-        """
-    }
-
-    private static func generateDeleteIntentCode(
-        typeName: String,
-        displayName: String,
-        titleProperty: String
-    ) -> String {
-        // Use unique struct name to avoid App Intents identifier conflicts
-        return """
-            /// Intent to delete a \(displayName)
-            public struct \(typeName)DeleteIntent: AppIntent {
-                public static let title: LocalizedStringResource = "Delete \(displayName)"
-                public static let description = IntentDescription("Deletes a \(displayName.lowercased())")
-
-                @Parameter(title: "\(displayName)")
-                var item: \(typeName)
-
-                public init() {}
-
-                @MainActor
-                public func perform() async throws -> some IntentResult & ProvidesDialog {
-                    let itemToDelete = item
-                    let title = itemToDelete.\(titleProperty)
-
-                    if let container = PersistenceContainer.current {
-                        try await container.write { [itemToDelete] db in
-                            _ = try itemToDelete.delete(db)
-                        }
-                    }
-
-                    return .result(dialog: "Deleted '\\(title)'")
-                }
-            }
-        """
-    }
-
+    // Note: Intent types (ListIntent, DeleteIntent) are generated by the PeerMacro
+    // as top-level peer types, not nested members
 }
