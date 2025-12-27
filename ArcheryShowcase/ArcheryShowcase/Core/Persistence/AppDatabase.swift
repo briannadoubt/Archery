@@ -27,8 +27,7 @@ import AppIntents
 @Persistable(
     table: "tasks",
     displayName: "Task",
-    titleProperty: "title",
-    shortcuts: false  // Disabled - using ShowcaseShortcuts instead
+    titleProperty: "title"
 )
 struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
     @PrimaryKey var id: String
@@ -136,8 +135,7 @@ struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRe
 @Persistable(
     table: "projects",
     displayName: "Project",
-    titleProperty: "name",
-    shortcuts: false  // Disabled - using ShowcaseShortcuts instead
+    titleProperty: "name"
 )
 struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
     @PrimaryKey var id: String
