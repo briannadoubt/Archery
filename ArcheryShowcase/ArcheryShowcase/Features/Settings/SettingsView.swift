@@ -23,7 +23,9 @@ struct SettingsView: View {
             #if os(iOS) || os(visionOS)
             Section("Siri & Shortcuts") {
                 AppShortcutsButton {
-                    // Optional: track analytics when user opens shortcuts
+                    AnalyticsManager.shared.track(
+                        AppAnalytics.featureUsed(featureName: "siri_shortcuts", duration: 0)
+                    )
                 }
             }
             #endif
