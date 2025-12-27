@@ -30,34 +30,32 @@ enum PersistableDiagnostic: String, DiagnosticMessage {
 
 /// Generates GRDB conformances, type-safe Columns enum, and optionally full App Intents integration.
 ///
+/// All protocol conformances are auto-generated via extension - no need to declare them manually.
+///
 /// Basic Usage (database only):
 /// ```swift
 /// @Persistable(table: "players")
-/// struct Player: Codable, Identifiable, Sendable, FetchableRecord, PersistableRecord {
+/// struct Player {
 ///     var id: String
 ///     var name: String
 ///     var score: Int
 /// }
+/// // Generates: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating
 /// ```
 ///
 /// Full Usage (database + App Intents):
 /// ```swift
 /// @Persistable(table: "tasks", displayName: "Task", titleProperty: "title")
-/// struct TaskItem: Codable, Identifiable, Sendable, FetchableRecord, PersistableRecord {
+/// struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
 ///     var id: String
 ///     var title: String
 ///     var status: TaskStatus
 /// }
+/// // Generates EntityQuery, CreateIntent, ListIntent, DeleteIntent
 /// ```
 ///
-/// When `displayName` is provided, generates:
-/// - `AppEntity` conformance with `EntityQuery`
-/// - CRUD intents: `CreateIntent`, `ListIntent`, `DeleteIntent`
-///
-/// Note: `AppShortcutsProvider` must be created manually in a separate file.
-/// The AppIntents metadata processor requires static analysis and cannot parse macro-generated code.
-///
-/// All generated App Intents code is Swift 6 concurrency-safe with proper `nonisolated` and `@MainActor` annotations.
+/// Note: With AppEntity, declare ALL conformances on struct.
+/// Swift 6 actor isolation requires this to avoid MainActor/Sendable conflicts.
 public struct PersistableMacro: MemberMacro, ExtensionMacro {
 
     // MARK: - Configuration
@@ -601,9 +599,7 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         let config = parseConfig(from: node, typeName: typeName)
         let tableName = config.tableName ?? typeName.lowercased()
 
-        // Check if struct declares AppEntity conformance
-        let existingConformances = getExistingConformances(structDecl)
-        let hasAppEntityConformance = existingConformances.contains("AppEntity")
+        // Check if we should generate AppEntity members (when displayName is provided)
         let hasDisplayName = config.displayName != nil
 
         var members: [DeclSyntax] = []
@@ -636,9 +632,9 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         )
         members.append(DeclSyntax(stringLiteral: migrationDecl))
 
-        // Generate AppEntity members INLINE when struct declares AppEntity + displayName provided
-        // This avoids Swift 6 actor isolation conflicts between AppEntity (MainActor) and FetchableRecord (Sendable)
-        if hasAppEntityConformance && hasDisplayName {
+        // Generate AppEntity members when displayName is provided
+        // The macro generates AppEntity conformance via extension
+        if hasDisplayName {
             let displayName = config.displayName!
             let titleProperty = config.titleProperty
 
@@ -700,39 +696,45 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         let typeName = structDecl.name.text
         var extensions: [ExtensionDeclSyntax] = []
 
-        // Check which conformances are already declared
+        // Check which conformances are already declared on the struct
         let existingConformances = getExistingConformances(structDecl)
 
-        // Check if struct declares AppEntity conformance - changes what we can generate
-        let hasAppEntityConformance = existingConformances.contains("AppEntity")
+        // Check if struct has AppEntity - when present, we can't generate ANY conformances
+        // via extension because the whole struct becomes MainActor-isolated, and extensions
+        // inherit that isolation, breaking Sendable requirements for GRDB protocols
+        let hasAppEntity = existingConformances.contains("AppEntity")
 
-        // Build list of conformances that can be generated via extension
-        // Note: When struct has AppEntity, it becomes MainActor-isolated, so Identifiable/Hashable
-        // must also be declared on the struct (not via extension) to avoid Sendable conflicts
-        var conformances: [String] = []
+        // When AppEntity is present, user must declare all conformances on the struct
+        // We only generate AutoMigrating and timestamp protocols
+        if !hasAppEntity {
+            // Build list of conformances to generate
+            var conformances: [String] = []
 
-        // Swift standard library conformances - only generate if struct doesn't have AppEntity
-        // (when AppEntity is present, user must declare these on struct to avoid isolation issues)
-        if !hasAppEntityConformance {
+            // Core conformances - generate if not already declared
+            if !existingConformances.contains("Codable") {
+                conformances.append("Codable")
+            }
             if !existingConformances.contains("Identifiable") {
                 conformances.append("Identifiable")
             }
             if !existingConformances.contains("Hashable") {
                 conformances.append("Hashable")
             }
-            // Sendable only in database-only mode (not compatible with AppEntity)
-            if !existingConformances.contains("Sendable") {
-                conformances.append("Sendable")
+            if !existingConformances.contains("FetchableRecord") {
+                conformances.append("FetchableRecord")
             }
-        }
+            if !existingConformances.contains("PersistableRecord") {
+                conformances.append("PersistableRecord")
+            }
 
-        // Generate conformances extension
-        if !conformances.isEmpty {
-            let conformanceList = conformances.joined(separator: ", ")
-            let conformanceExtension = try ExtensionDeclSyntax(
-                "extension \(raw: typeName): \(raw: conformanceList) {}"
-            )
-            extensions.append(conformanceExtension)
+            // Generate main conformances extension
+            if !conformances.isEmpty {
+                let conformanceList = conformances.joined(separator: ", ")
+                let conformanceExtension = try ExtensionDeclSyntax(
+                    "extension \(raw: typeName): \(raw: conformanceList) {}"
+                )
+                extensions.append(conformanceExtension)
+            }
         }
 
         // Always generate AutoMigrating conformance for migration support

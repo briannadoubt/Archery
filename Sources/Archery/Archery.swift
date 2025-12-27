@@ -175,48 +175,44 @@ public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module:
 
 /// Generates database conformances and optionally full App Intents integration.
 ///
+/// All protocol conformances are auto-generated - no need to declare them manually.
+///
 /// Basic Example (database only):
 /// ```swift
 /// @Persistable(table: "players")
-/// struct Player: Codable, FetchableRecord, PersistableRecord {
+/// struct Player {
 ///     var id: Int64
 ///     var name: String
 ///     var score: Int
 /// }
-/// // Generates: Columns enum, databaseTableName, createTableMigration
-/// // Extension: Identifiable, Hashable, Sendable, AutoMigrating
+/// // Generates: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating
 /// ```
 ///
 /// Full Example (database + App Intents):
 /// ```swift
 /// @Persistable(table: "tasks", displayName: "Task", titleProperty: "title")
-/// struct TaskItem: Codable, FetchableRecord, PersistableRecord, AppEntity {
+/// struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
 ///     var id: String
 ///     var title: String
 ///     var status: TaskStatus
 /// }
-/// // Generates: Columns, databaseTableName, createTableMigration
-/// // + AppEntity members: defaultQuery, typeDisplayRepresentation, displayRepresentation
-/// // + Nested types: EntityQuery, CreateIntent, ListIntent, DeleteIntent
-/// // Extension: Identifiable, Hashable, AutoMigrating (no Sendable - incompatible with AppEntity)
-/// // Note: Create AppShortcutsProvider manually - AppIntents metadata processor can't parse macros
+/// // Generates EntityQuery, CreateIntent, ListIntent, DeleteIntent
+/// // Note: All conformances must be on struct when using AppEntity (Swift 6 actor isolation)
 /// ```
 ///
 /// Generates members:
 /// - `Columns` enum with type-safe column references
 /// - `databaseTableName` static property
 /// - `createTableMigration` for automatic schema migration
-/// - When struct declares `AppEntity` + `displayName`: AppEntity members inline + nested intents
+/// - When `displayName` provided: AppEntity members + nested intents
 ///
-/// Generates conformances via extension:
-/// - Database-only mode: `Identifiable`, `Hashable`, `Sendable`
-/// - App Intents mode: None (user must declare all conformances on struct)
-/// - Always: `AutoMigrating`, `HasTimestamps`, `HasCreatedAt`, `HasUpdatedAt` (based on properties)
+/// Generates conformances via extension (when no AppEntity):
+/// - `Codable`, `Identifiable`, `Hashable`, `FetchableRecord`, `PersistableRecord`, `AutoMigrating`
+/// - Based on properties: `HasTimestamps`, `HasCreatedAt`, `HasUpdatedAt`
 ///
-/// You must declare on the struct: `Codable, FetchableRecord, PersistableRecord`
-/// For App Intents: also `Identifiable, Hashable, AppEntity` (due to Swift 6 actor isolation requirements)
+/// When using AppEntity: declare ALL conformances on struct (Swift 6 actor isolation requirement)
 @attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration), arbitrary)
-@attached(extension, conformances: Identifiable, Hashable, Sendable, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt)
+@attached(extension, conformances: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt)
 public macro Persistable(
     table: String? = nil,
     primaryKey: String = "id",
