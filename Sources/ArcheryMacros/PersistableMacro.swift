@@ -701,46 +701,35 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         // Check which conformances are already declared on the struct
         let existingConformances = getExistingConformances(structDecl)
 
-        // Build list of conformances to generate
+        // Generate all conformances with nonisolated to avoid MainActor isolation conflicts.
+        // Swift 6's default actor isolation makes types MainActor-isolated, which breaks
+        // Sendable requirements for GRDB and AppEntity types.
         var conformances: [String] = []
 
         // Core conformances - generate if not already declared
         if !existingConformances.contains("Codable") {
-            conformances.append("Codable")
+            conformances.append("nonisolated Codable")
         }
         if !existingConformances.contains("Identifiable") {
-            conformances.append("Identifiable")
+            conformances.append("nonisolated Identifiable")
         }
         if !existingConformances.contains("Hashable") {
-            conformances.append("Hashable")
+            conformances.append("nonisolated Hashable")
+        }
+        if !existingConformances.contains("FetchableRecord") {
+            conformances.append("nonisolated FetchableRecord")
+        }
+        if !existingConformances.contains("PersistableRecord") {
+            conformances.append("nonisolated PersistableRecord")
         }
 
-        // Generate main conformances extension (non-GRDB protocols)
+        // Generate all conformances in a single nonisolated extension
         if !conformances.isEmpty {
             let conformanceList = conformances.joined(separator: ", ")
             let conformanceExtension = try ExtensionDeclSyntax(
                 "extension \(raw: typeName): \(raw: conformanceList) {}"
             )
             extensions.append(conformanceExtension)
-        }
-
-        // Generate GRDB conformances with nonisolated to avoid MainActor isolation conflicts
-        // Swift 6's default actor isolation makes types MainActor-isolated, which breaks
-        // GRDB's Sendable requirements. Using nonisolated opts out of this isolation.
-        var grdbConformances: [String] = []
-        if !existingConformances.contains("FetchableRecord") {
-            grdbConformances.append("nonisolated FetchableRecord")
-        }
-        if !existingConformances.contains("PersistableRecord") {
-            grdbConformances.append("nonisolated PersistableRecord")
-        }
-
-        if !grdbConformances.isEmpty {
-            let grdbConformanceList = grdbConformances.joined(separator: ", ")
-            let grdbExtension = try ExtensionDeclSyntax(
-                "extension \(raw: typeName): \(raw: grdbConformanceList) {}"
-            )
-            extensions.append(grdbExtension)
         }
 
         // Always generate AutoMigrating conformance for migration support

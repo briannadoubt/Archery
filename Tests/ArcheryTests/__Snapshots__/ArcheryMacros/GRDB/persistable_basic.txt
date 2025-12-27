@@ -20,10 +20,7 @@ struct Player: Codable, Identifiable {
             }
 }
 
-extension Player: Hashable {
-}
-
-extension Player: nonisolated FetchableRecord, nonisolated PersistableRecord {
+extension Player: nonisolated Hashable, nonisolated FetchableRecord, nonisolated PersistableRecord {
 }
 
 extension Player: AutoMigrating {

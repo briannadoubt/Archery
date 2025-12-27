@@ -24,7 +24,7 @@ import AppIntents
 /// @Query(TaskItem.all()) var tasks: [TaskItem]
 /// ```
 @Persistable(table: "tasks", displayName: "Task")
-struct TaskItem: Codable, Identifiable, Hashable {
+struct TaskItem {
     @PrimaryKey var id: String
     var title: String
     var taskDescription: String?
@@ -128,7 +128,7 @@ struct TaskItem: Codable, Identifiable, Hashable {
 // MARK: - Project Model
 
 @Persistable(table: "projects", displayName: "Project", titleProperty: "name")
-struct PersistentProject: Codable, Identifiable, Hashable {
+struct PersistentProject {
     @PrimaryKey var id: String
     var name: String
     var projectDescription: String?
