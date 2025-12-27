@@ -53,7 +53,9 @@ enum PersistableDiagnostic: String, DiagnosticMessage {
 /// When `displayName` is provided, generates:
 /// - `AppEntity` conformance with `EntityQuery`
 /// - CRUD intents: `CreateIntent`, `ListIntent`, `DeleteIntent`
-/// - `Shortcuts: AppShortcutsProvider` (unless `shortcuts: false`)
+///
+/// Note: `AppShortcutsProvider` must be created manually in a separate file.
+/// The AppIntents metadata processor requires static analysis and cannot parse macro-generated code.
 ///
 /// All generated App Intents code is Swift 6 concurrency-safe with proper `nonisolated` and `@MainActor` annotations.
 public struct PersistableMacro: MemberMacro, ExtensionMacro {
@@ -67,7 +69,6 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         var displayName: String?
         var titleProperty: String = "title"
         var generateIntents: Bool = true
-        var generateShortcuts: Bool = true
     }
 
     static func parseConfig(from node: AttributeSyntax, typeName: String) -> Config {
@@ -103,8 +104,6 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
                 }
             case "intents":
                 config.generateIntents = argument.expression.description.trimmingCharacters(in: .whitespaces) == "true"
-            case "shortcuts":
-                config.generateShortcuts = argument.expression.description.trimmingCharacters(in: .whitespaces) == "true"
             default:
                 break
             }
@@ -679,15 +678,6 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
                     titleProperty: titleProperty
                 )
                 members.append(DeclSyntax(stringLiteral: deleteIntent))
-
-                // Generate shortcuts if enabled
-                if config.generateShortcuts {
-                    let shortcuts = generateShortcutsProviderCode(
-                        typeName: typeName,
-                        displayName: displayName
-                    )
-                    members.append(DeclSyntax(stringLiteral: shortcuts))
-                }
             }
         }
 
@@ -708,14 +698,10 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         }
 
         let typeName = structDecl.name.text
-        let config = parseConfig(from: node, typeName: typeName)
         var extensions: [ExtensionDeclSyntax] = []
 
         // Check which conformances are already declared
         let existingConformances = getExistingConformances(structDecl)
-
-        // App Intents mode when displayName is provided
-        let isAppIntentsMode = config.displayName != nil
 
         // Check if struct declares AppEntity conformance - changes what we can generate
         let hasAppEntityConformance = existingConformances.contains("AppEntity")
@@ -987,50 +973,4 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         """
     }
 
-    private static func generateShortcutsProviderCode(
-        typeName: String,
-        displayName: String
-    ) -> String {
-        let displayNameLower = displayName.lowercased()
-        let displayNamePlural = displayName + "s"
-        let displayNamePluralLower = displayNamePlural.lowercased()
-
-        // Use unique struct name to avoid App Intents identifier conflicts
-        return """
-            /// App Shortcuts for \(typeName)
-            public struct \(typeName)Shortcuts: AppShortcutsProvider {
-                public static var appShortcuts: [AppShortcut] {
-                    AppShortcut(
-                        intent: \(typeName).\(typeName)CreateIntent(),
-                        phrases: [
-                            "Create a \(displayNameLower) in \\(.applicationName)",
-                            "New \(displayNameLower) in \\(.applicationName)",
-                            "Add \(displayNameLower) to \\(.applicationName)"
-                        ],
-                        shortTitle: "Create \(displayName)",
-                        systemImageName: "plus.circle"
-                    )
-                    AppShortcut(
-                        intent: \(typeName).\(typeName)ListIntent(),
-                        phrases: [
-                            "Show my \(displayNamePluralLower) in \\(.applicationName)",
-                            "List \(displayNamePluralLower) in \\(.applicationName)",
-                            "View \(displayNamePluralLower) in \\(.applicationName)"
-                        ],
-                        shortTitle: "List \(displayNamePlural)",
-                        systemImageName: "list.bullet"
-                    )
-                    AppShortcut(
-                        intent: \(typeName).\(typeName)DeleteIntent(),
-                        phrases: [
-                            "Delete \(displayNameLower) in \\(.applicationName)",
-                            "Remove \(displayNameLower) from \\(.applicationName)"
-                        ],
-                        shortTitle: "Delete \(displayName)",
-                        systemImageName: "trash"
-                    )
-                }
-            }
-        """
-    }
 }

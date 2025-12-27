@@ -197,8 +197,9 @@ public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module:
 /// }
 /// // Generates: Columns, databaseTableName, createTableMigration
 /// // + AppEntity members: defaultQuery, typeDisplayRepresentation, displayRepresentation
-/// // + Nested types: EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+/// // + Nested types: EntityQuery, CreateIntent, ListIntent, DeleteIntent
 /// // Extension: Identifiable, Hashable, AutoMigrating (no Sendable - incompatible with AppEntity)
+/// // Note: Create AppShortcutsProvider manually - AppIntents metadata processor can't parse macros
 /// ```
 ///
 /// Generates members:
@@ -221,8 +222,7 @@ public macro Persistable(
     primaryKey: String = "id",
     displayName: String? = nil,
     titleProperty: String = "title",
-    intents: Bool = true,
-    shortcuts: Bool = true
+    intents: Bool = true
 ) = #externalMacro(module: "ArcheryMacros", type: "PersistableMacro")
 
 /// Generates a repository pattern for the database with protocol, live, and mock implementations.
