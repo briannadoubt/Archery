@@ -50,6 +50,11 @@ struct SettingsView: View {
 
             Section("Debug") {
                 NavigationLink("Deep Links", destination: DeepLinkTesterView())
+                NavigationLink {
+                    BenchmarksView()
+                } label: {
+                    Label("Benchmarks", systemImage: "gauge.with.dots.needle.67percent")
+                }
             }
 
             Section {
