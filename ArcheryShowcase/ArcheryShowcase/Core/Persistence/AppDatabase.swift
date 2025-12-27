@@ -12,12 +12,13 @@ import AppIntents
 /// - `priority: TaskPriority` stored as INTEGER in SQLite
 ///
 /// The `@Persistable` macro generates:
-/// - Members: Columns enum, databaseTableName
-/// - Conformances via extension: Identifiable, Hashable (no Sendable in App Intents mode)
-/// - App Intents: AppEntity, EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+/// - Members: Columns enum, databaseTableName, createTableMigration
+/// - Members (when AppEntity declared): defaultQuery, typeDisplayRepresentation, displayRepresentation,
+///   EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+/// - Conformances via extension: AutoMigrating (and Identifiable, Hashable, Sendable in database-only mode)
 ///
-/// `Codable`, `FetchableRecord`, `PersistableRecord` must be declared on the struct
-/// because PersistableRecord requires Encodable which needs to be visible at definition.
+/// For App Intents mode: declare `Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity`
+/// This avoids Swift 6 actor isolation conflicts between AppEntity (MainActor) and FetchableRecord (Sendable).
 ///
 /// Usage with `@Query`:
 /// ```swift

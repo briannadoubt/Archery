@@ -9,8 +9,6 @@ import SwiftDiagnostics
 enum PersistableDiagnostic: String, DiagnosticMessage {
     case mustBeStruct
     case noProperties
-    case appEntityRequiresDisplayName
-    case displayNameRequiresAppEntity
 
     var message: String {
         switch self {
@@ -18,10 +16,6 @@ enum PersistableDiagnostic: String, DiagnosticMessage {
             return "@Persistable can only be applied to structs"
         case .noProperties:
             return "@Persistable requires at least one stored property"
-        case .appEntityRequiresDisplayName:
-            return "AppEntity conformance requires displayName parameter: @Persistable(table: \"...\", displayName: \"...\")"
-        case .displayNameRequiresAppEntity:
-            return "displayName parameter requires AppEntity conformance on the struct"
         }
     }
 
@@ -608,22 +602,10 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         let config = parseConfig(from: node, typeName: typeName)
         let tableName = config.tableName ?? typeName.lowercased()
 
-        // Check for AppEntity conformance and displayName parameter
+        // Check if struct declares AppEntity conformance
         let existingConformances = getExistingConformances(structDecl)
-        let hasAppEntity = existingConformances.contains("AppEntity")
+        let hasAppEntityConformance = existingConformances.contains("AppEntity")
         let hasDisplayName = config.displayName != nil
-
-        // Validate: AppEntity requires displayName, displayName requires AppEntity
-        if hasAppEntity && !hasDisplayName {
-            throw DiagnosticsError(diagnostics: [
-                Diagnostic(node: Syntax(node), message: PersistableDiagnostic.appEntityRequiresDisplayName)
-            ])
-        }
-        if hasDisplayName && !hasAppEntity {
-            throw DiagnosticsError(diagnostics: [
-                Diagnostic(node: Syntax(node), message: PersistableDiagnostic.displayNameRequiresAppEntity)
-            ])
-        }
 
         var members: [DeclSyntax] = []
 
@@ -655,49 +637,57 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         )
         members.append(DeclSyntax(stringLiteral: migrationDecl))
 
-        // Generate AppEntity members inline if struct declares AppEntity conformance
-        if hasAppEntity, let displayName = config.displayName {
-            let properties = extractProperties(from: structDecl)
+        // Generate AppEntity members INLINE when struct declares AppEntity + displayName provided
+        // This avoids Swift 6 actor isolation conflicts between AppEntity (MainActor) and FetchableRecord (Sendable)
+        if hasAppEntityConformance && hasDisplayName {
+            let displayName = config.displayName!
+            let titleProperty = config.titleProperty
 
+            // Generate AppEntity required members inline
             let appEntityMembers = generateAppEntityMembersInline(
                 typeName: typeName,
                 displayName: displayName,
-                titleProperty: config.titleProperty
+                titleProperty: titleProperty
             )
             members.append(DeclSyntax(stringLiteral: appEntityMembers))
 
+            // Generate EntityQuery as nested type
             let entityQueryCode = generateEntityQueryCode(typeName: typeName)
             members.append(DeclSyntax(stringLiteral: entityQueryCode))
 
+            // Generate intents if enabled
             if config.generateIntents {
-                let createIntentCode = generateCreateIntentCode(
+                let properties = extractProperties(from: structDecl)
+
+                let createIntent = generateCreateIntentCode(
                     typeName: typeName,
                     displayName: displayName,
-                    titleProperty: config.titleProperty,
+                    titleProperty: titleProperty,
                     properties: properties
                 )
-                members.append(DeclSyntax(stringLiteral: createIntentCode))
+                members.append(DeclSyntax(stringLiteral: createIntent))
 
-                let listIntentCode = generateListIntentCode(
+                let listIntent = generateListIntentCode(
                     typeName: typeName,
                     displayName: displayName
                 )
-                members.append(DeclSyntax(stringLiteral: listIntentCode))
+                members.append(DeclSyntax(stringLiteral: listIntent))
 
-                let deleteIntentCode = generateDeleteIntentCode(
+                let deleteIntent = generateDeleteIntentCode(
                     typeName: typeName,
                     displayName: displayName,
-                    titleProperty: config.titleProperty
+                    titleProperty: titleProperty
                 )
-                members.append(DeclSyntax(stringLiteral: deleteIntentCode))
-            }
+                members.append(DeclSyntax(stringLiteral: deleteIntent))
 
-            if config.generateShortcuts {
-                let shortcutsCode = generateShortcutsProviderCode(
-                    typeName: typeName,
-                    displayName: displayName
-                )
-                members.append(DeclSyntax(stringLiteral: shortcutsCode))
+                // Generate shortcuts if enabled
+                if config.generateShortcuts {
+                    let shortcuts = generateShortcutsProviderCode(
+                        typeName: typeName,
+                        displayName: displayName
+                    )
+                    members.append(DeclSyntax(stringLiteral: shortcuts))
+                }
             }
         }
 
@@ -718,31 +708,36 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         }
 
         let typeName = structDecl.name.text
+        let config = parseConfig(from: node, typeName: typeName)
         var extensions: [ExtensionDeclSyntax] = []
 
         // Check which conformances are already declared
         let existingConformances = getExistingConformances(structDecl)
 
-        // AppEntity mode: user declares AppEntity on struct, macro generates members inline
-        // Database-only mode: no AppEntity, add Sendable
-        let hasAppEntity = existingConformances.contains("AppEntity")
+        // App Intents mode when displayName is provided
+        let isAppIntentsMode = config.displayName != nil
 
-        // Note: We only generate Identifiable, Hashable, Sendable via extension.
-        // Codable, FetchableRecord, PersistableRecord must be declared on the struct
-        // because PersistableRecord requires Encodable to be visible at struct definition.
+        // Check if struct declares AppEntity conformance - changes what we can generate
+        let hasAppEntityConformance = existingConformances.contains("AppEntity")
+
+        // Build list of conformances that can be generated via extension
+        // Note: When struct has AppEntity, it becomes MainActor-isolated, so Identifiable/Hashable
+        // must also be declared on the struct (not via extension) to avoid Sendable conflicts
         var conformances: [String] = []
 
-        // Swift standard library conformances (not Codable - must be on struct for GRDB)
-        if !existingConformances.contains("Identifiable") {
-            conformances.append("Identifiable")
-        }
-        if !existingConformances.contains("Hashable") {
-            conformances.append("Hashable")
-        }
-
-        // Sendable only in database-only mode (AppEntity types handle isolation differently)
-        if !hasAppEntity && !existingConformances.contains("Sendable") {
-            conformances.append("Sendable")
+        // Swift standard library conformances - only generate if struct doesn't have AppEntity
+        // (when AppEntity is present, user must declare these on struct to avoid isolation issues)
+        if !hasAppEntityConformance {
+            if !existingConformances.contains("Identifiable") {
+                conformances.append("Identifiable")
+            }
+            if !existingConformances.contains("Hashable") {
+                conformances.append("Hashable")
+            }
+            // Sendable only in database-only mode (not compatible with AppEntity)
+            if !existingConformances.contains("Sendable") {
+                conformances.append("Sendable")
+            }
         }
 
         // Generate conformances extension
@@ -753,9 +748,6 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
             )
             extensions.append(conformanceExtension)
         }
-
-        // Note: AppEntity members are now generated inline in MemberMacro when the struct
-        // declares AppEntity conformance. No extension-based conformance needed.
 
         // Always generate AutoMigrating conformance for migration support
         let autoMigratingExtension = try ExtensionDeclSyntax(

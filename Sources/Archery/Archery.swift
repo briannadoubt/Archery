@@ -171,46 +171,47 @@ public macro AppShell() = #externalMacro(module: "ArcheryMacros", type: "AppShel
 public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module: "ArcheryMacros", type: "AppShellMacro")
 
 /// Generates database conformances and optionally full App Intents integration.
-/// User must manually add FetchableRecord, PersistableRecord conformances.
 ///
 /// Basic Example (database only):
 /// ```swift
 /// @Persistable(table: "players")
-/// struct Player: Codable, Identifiable, FetchableRecord, PersistableRecord {
+/// struct Player: Codable, FetchableRecord, PersistableRecord {
 ///     var id: Int64
 ///     var name: String
 ///     var score: Int
 /// }
-/// // Generates: enum Columns { ... } and static let databaseTableName = "players"
+/// // Generates: Columns enum, databaseTableName, createTableMigration
+/// // Extension: Identifiable, Hashable, Sendable, AutoMigrating
 /// ```
 ///
 /// Full Example (database + App Intents):
 /// ```swift
 /// @Persistable(table: "tasks", displayName: "Task", titleProperty: "title")
-/// struct TaskItem: Codable, Identifiable, Sendable, FetchableRecord, PersistableRecord {
+/// struct TaskItem: Codable, FetchableRecord, PersistableRecord, AppEntity {
 ///     var id: String
 ///     var title: String
 ///     var status: TaskStatus
 /// }
-/// // Generates: Columns, databaseTableName, AppEntity conformance,
-/// // EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+/// // Generates: Columns, databaseTableName, createTableMigration
+/// // + AppEntity members: defaultQuery, typeDisplayRepresentation, displayRepresentation
+/// // + Nested types: EntityQuery, CreateIntent, ListIntent, DeleteIntent, Shortcuts
+/// // Extension: Identifiable, Hashable, AutoMigrating (no Sendable - incompatible with AppEntity)
 /// ```
 ///
 /// Generates members:
 /// - `Columns` enum with type-safe column references
 /// - `databaseTableName` static property
+/// - `createTableMigration` for automatic schema migration
+/// - When struct declares `AppEntity` + `displayName`: AppEntity members inline + nested intents
 ///
 /// Generates conformances via extension:
-/// - `Identifiable`, `Hashable`, `Sendable` (if not already declared)
+/// - Database-only mode: `Identifiable`, `Hashable`, `Sendable`
+/// - App Intents mode: None (user must declare all conformances on struct)
+/// - Always: `AutoMigrating`, `HasTimestamps`, `HasCreatedAt`, `HasUpdatedAt` (based on properties)
 ///
 /// You must declare on the struct: `Codable, FetchableRecord, PersistableRecord`
-/// (PersistableRecord requires Encodable which must be visible at struct definition)
-///
-/// When `displayName` is provided, also generates App Intents (skipping Sendable):
-/// - `AppEntity` conformance with `{TypeName}EntityQuery`
-/// - CRUD intents: `{TypeName}CreateIntent`, `{TypeName}ListIntent`, `{TypeName}DeleteIntent`
-/// - `{TypeName}Shortcuts: AppShortcutsProvider` (unless `shortcuts: false`)
-@attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration), named(defaultQuery), named(typeDisplayRepresentation), named(displayRepresentation), arbitrary)
+/// For App Intents: also `Identifiable, Hashable, AppEntity` (due to Swift 6 actor isolation requirements)
+@attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration), arbitrary)
 @attached(extension, conformances: Identifiable, Hashable, Sendable, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt)
 public macro Persistable(
     table: String? = nil,
