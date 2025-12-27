@@ -24,7 +24,7 @@ struct Comment: Codable, FetchableRecord, PersistableRecord {
             }
 }
 
-extension Comment: Identifiable, Hashable {
+extension Comment: nonisolated Identifiable, nonisolated Hashable {
 }
 
 extension Comment: AutoMigrating {

@@ -32,7 +32,7 @@ struct Task: Codable, FetchableRecord, PersistableRecord {
             }
 }
 
-extension Task: Identifiable, Hashable {
+extension Task: nonisolated Identifiable, nonisolated Hashable {
 }
 
 extension Task: AutoMigrating {
