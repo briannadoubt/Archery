@@ -599,7 +599,9 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         let config = parseConfig(from: node, typeName: typeName)
         let tableName = config.tableName ?? typeName.lowercased()
 
-        // Check if we should generate AppEntity members (when displayName is provided)
+        // Check if struct declares AppEntity conformance
+        let existingConformances = getExistingConformances(structDecl)
+        let hasAppEntityConformance = existingConformances.contains("AppEntity")
         let hasDisplayName = config.displayName != nil
 
         var members: [DeclSyntax] = []
@@ -632,9 +634,9 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
         )
         members.append(DeclSyntax(stringLiteral: migrationDecl))
 
-        // Generate AppEntity members when displayName is provided
-        // The macro generates AppEntity conformance via extension
-        if hasDisplayName {
+        // Generate AppEntity members INLINE when struct declares AppEntity + displayName provided
+        // This avoids Swift 6 actor isolation conflicts between AppEntity (MainActor) and FetchableRecord (Sendable)
+        if hasAppEntityConformance && hasDisplayName {
             let displayName = config.displayName!
             let titleProperty = config.titleProperty
 
@@ -767,9 +769,11 @@ public struct PersistableMacro: MemberMacro, ExtensionMacro {
 
         return extensions
     }
+}
 
-    // MARK: - Conformance Detection
+// MARK: - Conformance Detection
 
+extension PersistableMacro {
     /// Get all conformances already declared on the struct
     private static func getExistingConformances(_ structDecl: StructDeclSyntax) -> Set<String> {
         guard let inheritanceClause = structDecl.inheritanceClause else {

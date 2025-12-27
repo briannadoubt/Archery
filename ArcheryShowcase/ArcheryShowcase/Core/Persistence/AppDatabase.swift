@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Archery
-import AppIntents
 
 // MARK: - Task Model
 
@@ -11,24 +10,20 @@ import AppIntents
 /// - `status: TaskStatus` stored as TEXT in SQLite
 /// - `priority: TaskPriority` stored as INTEGER in SQLite
 ///
-/// The `@Persistable` macro generates conformances automatically when no AppEntity:
-/// - Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating
+/// The `@Persistable` macro generates:
+/// - `Columns` enum with type-safe column references
+/// - `databaseTableName` static property
+/// - `createTableMigration` for automatic schema migration
 ///
-/// When using AppEntity, ALL conformances must be declared on struct:
-/// - `Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity`
-/// - Swift 6 actor isolation makes the whole struct MainActor-isolated with AppEntity,
-///   so conformances added via extension would break Sendable requirements.
+/// Note: With Swift 6 MainActor default isolation, conformances must be declared
+/// on the struct to avoid actor isolation conflicts with GRDB's Sendable requirements.
 ///
 /// Usage with `@Query`:
 /// ```swift
 /// @Query(TaskItem.all()) var tasks: [TaskItem]
 /// ```
-@Persistable(
-    table: "tasks",
-    displayName: "Task",
-    titleProperty: "title"
-)
-struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
+@Persistable(table: "tasks")
+struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
     @PrimaryKey var id: String
     var title: String
     var taskDescription: String?
@@ -131,12 +126,8 @@ struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRe
 
 // MARK: - Project Model
 
-@Persistable(
-    table: "projects",
-    displayName: "Project",
-    titleProperty: "name"
-)
-struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AppEntity {
+@Persistable(table: "projects")
+struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
     @PrimaryKey var id: String
     var name: String
     var projectDescription: String?

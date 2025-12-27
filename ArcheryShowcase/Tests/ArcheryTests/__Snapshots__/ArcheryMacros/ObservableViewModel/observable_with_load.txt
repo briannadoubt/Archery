@@ -1,0 +1,114 @@
+@MainActor
+class SampleVM: Resettable {
+    func load() async {}
+
+    @MainActor
+    private var __archeryCancelables: [CancelableTask] = []
+
+    @MainActor
+    private var __archeryDebounceTasks: [AnyHashable: _Concurrency.Task<Void, Never>] = [:]
+
+    @MainActor
+    private var __archeryThrottleTasks: [AnyHashable: _Concurrency.Task<Void, Never>] = [:]
+
+    @MainActor
+    func track(_ task: CancelableTask) {
+        __archeryCancelables.append(task)
+    }
+
+    @MainActor
+    func cancelTrackedTasks() {
+        __archeryCancelables.forEach {
+            $0.cancel()
+        }
+        __archeryCancelables.removeAll()
+    }
+
+    @MainActor
+    func reset() {
+        cancelTrackedTasks()
+    }
+
+    @MainActor
+    func onAppear() {
+        cancelTrackedTasks()
+        let task = _Concurrency.Task { @MainActor in
+            await load()
+        }
+        track(CancelableTask {
+                task.cancel()
+            })
+    }
+
+    @MainActor
+    func onDisappear() {
+        cancelTrackedTasks()
+    }
+
+    @MainActor
+    func debounce(
+        id: AnyHashable = #function,
+        dueTime: Duration,
+        action: @escaping @Sendable () async -> Void
+    ) {
+        __archeryDebounceTasks[id]?.cancel()
+        let task = _Concurrency.Task { @MainActor in
+            try? await _Concurrency.Task.sleep(for: dueTime)
+            guard !_Concurrency.Task.isCancelled else {
+                return
+            }
+            await action()
+        }
+        __archeryDebounceTasks[id] = task
+        track(CancelableTask {
+                task.cancel()
+            })
+    }
+
+    @MainActor
+    func throttle(
+        id: AnyHashable = #function,
+        interval: Duration,
+        action: @escaping @Sendable () async -> Void
+    ) {
+        if let existing = __archeryThrottleTasks[id], !existing.isCancelled {
+            return
+        }
+
+        let task = _Concurrency.Task { @MainActor in
+            defer {
+                __archeryThrottleTasks[id] = nil
+            }
+            await action()
+            try? await _Concurrency.Task.sleep(for: interval)
+        }
+
+        __archeryThrottleTasks[id] = task
+        track(CancelableTask {
+                task.cancel()
+            })
+    }
+
+    @MainActor
+    func beginLoading<Value>(_ keyPath: ReferenceWritableKeyPath<SampleVM, LoadState<Value>>) {
+        self[keyPath: keyPath] = .loading
+    }
+
+    @MainActor
+    func endSuccess<Value>(_ keyPath: ReferenceWritableKeyPath<SampleVM, LoadState<Value>>, value: Value) {
+        self[keyPath: keyPath] = .success(value)
+    }
+
+    @MainActor
+    func endFailure<Value>(_ keyPath: ReferenceWritableKeyPath<SampleVM, LoadState<Value>>, error: Error) {
+        self[keyPath: keyPath] = .failure(error)
+    }
+
+    @MainActor
+    func setIdle<Value>(_ keyPath: ReferenceWritableKeyPath<SampleVM, LoadState<Value>>) {
+        self[keyPath: keyPath] = .idle
+    }
+}
+
+extension SampleVM: ArcheryLoadable {
+}

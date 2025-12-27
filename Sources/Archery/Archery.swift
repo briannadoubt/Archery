@@ -206,11 +206,12 @@ public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module:
 /// - `createTableMigration` for automatic schema migration
 /// - When `displayName` provided: AppEntity members + nested intents
 ///
-/// Generates conformances via extension (when no AppEntity):
+/// Generates conformances via extension (when AppEntity not declared on struct):
 /// - `Codable`, `Identifiable`, `Hashable`, `FetchableRecord`, `PersistableRecord`, `AutoMigrating`
 /// - Based on properties: `HasTimestamps`, `HasCreatedAt`, `HasUpdatedAt`
 ///
-/// When using AppEntity: declare ALL conformances on struct (Swift 6 actor isolation requirement)
+/// Note: When using Swift 6 with MainActor default isolation, all conformances
+/// must be declared on the struct to avoid actor isolation conflicts.
 @attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration), arbitrary)
 @attached(extension, conformances: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt)
 public macro Persistable(

@@ -1,0 +1,367 @@
+struct MiniShell {
+    enum Tab: CaseIterable { case home 
+}
+
+    // MARK: - Generated Navigation Coordinator
+
+    /// Generated NavigationCoordinator that powers the app shell.
+    ///
+    /// Manages:
+    /// - Tab selection with entitlement gating
+    /// - Per-tab navigation stacks
+    /// - Sheet and fullscreen presentations (recursive)
+    /// - Flow management
+    /// - Deep link handling
+    @MainActor
+    final class ShellNavigationCoordinator: NavigationCoordinator<Tab> {
+        private let container: EnvContainer
+        private let _store: StoreKitManager
+
+        init(container: EnvContainer = EnvContainer()) {
+            self.container = container
+            self._store = .shared
+            super.init(initialTab: .home)
+            self.storeKitManager = _store
+        }
+
+        var store: StoreKitManager {
+            _store
+        }
+
+        // MARK: - Route Resolution
+
+        /// Resolve a type-erased route to its view
+        func resolveView(for anyRoute: AnyRoute) -> SwiftUI.AnyView {
+                if let route = anyRoute.as(ShellView.HomeRoute.self) {
+                    return SwiftUI.AnyView(SwiftUI.AnyView(SwiftUI.Text(String(describing: route))))
+                }
+            return SwiftUI.AnyView(SwiftUI.Text("Unknown route: \(anyRoute.id)"))
+        }
+
+        /// Get the root view for a tab
+        func rootView(for tab: Tab) -> SwiftUI.AnyView {
+            switch tab {
+                case .home:
+                return SwiftUI.AnyView(SwiftUI.Text("home"))
+            }
+        }
+
+        // MARK: - Tab Visibility
+
+        /// Returns visible tabs based on entitlements
+        var visibleTabs: [Tab] {
+            Tab.allCases.filter { tab in
+                return true
+            }
+        }
+
+        /// Check if a tab is locked (visible but inaccessible)
+        func isTabLocked(_ tab: Tab) -> Bool {
+            return false
+        }
+
+        // MARK: - Entitlement Checking
+
+        override func checkEntitlement<R: NavigationRoute>(for route: R) -> EntitlementRequirement? {
+            return nil
+        }
+
+        // MARK: - Deep Link Resolution
+
+        override func resolveDeepLink(_ url: URL) -> DeepLinkResolution? {
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+                return .invalidFormat("Could not parse URL")
+            }
+
+            let pathComponents = components.path.split(separator: "/").map(String.init)
+            guard let firstPath = pathComponents.first else {
+                return .notFound
+            }
+
+            // Handle flow deep links
+            if firstPath == "flow" {
+                guard pathComponents.count >= 2 else {
+                    return .notFound
+                }
+                let flowId = pathComponents[1]
+                let step = pathComponents.count >= 4 && pathComponents[2] == "step" ? pathComponents[3] : nil
+                return .flow(id: flowId, step: step)
+            }
+
+            let remaining = Array(pathComponents.dropFirst())
+            let query = Dictionary(uniqueKeysWithValues:
+                (components.queryItems ?? []).compactMap { item -> (String, String)? in
+                    guard let value = item.value else {
+                                    return nil
+                                }
+                    return (item.name, value)
+                }
+            )
+
+            switch firstPath {
+                case "home":
+                    var actions: [CoordinatorAction] = [.selectTab(index: 0)]
+                    if remaining.count > 0, let route = HomeRoute.fromURL(path: remaining, query: query) {
+                        actions.append(.push(AnyRoute(route)))
+                    }
+                    return .success(actions)
+            default:
+                return .notFound
+            }
+        }
+    }
+
+    // MARK: - Generated Shell View
+
+    /// Generated shell view powered by NavigationCoordinator.
+    ///
+    /// Features:
+    /// - TabView with per-tab NavigationStacks
+    /// - Entitlement-gated tabs (locked/hidden)
+    /// - Recursive sheet presentations
+    /// - Full-screen presentations
+    /// - Deep link handling via onOpenURL
+    struct ShellView: SwiftUI.View {
+        @SwiftUI.State private var coordinator: ShellNavigationCoordinator
+        private var container: EnvContainer
+
+        enum HomeRoute: NavigationRoute, Codable { case root 
+}
+
+        init(
+            selection: Tab = .home,
+            base: EnvContainer = EnvContainer(),
+            mergeFrom parent: EnvContainer? = nil,
+            patch: ((inout EnvContainer) -> Void)? = nil,
+            persistence: NavigationPersistence = .enabled(key: "archery.navigation.AppShellMacro")
+        ) {
+            var working = EnvContainer()
+            base.merge(into: working)
+            parent?.merge(into: working)
+            Self.register(into: &working)
+            
+            patch?(&working)
+            self.container = working
+            self._coordinator = SwiftUI.State(initialValue: ShellNavigationCoordinator(container: working))
+
+            // Configure analytics providers and framework-level auto-tracking
+            Self.__configureAnalytics()
+        }
+
+        private static func __configureAnalytics() {
+            // Configure providers (uses analyticsProviders if defined, otherwise DebugAnalyticsProvider)
+            let providers: [any AnalyticsProvider] = [DebugAnalyticsProvider()]
+            #if DEBUG
+            let debugMode = true
+            #else
+            let debugMode = false
+            #endif
+            AnalyticsManager.shared.configure(providers: providers, enabled: true, debugMode: debugMode)
+
+            // Bridge ArcheryEvent to AnalyticsManager automatically
+            if ArcheryAnalyticsConfiguration.shared.eventHandler == nil {
+                ArcheryAnalyticsConfiguration.shared.eventHandler = { event in
+                    let name = event.name
+                    let properties = event.properties
+                    Task { @MainActor in
+                        AnalyticsManager.shared.track(name, properties: properties)
+                    }
+                }
+            }
+        }
+
+        var body: some SwiftUI.View {
+            SwiftUI.TabView(selection: $coordinator.selectedTab) {
+                SwiftUI.ForEach(coordinator.visibleTabs, id: \.self) { tab in
+                    tabContent(for: tab)
+                        .tabItem {
+                            tabLabel(for: tab)
+                        }
+                        .tag(tab)
+                }
+            }
+            .sheet(item: coordinator.sheetBinding(depth: 0)) { route in
+                sheetContent(route: route, depth: 1)
+            }
+            #if !os(macOS)
+            .fullScreenCover(item: coordinator.fullScreenBinding) { route in
+                fullScreenContent(route: route)
+            }
+            #endif
+            .environment(\.navigationHandle, coordinator.makeHandle(for: .tab(0)))
+            .environment(\.archeryContainer, container)
+            .environment(coordinator)
+            .onOpenURL { url in
+                _ = coordinator.handle(url: url)
+            }
+        }
+
+        // MARK: - Tab Content
+
+        @SwiftUI.ViewBuilder
+        private func tabContent(for tab: Tab) -> some SwiftUI.View {
+            if coordinator.isTabLocked(tab) {
+                lockedTabContent(tab)
+            } else {
+                SwiftUI.NavigationStack(path: pathBinding(for: tab)) {
+                    coordinator.rootView(for: tab)
+                        .navigationDestination(for: AnyRoute.self) { route in
+                            coordinator.resolveView(for: route)
+                        }
+                }
+                .environment(\.navigationHandle, coordinator.makeHandle(for: .tab(tabIndex(tab))))
+            }
+        }
+
+        @SwiftUI.ViewBuilder
+        private func tabLabel(for tab: Tab) -> some SwiftUI.View {
+            switch tab {
+            case .home: SwiftUI.Label("home", systemImage: "circle")
+            }
+        }
+
+        @SwiftUI.ViewBuilder
+        private func lockedTabContent(_ tab: Tab) -> some SwiftUI.View {
+            SwiftUI.ContentUnavailableView {
+                SwiftUI.Label(String(describing: tab), systemImage: "lock.fill")
+            } description: {
+                SwiftUI.Text("Upgrade to unlock this feature.")
+            } actions: {
+                SwiftUI.Button("View Plans") {
+                    // Present paywall
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+
+        // MARK: - Sheet Content (Recursive via limited depth)
+
+        /// Build sheet content with recursive presentation support
+        /// Uses explicit views at each depth level to satisfy type checker
+        private func sheetContent(route: AnyRoute, depth: Int) -> SwiftUI.AnyView {
+            let content = SwiftUI.NavigationStack {
+                coordinator.resolveView(for: route)
+                    .toolbar {
+                        SwiftUI.ToolbarItem(placement: .cancellationAction) {
+                            SwiftUI.Button("Done") {
+                                coordinator.dismiss(levels: 1)
+                            }
+                        }
+                    }
+            }
+            .presentationDetents(detentsForRoute(route))
+            .environment(\.navigationHandle, coordinator.makeHandle(for: .sheet(depth: depth)))
+
+            // Limit recursive sheet depth to prevent infinite type recursion
+            if depth < 5 {
+                return SwiftUI.AnyView(
+                    content.sheet(item: coordinator.sheetBinding(depth: depth)) { nextRoute in
+                        self.sheetContent(route: nextRoute, depth: depth + 1)
+                    }
+                )
+            } else {
+                return SwiftUI.AnyView(content)
+            }
+        }
+
+        private func detentsForRoute(_ route: AnyRoute) -> Set<SwiftUI.PresentationDetent> {
+            if case .sheet(let detents) = route.presentationStyle {
+                return Set(detents.map(\.presentationDetent))
+            }
+            return [.large]
+        }
+
+        // MARK: - Full Screen Content
+
+        private func fullScreenContent(route: AnyRoute) -> SwiftUI.AnyView {
+            let content = SwiftUI.NavigationStack {
+                coordinator.resolveView(for: route)
+                    .toolbar {
+                        SwiftUI.ToolbarItem(placement: .cancellationAction) {
+                            SwiftUI.Button("Close") {
+                                coordinator.fullScreenRoute = nil
+                            }
+                        }
+                    }
+            }
+            .sheet(item: coordinator.sheetBinding(depth: 0)) { sheetRoute in
+                self.sheetContent(route: sheetRoute, depth: 1)
+            }
+            .environment(\.navigationHandle, coordinator.makeHandle(for: .fullScreen()))
+
+            return SwiftUI.AnyView(content)
+        }
+
+        // MARK: - Helpers
+
+        private func pathBinding(for tab: Tab) -> SwiftUI.Binding<[AnyRoute]> {
+            SwiftUI.Binding(
+                get: { (coordinator.tabPaths[tab] as? [AnyRoute]) ?? [] },
+                set: { coordinator.tabPaths[tab] = $0.map { $0 as AnyHashable } }
+            )
+        }
+
+        private func tabIndex(_ tab: Tab) -> Int {
+            Tab.allCases.firstIndex(of: tab).map { Tab.allCases.distance(from: Tab.allCases.startIndex, to: $0) } ?? 0
+        }
+
+        // MARK: - Static Registration
+
+        static func register(into container: inout EnvContainer) {
+            container.registerFactory { Self.init() }
+            container.register(Tab.allCases)
+            
+        }
+
+        static func previewContainer(seed: ((inout EnvContainer) -> Void)? = nil, mergeFrom parent: EnvContainer? = nil) -> EnvContainer {
+            var c = EnvContainer()
+            parent?.merge(into: c)
+            Self.register(into: &c)
+            
+            
+            seed?(&c)
+            return c
+        }
+
+    }
+
+    #if DEBUG
+    struct ShellView_Previews: SwiftUI.PreviewProvider {
+        static var previews: some SwiftUI.View {
+            let container = ShellView.previewContainer()
+            return SwiftUI.Group {
+                ForEach(Array(Tab.allCases), id: \.self) { tab in
+                    ShellView(selection: tab, mergeFrom: container)
+                        .environment(\.archeryContainer, container)
+                        .previewDisplayName(String(describing: tab))
+                }
+            }
+        }
+    }
+    #endif
+
+    // MARK: - Generated App Infrastructure
+
+        @SwiftUI.State private var __store = StoreKitManager.shared
+        init() {
+            Self.__configureAppearance()
+        }
+
+        private static func __configureAppearance() {
+            #if os(iOS)
+            UINavigationBar.appearance().largeTitleTextAttributes = [
+                .font: UIFont.systemFont(ofSize: 34, weight: .bold)
+            ]
+            #endif
+        }
+        var body: some SwiftUI.Scene {
+            SwiftUI.WindowGroup {
+                ShellView()
+                .environment(__store)
+            }
+            #if os(macOS)
+            .windowStyle(.hiddenTitleBar)
+            .windowToolbarStyle(.unified)
+            #endif
+        }
+}
