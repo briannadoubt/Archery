@@ -108,8 +108,10 @@ final class WeatherAPILive: WeatherAPIProtocol, @unchecked Sendable {
         if policy.enabled, let cached = await state.cachedValue(for: key, now: clock.now)?.value as? Data {
             return cached
         }
-        let result = try await withRetry(function: "forecast(city: String)") {
-            try await self.base.value.forecast(city: city)
+        let result = try await Archery.OperationTracer.traceNetwork(method: "API", path: "forecast") {
+            try await withRetry(function: "forecast(city: String)") {
+                try await self.base.value.forecast(city: city)
+            }
         }
         if policy.enabled {
             let expiry = policy.ttl.map {

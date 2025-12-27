@@ -244,7 +244,11 @@ public enum APIClientMacro: PeerMacro {
 
         let cachePolicyExpr = info.cacheOverrideExpr ?? "cachePolicy"
 
+        // Extract method name for tracing (without parameters)
+        let methodName = info.name
+
         if info.isAsync && info.isThrowing && !info.returnsVoid {
+            // Check cache before entering traced block to avoid actor isolation issues
             return """
     \(header) {
         let policy = \(cachePolicyExpr)
@@ -252,8 +256,10 @@ public enum APIClientMacro: PeerMacro {
         if policy.enabled, let cached = await state.cachedValue(for: key, now: clock.now)?.value as? \(info.returnType) {
             return cached
         }
-        let result = try await withRetry(function: \(info.functionLabelLiteral)) {
-            try await \(baseCall)
+        let result = try await Archery.OperationTracer.traceNetwork(method: "API", path: "\(methodName)") {
+            try await withRetry(function: \(info.functionLabelLiteral)) {
+                try await \(baseCall)
+            }
         }
         if policy.enabled {
             let expiry = policy.ttl.map { clock.now.advanced(by: $0) }
@@ -267,8 +273,10 @@ public enum APIClientMacro: PeerMacro {
         if info.isAsync && info.isThrowing {
             return """
     \(header) {
-        try await withRetry(function: \(info.functionLabelLiteral)) {
-            try await \(baseCall)
+        try await Archery.OperationTracer.traceNetwork(method: "API", path: "\(methodName)") {
+            try await withRetry(function: \(info.functionLabelLiteral)) {
+                try await \(baseCall)
+            }
         }
     }
 """
@@ -277,8 +285,10 @@ public enum APIClientMacro: PeerMacro {
         if info.isAsync {
             return """
     \(header) {
-        \(info.returnsVoid ? "" : "let result = ")await \(baseCall)
-        \(info.returnsVoid ? "return" : "return result")
+        await Archery.OperationTracer.trace("\(methodName)", category: .network) {
+            \(info.returnsVoid ? "" : "let result = ")await \(baseCall)
+            \(info.returnsVoid ? "return" : "return result")
+        }
     }
 """
         }

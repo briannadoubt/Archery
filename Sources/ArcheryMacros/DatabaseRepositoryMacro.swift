@@ -189,12 +189,16 @@ public enum DatabaseRepositoryMacro: PeerMacro {
 
         let customSection = customMethods.isEmpty ? "" : "\n\n    // Custom methods\n\(customMethodImpls)"
 
+        // Table name derived from record type (lowercase + 's')
+        let tableName = recordType.lowercased() + "s"
+
         return """
 
 \(access)final class \(name): \(protocolName), @unchecked Sendable {
     private let container: Archery.PersistenceContainer
     private let base: \(className)
     private let entityTypeName = "\(recordType)"
+    private let tableName = "\(tableName)"
 
     \(access)init(container: Archery.PersistenceContainer) {
         self.container = container
@@ -209,94 +213,110 @@ public enum DatabaseRepositoryMacro: PeerMacro {
         self.base = \(className)()
     }
 
-    // CRUD operations
+    // CRUD operations with performance tracing
 
     \(access)func fetchAll() async throws -> [\(recordType)] {
-        let start = ContinuousClock.now
-        let results = try await container.read { db in try \(recordType).fetchAll(db) }
-        let duration = ContinuousClock.now - start
-        let durationMs = Double(duration.components.attoseconds) / 1_000_000_000_000_000
+        try await Archery.OperationTracer.traceDatabase("fetchAll", table: tableName) {
+            let start = ContinuousClock.now
+            let results = try await container.read { db in try \(recordType).fetchAll(db) }
+            let duration = ContinuousClock.now - start
+            let durationMs = Double(duration.components.attoseconds) / 1_000_000_000_000_000
 
-        // Auto-track fetch
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityFetched(entityType: entityTypeName, count: results.count, durationMs: durationMs)
-            )
+            // Auto-track fetch
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityFetched(entityType: entityTypeName, count: results.count, durationMs: durationMs)
+                )
+            }
+
+            return results
         }
-
-        return results
     }
 
     \(access)func fetch(id: \(recordType).ID) async throws -> \(recordType)? {
-        try await container.read { db in try \(recordType).fetchOne(db, id: id) }
+        try await Archery.OperationTracer.traceDatabase("fetch", table: tableName) {
+            try await container.read { db in try \(recordType).fetchOne(db, id: id) }
+        }
     }
 
     \(access)func insert(_ record: \(recordType)) async throws -> \(recordType) {
-        let result = try await container.write { db in
-            var record = record
-            try record.insert(db)
-            return record
-        }
+        try await Archery.OperationTracer.traceDatabase("insert", table: tableName) {
+            let result = try await container.write { db in
+                var record = record
+                try record.insert(db)
+                return record
+            }
 
-        // Auto-track entity created
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityCreated(entityType: entityTypeName, entityId: String(describing: result.id))
-            )
-        }
+            // Auto-track entity created
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityCreated(entityType: entityTypeName, entityId: String(describing: result.id))
+                )
+            }
 
-        return result
+            return result
+        }
     }
 
     \(access)func update(_ record: \(recordType)) async throws {
-        try await container.write { db in try record.update(db) }
+        try await Archery.OperationTracer.traceDatabase("update", table: tableName) {
+            try await container.write { db in try record.update(db) }
 
-        // Auto-track entity updated
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityUpdated(entityType: entityTypeName, entityId: String(describing: record.id))
-            )
+            // Auto-track entity updated
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityUpdated(entityType: entityTypeName, entityId: String(describing: record.id))
+                )
+            }
         }
     }
 
     \(access)func upsert(_ record: \(recordType)) async throws -> \(recordType) {
-        let result = try await container.write { db in
-            var record = record
-            try record.save(db)
-            return record
-        }
+        try await Archery.OperationTracer.traceDatabase("upsert", table: tableName) {
+            let result = try await container.write { db in
+                var record = record
+                try record.save(db)
+                return record
+            }
 
-        // Auto-track entity created/updated (upsert)
-        await MainActor.run {
-            ArcheryAnalyticsConfiguration.shared.track(
-                .entityUpdated(entityType: entityTypeName, entityId: String(describing: result.id))
-            )
-        }
+            // Auto-track entity created/updated (upsert)
+            await MainActor.run {
+                ArcheryAnalyticsConfiguration.shared.track(
+                    .entityUpdated(entityType: entityTypeName, entityId: String(describing: result.id))
+                )
+            }
 
-        return result
+            return result
+        }
     }
 
     \(access)func delete(id: \(recordType).ID) async throws -> Bool {
-        let deleted = try await container.write { db in try \(recordType).deleteOne(db, id: id) }
+        try await Archery.OperationTracer.traceDatabase("delete", table: tableName) {
+            let deleted = try await container.write { db in try \(recordType).deleteOne(db, id: id) }
 
-        if deleted {
-            // Auto-track entity deleted
-            await MainActor.run {
-                ArcheryAnalyticsConfiguration.shared.track(
-                    .entityDeleted(entityType: entityTypeName, entityId: String(describing: id))
-                )
+            if deleted {
+                // Auto-track entity deleted
+                await MainActor.run {
+                    ArcheryAnalyticsConfiguration.shared.track(
+                        .entityDeleted(entityType: entityTypeName, entityId: String(describing: id))
+                    )
+                }
             }
-        }
 
-        return deleted
+            return deleted
+        }
     }
 
     \(access)func deleteAll() async throws -> Int {
-        try await container.write { db in try \(recordType).deleteAll(db) }
+        try await Archery.OperationTracer.traceDatabase("deleteAll", table: tableName) {
+            try await container.write { db in try \(recordType).deleteAll(db) }
+        }
     }
 
     \(access)func count() async throws -> Int {
-        try await container.read { db in try \(recordType).fetchCount(db) }
+        try await Archery.OperationTracer.traceDatabase("count", table: tableName) {
+            try await container.read { db in try \(recordType).fetchCount(db) }
+        }
     }\(customSection)
 }
 """
