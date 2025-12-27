@@ -210,10 +210,16 @@ public macro AppShell(schema: [any AutoMigrating.Type]) = #externalMacro(module:
 /// - `Codable`, `Identifiable`, `Hashable`, `FetchableRecord`, `PersistableRecord`, `AutoMigrating`
 /// - Based on properties: `HasTimestamps`, `HasCreatedAt`, `HasUpdatedAt`
 ///
-/// Note: When using Swift 6 with MainActor default isolation, all conformances
-/// must be declared on the struct to avoid actor isolation conflicts.
+/// When `displayName` is provided, generates a peer `{TypeName}Entity` struct with:
+/// - `AppEntity` conformance for App Intents/Siri integration
+/// - EntityQuery for fetching entities
+/// - Create, List, and Delete intents (when `intents: true`)
+///
+/// Note: With Swift 6 MainActor default isolation, GRDB conformances must be declared
+/// on the struct to avoid actor isolation conflicts with Sendable requirements.
 @attached(member, names: named(Columns), named(databaseTableName), named(createTableMigration), arbitrary)
 @attached(extension, conformances: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord, AutoMigrating, HasTimestamps, HasCreatedAt, HasUpdatedAt)
+@attached(peer, names: suffixed(Entity), suffixed(EntityListIntent), suffixed(EntityDeleteIntent))
 public macro Persistable(
     table: String? = nil,
     primaryKey: String = "id",

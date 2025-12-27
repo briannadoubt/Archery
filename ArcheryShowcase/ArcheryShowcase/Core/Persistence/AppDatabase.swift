@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Archery
+import AppIntents
 
 // MARK: - Task Model
 
@@ -22,8 +23,8 @@ import Archery
 /// ```swift
 /// @Query(TaskItem.all()) var tasks: [TaskItem]
 /// ```
-@Persistable(table: "tasks")
-struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
+@Persistable(table: "tasks", displayName: "Task")
+struct TaskItem: Codable, Identifiable, Hashable {
     @PrimaryKey var id: String
     var title: String
     var taskDescription: String?
@@ -126,8 +127,8 @@ struct TaskItem: Codable, Identifiable, Hashable, FetchableRecord, PersistableRe
 
 // MARK: - Project Model
 
-@Persistable(table: "projects")
-struct PersistentProject: Codable, Identifiable, Hashable, FetchableRecord, PersistableRecord {
+@Persistable(table: "projects", displayName: "Project", titleProperty: "name")
+struct PersistentProject: Codable, Identifiable, Hashable {
     @PrimaryKey var id: String
     var name: String
     var projectDescription: String?
