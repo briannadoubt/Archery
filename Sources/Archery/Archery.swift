@@ -700,6 +700,76 @@ public enum SQLiteColumnType: String {
     case datetime
 }
 
+// MARK: - Configuration Macro
+
+/// Generates a type-safe configuration system with layered config sources,
+/// validation, secrets management, and environment-specific values.
+///
+/// The macro generates:
+/// - `static var manager: ConfigurationManager<Self>` - singleton manager
+/// - `static var defaultValues: Self` - default configuration
+/// - `func validate() throws -> Bool` - validation method
+/// - `static var schema: ConfigurationSchema` - JSON schema
+/// - Environment-specific getters for `@EnvironmentSpecific` properties
+/// - Secret resolvers for `@Secret` properties
+///
+/// Example:
+/// ```swift
+/// @Configuration(environmentPrefix: "MYAPP")
+/// struct AppConfig {
+///     @Required @Validate(pattern: "^https://.*")
+///     var apiUrl: String = "https://api.example.com"
+///
+///     @Secret
+///     var apiKey: String = ""
+///
+///     @EnvironmentSpecific
+///     var debugMode: Bool = false
+/// }
+/// ```
+@attached(member, names: named(manager), named(defaultValues), named(validate), named(schema), arbitrary)
+public macro Configuration(
+    environmentPrefix: String = "APP",
+    validateOnChange: Bool = true,
+    enableRemoteConfig: Bool = false,
+    schema: String? = nil
+) = #externalMacro(module: "ArcheryMacros", type: "ConfigurationMacro")
+
+// MARK: - Configuration Property Macros
+
+/// Marks a configuration property as storing a secret value.
+/// Secrets are stored in Keychain with AES-256 encryption.
+/// Generates a `resolved<PropertyName>` getter that retrieves from SecretsManager.
+@attached(peer)
+public macro Secret() = #externalMacro(module: "ArcheryMacros", type: "SecretMacro")
+
+/// Marks a configuration property as environment-specific.
+/// Values can differ between development, staging, and production.
+/// Generates a `<propertyName>ForEnvironment` getter.
+@attached(peer)
+public macro EnvironmentSpecific() = #externalMacro(module: "ArcheryMacros", type: "EnvironmentSpecificMacro")
+
+/// Adds validation rules to a configuration property.
+/// - Parameters:
+///   - pattern: Regex pattern for string validation
+///   - range: Numeric range (e.g., "1...100")
+///   - values: Comma-separated allowed values (e.g., "debug,info,error")
+@attached(peer)
+public macro Validate(
+    pattern: String? = nil,
+    range: String? = nil,
+    values: String? = nil
+) = #externalMacro(module: "ArcheryMacros", type: "ValidateMacro")
+
+/// Sets an explicit default value for a configuration property.
+/// Used when the default should be a string representation.
+@attached(peer)
+public macro DefaultValue(_ value: String) = #externalMacro(module: "ArcheryMacros", type: "DefaultValueMacro")
+
+/// Adds a description to a configuration property for documentation and schema generation.
+@attached(peer)
+public macro Description(_ text: String) = #externalMacro(module: "ArcheryMacros", type: "DescriptionMacro")
+
 // Minimal handle for tests - renamed to avoid shadowing the module name
 public struct ArcheryHandle { public init() {} }
 

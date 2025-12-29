@@ -263,7 +263,13 @@ public struct ValidationResult {
     public let isValid: Bool
     public let errors: [ConfigValidationError]
     public let warnings: [ConfigValidationError]
-    
+
+    public init(isValid: Bool, errors: [ConfigValidationError], warnings: [ConfigValidationError]) {
+        self.isValid = isValid
+        self.errors = errors
+        self.warnings = warnings
+    }
+
     public var hasWarnings: Bool {
         !warnings.isEmpty
     }

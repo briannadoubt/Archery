@@ -60,6 +60,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Performance Tracing", systemImage: "waveform.path.ecg")
                 }
+                NavigationLink {
+                    ConfigurationView()
+                } label: {
+                    Label("Configuration", systemImage: "gearshape.2")
+                }
             }
 
             Section {

@@ -52,12 +52,60 @@ struct ArcheryShowcaseApp: App {
     static var themeManager: ThemeManager { ThemeManager() }
     static var analyticsProviders: [AnalyticsProvider] { [DebugAnalyticsProvider()] }
 
+    // MARK: - App Configuration Setup
+    //
+    // Sets up the @Configuration system with remote config and demo secrets.
+    // Called during app startup to initialize configuration before first use.
+
+    static func setupConfiguration() async {
+        // Setup remote config if URL is provided
+        if let urlString = AppConfiguration.featureFlagsURL,
+           let url = URL(string: urlString) {
+            AppConfiguration.setupRemoteConfig(
+                url: url,
+                refreshInterval: TimeInterval(AppConfiguration.remoteConfigInterval)
+            )
+        }
+
+        // Store demo secrets for showcase purposes
+        #if DEBUG
+        await setupDemoSecrets()
+        #endif
+    }
+
+    #if DEBUG
+    private static func setupDemoSecrets() async {
+        // Store demo secrets to demonstrate @Secret property resolution
+        let demoSecrets = [
+            Secret(
+                key: "apiKey",
+                value: "demo-api-key-ARCHERY-12345",
+                environment: ConfigurationEnvironment.current,
+                tags: ["demo", "api"]
+            ),
+            Secret(
+                key: "analyticsTrackingId",
+                value: "UA-DEMO-ARCHERY-67890",
+                environment: ConfigurationEnvironment.current,
+                tags: ["demo", "analytics"]
+            )
+        ]
+
+        for secret in demoSecrets {
+            try? SecretsManager.shared.store(secret)
+        }
+    }
+    #endif
+
     // MARK: - Database Seeding Hook
     //
     // If this function exists, @AppShell calls it during database setup.
     // It's called after migrations run, to seed initial data if needed.
 
     static func seedDemoData(container: PersistenceContainer) async throws {
+        // Setup configuration and demo secrets
+        await setupConfiguration()
+
         // Only seed if database is empty
         let taskCount = try await container.read { db in
             try TaskItem.fetchCount(db)
