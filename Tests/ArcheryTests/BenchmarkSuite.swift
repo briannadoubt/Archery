@@ -23,7 +23,10 @@ final class BenchmarkSuite: XCTestCase {
 
         // Skip budget validation on CI - performance is too variable
         // Run budgets locally for meaningful regression detection
-        #if !CI
+        guard ProcessInfo.processInfo.environment["CI"] == nil else {
+            return
+        }
+
         let budget = PerformanceBudget(name: "Container") {
             MaximumTimeConstraint(
                 name: "Lookup Time",
@@ -34,7 +37,6 @@ final class BenchmarkSuite: XCTestCase {
 
         let validation = budget.validate(result)
         XCTAssertTrue(validation.passed, validation.details)
-        #endif
     }
     
     // MARK: - Repository Caching Benchmarks
