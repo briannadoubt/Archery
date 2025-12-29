@@ -257,4 +257,3 @@ extension PersistentProject: HasQuerySources {
         }
     }
 }
-

@@ -16,6 +16,12 @@ struct ArcheryPlugin: CompilerPlugin {
         AuthenticatedMacro.self,
         FormMacro.self,
         ConfigurationMacro.self,
+        // Configuration property attribute macros
+        SecretMacro.self,
+        EnvironmentSpecificMacro.self,
+        ValidateMacro.self,
+        DefaultValueMacro.self,
+        DescriptionMacro.self,
         IntentEnumMacro.self,
         RouteMacro.self,
         // GRDB persistence macros

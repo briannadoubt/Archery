@@ -3,15 +3,30 @@ import Archery
 import SwiftUI
 
 // MARK: - Network Service
+//
+// Now uses AppConfiguration for baseURL, timeout, and retry settings.
+// This demonstrates how @Configuration integrates with existing services.
 
 class NetworkService: ObservableObject {
     static let shared = NetworkService()
-    
-    private let baseURL = URL(string: "https://api.archery-showcase.app")!
+
     private let session = URLSession.shared
-    
+
     var authToken: String?
-    
+
+    // Configuration-driven properties
+    private var baseURL: URL {
+        URL(string: AppConfiguration.apiBaseURL)!
+    }
+
+    private var timeout: TimeInterval {
+        TimeInterval(AppConfiguration.requestTimeout)
+    }
+
+    private var maxRetries: Int {
+        AppConfiguration.maxRetries
+    }
+
     func request<T: Decodable>(
         _ endpoint: String,
         method: String = "GET",
@@ -22,28 +37,37 @@ class NetworkService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
-        
+        request.timeoutInterval = timeout
+
         // Add default headers
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        
+
+        // Add API key from secrets if available
+        let apiKey = await MainActor.run {
+            AppConfiguration.resolvedApiKey
+        }
+        if let apiKey {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
+
         // Add custom headers
         for (key, value) in headers {
             request.setValue(value, forHTTPHeaderField: key)
         }
-        
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse
         }
-        
+
         guard (200...299).contains(httpResponse.statusCode) else {
             throw NetworkError.httpError(httpResponse.statusCode)
         }
-        
+
         return try JSONDecoder().decode(T.self, from: data)
     }
 }

@@ -46,6 +46,13 @@ public struct ConfigurationMacro: MemberMacro {
             properties: properties
         )))
         
+        // Generate static property accessors for clean API
+        for property in properties {
+            members.append(DeclSyntax(stringLiteral: generateStaticAccessor(
+                property: property
+            )))
+        }
+
         // Generate environment-specific getters
         for property in properties {
             if property.isEnvironmentSpecific {
@@ -53,15 +60,24 @@ public struct ConfigurationMacro: MemberMacro {
                     property: property
                 )))
             }
-            
+
             if property.isSecret {
                 members.append(DeclSyntax(stringLiteral: generateSecretGetter(
                     property: property
                 )))
             }
         }
-        
+
         return members
+    }
+
+    private static func generateStaticAccessor(property: ConfigProperty) -> String {
+        """
+        @MainActor
+        public static var \(property.name): \(property.type) {
+            manager.current.\(property.name)
+        }
+        """
     }
     
     private static func extractMacroArguments(from node: AttributeSyntax) -> ConfigurationAttributes {
@@ -200,11 +216,32 @@ public struct ConfigurationMacro: MemberMacro {
         attributes: ConfigurationAttributes
     ) -> String {
         """
-        public static var manager: ConfigurationManager<\(structName)> = {
-            ConfigurationManager<\(structName)>(
+        @MainActor
+        private static let manager: Archery.ConfigurationManager<\(structName)> = {
+            Archery.ConfigurationManager<\(structName)>(
                 environmentPrefix: "\(attributes.environmentPrefix)"
             )
         }()
+
+        @MainActor
+        public static func override(_ key: String, value: Any) {
+            manager.override(key, value: value)
+        }
+
+        @MainActor
+        public static func clearOverrides() {
+            manager.clearOverrides()
+        }
+
+        @MainActor
+        public static func refresh() async {
+            await manager.refresh()
+        }
+
+        @MainActor
+        public static func setupRemoteConfig(url: URL, refreshInterval: TimeInterval) {
+            manager.setupRemoteConfig(url: url, refreshInterval: refreshInterval)
+        }
         """
     }
     
@@ -231,57 +268,62 @@ public struct ConfigurationMacro: MemberMacro {
         attributes: ConfigurationAttributes
     ) -> String {
         var validationRules: [String] = []
-        
+
         for property in properties {
             if property.isRequired {
-                validationRules.append("ValidationRule(path: \"\(property.name)\", type: .required)")
+                validationRules.append("Archery.ValidationRule(path: \"\(property.name)\", type: .required)")
             }
-            
+
             if let pattern = property.validation.pattern {
-                validationRules.append("ValidationRule(path: \"\(property.name)\", type: .pattern(\"\(pattern)\"))")
+                validationRules.append("Archery.ValidationRule(path: \"\(property.name)\", type: .pattern(\"\(pattern)\"))")
             }
-            
+
             if let range = property.validation.range {
                 let components = range.split(separator: "...")
                 if components.count == 2,
                    let min = Double(components[0]),
                    let max = Double(components[1]) {
-                    validationRules.append("ValidationRule(path: \"\(property.name)\", type: .range(min: \(min), max: \(max)))")
+                    validationRules.append("Archery.ValidationRule(path: \"\(property.name)\", type: .range(min: \(min), max: \(max)))")
                 }
             }
-            
+
             if !property.validation.allowedValues.isEmpty {
                 let values = property.validation.allowedValues.map { "\"\($0)\"" }.joined(separator: ", ")
-                validationRules.append("ValidationRule(path: \"\(property.name)\", type: .allowedValues([\(values)]))")
+                validationRules.append("Archery.ValidationRule(path: \"\(property.name)\", type: .allowedValues([\(values)]))")
             }
-            
+
             if property.isSecret {
-                validationRules.append("ValidationRule(path: \"\(property.name)\", type: .secretReference)")
+                validationRules.append("Archery.ValidationRule(path: \"\(property.name)\", type: .secretReference)")
             }
         }
-        
+
         let rulesString = validationRules.joined(separator: ",\n            ")
-        
+
         return """
         public func validate() throws -> Bool {
-            let validator = ConfigValidator()
-            
+            let validator = Archery.ConfigValidator()
+
             \(rulesString.isEmpty ? "" : """
-            let rules = [
+            let rules: [Archery.ValidationRule] = [
                 \(rulesString)
             ]
-            
+
             for rule in rules {
                 validator.addRule(rule)
             }
             """)
-            
+
             let result = try validator.validate(self)
             if !result.isValid {
-                throw ConfigurationError.validationFailed(result.report())
+                throw Archery.ConfigurationError.validationFailed(result.report())
             }
-            
+
             return true
+        }
+
+        @MainActor
+        public static func validate() throws -> Bool {
+            try manager.current.validate()
         }
         """
     }
@@ -320,15 +362,15 @@ public struct ConfigurationMacro: MemberMacro {
                 schemaParams.append("secret: true")
             }
             
-            return "\"\(property.name)\": PropertySchema(\(schemaParams.joined(separator: ", ")))"
+            return "\"\(property.name)\": Archery.PropertySchema(\(schemaParams.joined(separator: ", ")))"
         }.joined(separator: ",\n            ")
-        
+
         let requiredProperties = properties.filter { $0.isRequired }.map { "\"\($0.name)\"" }
         let requiredString = requiredProperties.joined(separator: ", ")
-        
+
         return """
-        public static var schema: ConfigurationSchema {
-            ConfigurationSchema(
+        public static var schema: Archery.ConfigurationSchema {
+            Archery.ConfigurationSchema(
                 version: "1.0",
                 properties: [
                     \(propertySchemas)
@@ -342,7 +384,7 @@ public struct ConfigurationMacro: MemberMacro {
     private static func generateEnvironmentGetter(property: ConfigProperty) -> String {
         """
         public var \(property.name)ForEnvironment: \(property.type) {
-            switch ConfigurationEnvironment.current {
+            switch Archery.ConfigurationEnvironment.current {
             case .production:
                 return self.\(property.name)
             case .staging:
@@ -355,17 +397,24 @@ public struct ConfigurationMacro: MemberMacro {
     }
     
     private static func generateSecretGetter(property: ConfigProperty) -> String {
-        """
-        public var resolved\(property.name.capitalized): String? {
+        // Capitalize only the first letter, preserving rest of camelCase
+        let capitalizedName = property.name.prefix(1).uppercased() + property.name.dropFirst()
+        return """
+        @MainActor
+        public var resolved\(capitalizedName): String? {
             do {
-                if let secret = try SecretsManager.shared.retrieve("\(property.name)") {
+                if let secret = try Archery.SecretsManager.shared.retrieve("\(property.name)") {
                     return secret.value
                 }
                 return nil
             } catch {
-                print("[Config] Failed to resolve secret \(property.name): \\(error)")
                 return nil
             }
+        }
+
+        @MainActor
+        public static var resolved\(capitalizedName): String? {
+            manager.current.resolved\(capitalizedName)
         }
         """
     }
@@ -478,4 +527,59 @@ private struct ValidationConfig {
     var pattern: String?
     var range: String?
     var allowedValues: [String] = []
+}
+
+// MARK: - Property Marker Macros
+//
+// These are no-op peer macros that mark properties for inspection by @Configuration.
+// They don't generate any code themselves - @Configuration reads them during its expansion.
+
+public struct SecretMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        [] // No-op: just a marker
+    }
+}
+
+public struct EnvironmentSpecificMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        [] // No-op: just a marker
+    }
+}
+
+public struct ValidateMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        [] // No-op: just a marker
+    }
+}
+
+public struct DefaultValueMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        [] // No-op: just a marker
+    }
+}
+
+public struct DescriptionMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        [] // No-op: just a marker
+    }
 }
