@@ -28,7 +28,14 @@ private let archeryMacros: [String: Macro.Type] = [
     "CreatedAt": CreatedAtMacro.self,
     "UpdatedAt": UpdatedAtMacro.self,
     "NotPersisted": NotPersistedMacro.self,
-    "Default": DefaultMacro.self
+    "Default": DefaultMacro.self,
+    "Configuration": ConfigurationMacro.self,
+    "Secret": SecretMacro.self,
+    "EnvironmentSpecific": EnvironmentSpecificMacro.self,
+    "Validate": ValidateMacro.self,
+    "DefaultValue": DefaultValueMacro.self,
+    "Description": DescriptionMacro.self,
+    "Required": RequiredMacro.self
 ]
 
 @MainActor
@@ -227,6 +234,91 @@ private let cases: [SnapshotCase] = [
         source: """
         @DatabaseRepository(record: Player.self)
         public class PlayerStore {
+        }
+        """,
+        macros: archeryMacros
+    ),
+    // Configuration Macro
+    SnapshotCase(
+        name: "ArcheryMacros/Configuration/configuration_basic",
+        source: """
+        @Configuration
+        struct AppConfig: Configuration, Codable, Sendable {
+            var apiURL: String = "https://api.example.com"
+            var timeout: Int = 30
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/Configuration/configuration_validation",
+        source: """
+        @Configuration(environmentPrefix: "APP")
+        struct AppConfig: Configuration, Codable, Sendable {
+            @Required
+            @Validate(pattern: "^https://.*")
+            var apiURL: String = "https://api.example.com"
+
+            @Validate(range: "1...120")
+            var timeout: Int = 30
+
+            @Validate(values: "debug,info,warning,error")
+            var logLevel: String = "info"
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/Configuration/configuration_secrets",
+        source: """
+        @Configuration
+        struct AppConfig: Configuration, Codable, Sendable {
+            @Secret
+            var apiKey: String = ""
+
+            @Secret
+            var analyticsId: String = ""
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/Configuration/configuration_environment",
+        source: """
+        @Configuration
+        struct AppConfig: Configuration, Codable, Sendable {
+            @EnvironmentSpecific
+            var debugLogging: Bool = false
+
+            @EnvironmentSpecific
+            var verboseMode: Bool = false
+        }
+        """,
+        macros: archeryMacros
+    ),
+    SnapshotCase(
+        name: "ArcheryMacros/Configuration/configuration_full",
+        source: """
+        @Configuration(
+            environmentPrefix: "MYAPP",
+            validateOnChange: true,
+            enableRemoteConfig: true
+        )
+        struct AppConfig: Configuration, Codable, Sendable {
+            @Required
+            @Validate(pattern: "^https://.*")
+            @Description("Base API URL")
+            var apiURL: String = "https://api.example.com"
+
+            @DefaultValue("30")
+            @Validate(range: "5...120")
+            var timeout: Int = 30
+
+            @EnvironmentSpecific
+            var debugMode: Bool = false
+
+            @Secret
+            var apiKey: String = ""
         }
         """,
         macros: archeryMacros

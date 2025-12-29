@@ -1,0 +1,77 @@
+struct AppConfig: Configuration, Codable, Sendable {
+    var apiURL: String = "https://api.example.com"
+    var timeout: Int = 30
+
+    @MainActor
+    private static let manager: Archery.ConfigurationManager<AppConfig> = {
+        Archery.ConfigurationManager<AppConfig>(
+            environmentPrefix: "APP"
+        )
+    }()
+
+    @MainActor
+    public static func override(_ key: String, value: Any) {
+        manager.override(key, value: value)
+    }
+
+    @MainActor
+    public static func clearOverrides() {
+        manager.clearOverrides()
+    }
+
+    @MainActor
+    public static func refresh() async {
+        await manager.refresh()
+    }
+
+    @MainActor
+    public static func setupRemoteConfig(url: URL, refreshInterval: TimeInterval) {
+        manager.setupRemoteConfig(url: url, refreshInterval: refreshInterval)
+    }
+
+    public static var defaultValues: Self {
+        Self(
+            apiURL: "",
+                timeout: 0
+        )
+    }
+
+    public func validate() throws -> Bool {
+        let validator = Archery.ConfigValidator()
+
+
+
+        let result = try validator.validate(self)
+        if !result.isValid {
+            throw Archery.ConfigurationError.validationFailed(result.report())
+        }
+
+        return true
+    }
+
+    @MainActor
+    public static func validate() throws -> Bool {
+        try manager.current.validate()
+    }
+
+    public static var schema: Archery.ConfigurationSchema {
+        Archery.ConfigurationSchema(
+            version: "1.0",
+            properties: [
+                "apiURL": Archery.PropertySchema(type: "string"),
+                "timeout": Archery.PropertySchema(type: "integer")
+            ],
+            required: []
+        )
+    }
+
+    @MainActor
+    public static var apiURL: String {
+        manager.current.apiURL
+    }
+
+    @MainActor
+    public static var timeout: Int {
+        manager.current.timeout
+    }
+}
