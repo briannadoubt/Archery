@@ -58,7 +58,8 @@ jobs:
             -parallel-testing-enabled NO \
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            OTHER_SWIFT_FLAGS='-DCI'
 
   snapshot-tests:
     name: Snapshot Tests
