@@ -1,0 +1,99 @@
+struct AppConfig: Configuration, Codable, Sendable {
+    var debugLogging: Bool = false
+    var verboseMode: Bool = false
+
+    @MainActor
+    private static let manager: Archery.ConfigurationManager<AppConfig> = {
+        Archery.ConfigurationManager<AppConfig>(
+            environmentPrefix: "APP"
+        )
+    }()
+
+    @MainActor
+    public static func override(_ key: String, value: Any) {
+        manager.override(key, value: value)
+    }
+
+    @MainActor
+    public static func clearOverrides() {
+        manager.clearOverrides()
+    }
+
+    @MainActor
+    public static func refresh() async {
+        await manager.refresh()
+    }
+
+    @MainActor
+    public static func setupRemoteConfig(url: URL, refreshInterval: TimeInterval) {
+        manager.setupRemoteConfig(url: url, refreshInterval: refreshInterval)
+    }
+
+    public static var defaultValues: Self {
+        Self(
+            debugLogging: false,
+                verboseMode: false
+        )
+    }
+
+    public func validate() throws -> Bool {
+        let validator = Archery.ConfigValidator()
+
+
+
+        let result = try validator.validate(self)
+        if !result.isValid {
+            throw Archery.ConfigurationError.validationFailed(result.report())
+        }
+
+        return true
+    }
+
+    @MainActor
+    public static func validate() throws -> Bool {
+        try manager.current.validate()
+    }
+
+    public static var schema: Archery.ConfigurationSchema {
+        Archery.ConfigurationSchema(
+            version: "1.0",
+            properties: [
+                "debugLogging": Archery.PropertySchema(type: "boolean", environmentSpecific: true),
+                "verboseMode": Archery.PropertySchema(type: "boolean", environmentSpecific: true)
+            ],
+            required: []
+        )
+    }
+
+    @MainActor
+    public static var debugLogging: Bool {
+        manager.current.debugLogging
+    }
+
+    @MainActor
+    public static var verboseMode: Bool {
+        manager.current.verboseMode
+    }
+
+    public var debugLoggingForEnvironment: Bool {
+        switch Archery.ConfigurationEnvironment.current {
+        case .production:
+            return self.debugLogging
+        case .staging:
+            return self.debugLogging
+        case .development, .demo, .test:
+            return self.debugLogging
+        }
+    }
+
+    public var verboseModeForEnvironment: Bool {
+        switch Archery.ConfigurationEnvironment.current {
+        case .production:
+            return self.verboseMode
+        case .staging:
+            return self.verboseMode
+        case .development, .demo, .test:
+            return self.verboseMode
+        }
+    }
+}

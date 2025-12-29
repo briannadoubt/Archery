@@ -1,0 +1,130 @@
+struct AppConfig: Configuration, Codable, Sendable {
+    var apiURL: String = "https://api.example.com"
+    var timeout: Int = 30
+    var debugMode: Bool = false
+    var apiKey: String = ""
+
+    @MainActor
+    private static let manager: Archery.ConfigurationManager<AppConfig> = {
+        Archery.ConfigurationManager<AppConfig>(
+            environmentPrefix: "MYAPP"
+        )
+    }()
+
+    @MainActor
+    public static func override(_ key: String, value: Any) {
+        manager.override(key, value: value)
+    }
+
+    @MainActor
+    public static func clearOverrides() {
+        manager.clearOverrides()
+    }
+
+    @MainActor
+    public static func refresh() async {
+        await manager.refresh()
+    }
+
+    @MainActor
+    public static func setupRemoteConfig(url: URL, refreshInterval: TimeInterval) {
+        manager.setupRemoteConfig(url: url, refreshInterval: refreshInterval)
+    }
+
+    public static var defaultValues: Self {
+        Self(
+            apiURL: "",
+                timeout: 30,
+                debugMode: false,
+                apiKey: ""
+        )
+    }
+
+    public func validate() throws -> Bool {
+        let validator = Archery.ConfigValidator()
+
+        let rules: [Archery.ValidationRule] = [
+        Archery.ValidationRule(path: "apiURL", type: .required),
+                Archery.ValidationRule(path: "apiURL", type: .pattern("^https://.*")),
+                Archery.ValidationRule(path: "timeout", type: .range(min: 5.0, max: 120.0)),
+                Archery.ValidationRule(path: "apiKey", type: .secretReference)
+        ]
+
+        for rule in rules {
+            validator.addRule(rule)
+        }
+
+        let result = try validator.validate(self)
+        if !result.isValid {
+            throw Archery.ConfigurationError.validationFailed(result.report())
+        }
+
+        return true
+    }
+
+    @MainActor
+    public static func validate() throws -> Bool {
+        try manager.current.validate()
+    }
+
+    public static var schema: Archery.ConfigurationSchema {
+        Archery.ConfigurationSchema(
+            version: "1.0",
+            properties: [
+                "apiURL": Archery.PropertySchema(type: "string", description: "Base API URL", pattern: "^https://.*"),
+                "timeout": Archery.PropertySchema(type: "integer", defaultValue: "30"),
+                "debugMode": Archery.PropertySchema(type: "boolean", environmentSpecific: true),
+                "apiKey": Archery.PropertySchema(type: "string", secret: true)
+            ],
+            required: ["apiURL"]
+        )
+    }
+
+    @MainActor
+    public static var apiURL: String {
+        manager.current.apiURL
+    }
+
+    @MainActor
+    public static var timeout: Int {
+        manager.current.timeout
+    }
+
+    @MainActor
+    public static var debugMode: Bool {
+        manager.current.debugMode
+    }
+
+    @MainActor
+    public static var apiKey: String {
+        manager.current.apiKey
+    }
+
+    public var debugModeForEnvironment: Bool {
+        switch Archery.ConfigurationEnvironment.current {
+        case .production:
+            return self.debugMode
+        case .staging:
+            return self.debugMode
+        case .development, .demo, .test:
+            return self.debugMode
+        }
+    }
+
+    @MainActor
+    public var resolvedApiKey: String? {
+        do {
+            if let secret = try Archery.SecretsManager.shared.retrieve("apiKey") {
+                return secret.value
+            }
+            return nil
+        } catch {
+            return nil
+        }
+    }
+
+    @MainActor
+    public static var resolvedApiKey: String? {
+        manager.current.resolvedApiKey
+    }
+}
