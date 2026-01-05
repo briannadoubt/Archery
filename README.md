@@ -11,8 +11,8 @@ A production-ready, macro-first SwiftUI architecture framework that eliminates b
 - **Testing First**: Mandatory snapshot tests, navigation validation, and UI smoke tests
 
 ### Platform Support
-- iOS, iPadOS
-- macOS, Mac Catalyst  
+- iOS, iPadOS, tvOS
+- macOS, Mac Catalyst
 - watchOS, visionOS
 - Minimum SDK: v26, Swift 6.2, Xcode 26
 
@@ -113,11 +113,20 @@ Handles dependency injection and generates previews with mock data.
 ### @AppShell
 Generates root navigation structure with typed routes and automatic DI registration.
 
-### @APIClient
-Provides async/await networking with retry logic, caching, and error handling.
+### @Persistable
+GRDB-backed persistence with automatic schema generation, migrations, and App Intents support.
+
+### @DatabaseRepository
+Generates async repository pattern with CRUD operations, custom queries, and transaction support.
 
 ### @DesignTokens
 Imports design tokens from Figma/Style Dictionary for consistent theming.
+
+### @Route
+Type-safe navigation with compile-time path validation and deep link support.
+
+### @Localizable
+Generates localized string keys with compile-time validation.
 
 ## Developer Tools
 
@@ -208,14 +217,18 @@ Output formats: `text`, `json`, `github` (for CI annotations)
 ```
 Archery/
 ├── Sources/
-│   ├── ArcheryMacros/        # Macro implementations
-│   ├── ArcheryRuntime/       # Runtime support
-│   ├── ArcheryDI/           # Dependency injection
-│   ├── ArcheryNavigation/   # Navigation & routing
-│   └── ArcheryTesting/      # Testing utilities
-├── Tests/                    # Test suites
-├── Examples/                # Sample applications
-└── Documentation/           # Guides and API docs
+│   ├── Archery/              # Core runtime library
+│   ├── ArcheryMacros/        # Swift macro implementations
+│   ├── ArcheryClient/        # Example client usage
+│   ├── ArcheryLint/          # Architecture linter CLI
+│   ├── ArcheryBudget/        # Performance budget CLI
+│   ├── FeatureScaffold/      # Feature scaffolding CLI
+│   ├── DesignTokensGenerator/ # Design tokens CLI
+│   └── RouteValidator/       # Route validation CLI
+├── Plugins/                  # SwiftPM build & command plugins
+├── Tests/                    # Test suites with snapshots
+├── ArcheryShowcase/          # Full demo app for all platforms
+└── Documentation/            # Guides and API docs
 ```
 
 ## Performance Targets
@@ -269,12 +282,13 @@ swift package plugin regenerate-snapshots
 
 ## Roadmap
 
-See [UPGRADE_PLAN.md](UPGRADE_PLAN.md) for the detailed implementation roadmap. Key upcoming features:
+See [UPGRADE_PLAN.md](UPGRADE_PLAN.md) for the detailed implementation roadmap. Current status:
 
-- [ ] Persistence layer (SwiftData/Core Data/SQLite)
-- [ ] Accessibility & Localization tooling
-- [ ] Widget & App Intent generation
-- [ ] Analytics & Feature Flag system
+- [x] Persistence layer (GRDB with @Persistable and @DatabaseRepository)
+- [x] Widget & App Intent generation
+- [x] Analytics & Feature Flag system
+- [x] Localization tooling (@Localizable macro)
+- [ ] Accessibility tooling improvements
 - [ ] Full app generation from schema
 
 ## License
