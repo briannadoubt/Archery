@@ -34,23 +34,24 @@ dependencies: [
 
 ```swift
 @ObservableViewModel
+@MainActor
 class ProductListViewModel {
-    @Published var products: [Product] = []
-    @Published var loadState: LoadState<[Product]> = .idle
-    
+    var products: [Product] = []
+    var loadState: LoadState<[Product]> = .idle
+
     let repository: ProductRepository
-    
+
     init(repository: ProductRepository) {
         self.repository = repository
     }
-    
+
     func load() async {
-        loadState = .loading
+        beginLoading(\.loadState)
         do {
             products = try await repository.fetchProducts()
-            loadState = .success(products)
+            endSuccess(\.loadState, value: products)
         } catch {
-            loadState = .error(error)
+            endFailure(\.loadState, error: error)
         }
     }
 }
@@ -69,19 +70,17 @@ class ProductsAPI {
 #### 3. Bind to a View
 
 ```swift
-@ViewModelBound
+@ViewModelBound<ProductListViewModel>
 struct ProductListView: View {
-    @StateObject var viewModel: ProductListViewModel
-    
+    // vm is injected by the macro via DI container
+
     var body: some View {
-        List(viewModel.products) { product in
+        List(vm.products) { product in
             ProductRow(product: product)
-        }
-        .task {
-            await viewModel.load()
         }
     }
 }
+// The macro auto-calls load() on appear if the VM conforms to ArcheryLoadable
 ```
 
 #### 4. Setup App Shell
